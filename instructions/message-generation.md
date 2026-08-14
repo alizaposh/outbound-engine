@@ -21,9 +21,18 @@ Always read `config/positioning.md` and `config/personas.md` before generating.
 - Structure: `[FILL IN: e.g. one-line hook → one-line relevance → one-line offer → CTA]`
 - Personalization: at least one line that could only be written for this prospect.
 
-## CTA rules  [FILL IN]
-- Preferred CTA: `[FILL IN: e.g. a soft interest-check question vs. a meeting ask]`
-- One clear CTA per email. No stacked asks.
+## CTA rules
+- **Goal: booked meetings.** Every sequence drives toward a conversation.
+- **Default CTA:** a soft, low-friction interest-check that invites a reply, e.g.
+  "Open to exploring how Posh can help sell out your next event? Let me know if you'd
+  like to connect." Persona-specific wording lives in `config/personas.md`.
+- **One clear CTA per email. No stacked asks.**
+- **Keep the opener link-light.** A booking link in a cold first email can hurt
+  deliverability and reads as presumptuous. Introduce a scheduling link or a specific
+  time only after interest is shown, or in a later step.
+- **Frame outcomes as exploration, not guarantees** (see positioning prohibited
+  claims): "help sell out your next event?" as a question is fine; "we'll sell out
+  your event" is not.
 
 ## Prohibited claims — HARD RULES
 Pull the authoritative list from `config/positioning.md`. Never:
