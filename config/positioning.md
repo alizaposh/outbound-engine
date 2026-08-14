@@ -60,4 +60,7 @@ conversion with Posh text blasts") rather than the name + figures.
 ## Sender identity & compliance basics
 - Legal company name for footers: Posh Group Inc.
 - Physical mailing address for footers: 40 Crosby St, New York, NY 10013
-- Opt-out: honored via suppression list; never contact an opt-out again.
+- Opt-out: honored via suppression list; never contact an opt-out again. The opt-out
+  link itself is rendered by Smartlead's unsubscribe token at send time — never
+  hand-written into copy. See `instructions/message-generation.md`
+  (Compliance in the copy).

@@ -42,10 +42,27 @@ Pull the authoritative list from `config/positioning.md`. Never:
 - `[FILL IN any category-specific claims you must avoid]`
 
 ## Compliance in the copy
-- Each email must be compatible with a compliant footer (accurate sender identity,
-  physical address, working opt-out — handled at the campaign/mailbox level, but the
-  copy must not contradict it).
-- Never obscure that this is outbound from your company.
+- **Every email ships with a footer.** Not just the first in a sequence — each of the
+  three steps. The footer carries accurate sender identity, the physical mailing
+  address, and a working opt-out. Sender name and address come from
+  `config/positioning.md` (Sender identity & compliance basics); use those values
+  verbatim, don't retype them from memory.
+- **Never hand-write an unsubscribe link.** Do not invent a URL, a `mailto:`, or
+  "reply STOP to unsubscribe" as a substitute. A fabricated link is worse than none —
+  it looks compliant while doing nothing, and it can't feed the suppression list.
+- **Leave the opt-out to Smartlead's unsubscribe token.** Emit the token itself and
+  let Smartlead render the real per-recipient link at send time. This is what keeps
+  one-click opt-outs wired into Smartlead's own unsubscribe tracking, which is what
+  the suppression list and `instructions/reply-handling.md` depend on.
+  - Token to emit: `[FILL IN — confirm the exact merge tag in the Smartlead account;
+    do not guess the string]`. Until it's confirmed, emit a clearly-marked
+    `{{UNSUBSCRIBE_TOKEN}}` placeholder and flag the campaign as not send-ready
+    rather than substituting anything that looks like a live link.
+  - If a generated draft reaches review with a literal URL in the opt-out slot, treat
+    it as a defect and regenerate — do not patch it by hand.
+- The body copy must not contradict the footer, and must never suggest the opt-out is
+  unavailable, conditional, or slower than one click.
+- Never obscure that this is outbound from Posh.
 
 ## Output format
 Return, per prospect: `first_name, last_name, email, job_title, company,
