@@ -12,13 +12,13 @@ in version-controlled instruction and config files, not in one-off prompts.
 - **How the system operates:** read [`CLAUDE.md`](./CLAUDE.md).
 
 ## Layout
-- `CLAUDE.md` — the operating manual Claude Code reads automatically.
-- `instructions/` — reusable "how to do each job" files (research, generation,
+- `CLAUDE.md`: the operating manual Claude Code reads automatically.
+- `instructions/`: reusable "how to do each job" files (research, generation,
   campaign creation, reply handling, analysis; qualification is deferred).
-- `config/` — company-specific facts (positioning, personas, Smartlead defaults).
-- `scripts/` — Python that Claude Code writes to call the Smartlead / HubSpot / LLM APIs.
-- `data/` — local SQLite working state (git-ignored).
-- `reviews/` — exported human-review sheets (git-ignored).
+- `config/`: company-specific facts (positioning, personas, Smartlead defaults).
+- `scripts/`: Python that Claude Code writes to call the Smartlead / HubSpot / LLM APIs.
+- `data/`: local SQLite working state (git-ignored).
+- `reviews/`: exported human-review sheets (git-ignored).
 
 ## v1 principles
 - Runs entirely **locally** (Claude Code + Claude desktop scheduled tasks). No
@@ -30,4 +30,4 @@ in version-controlled instruction and config files, not in one-off prompts.
 
 ## Status
 Scaffold created. Company-specific content in `config/` and parts of `instructions/`
-still needs to be filled in — search the files for `[FILL IN` and `TODO`.
+still needs to be filled in. Search the files for `[FILL IN` and `TODO`.

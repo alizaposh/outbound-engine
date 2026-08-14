@@ -14,7 +14,7 @@ Written for someone comfortable with tools but not a developer. Do it once.
 | **HubSpot** | CRM (you already have this) | Now |
 | **The "cheap" LLM API** you'll use for bulk copy | Generates messages at volume | Before Phase 4 (generation) |
 | **Google account** | Google Sheets review surface | Before Phase 4 |
-| **Smartlead** | Sending infra | **Only after your Phase 0 go/no-go** — don't buy yet |
+| **Smartlead** | Sending infra | **Only after your Phase 0 go/no-go:** don't buy yet |
 
 > Note on sequencing: creating this repo is free and depends on nothing, so it's
 > safe to do now, before your Phase 0 spend gate. Smartlead + domains wait for
@@ -26,14 +26,14 @@ Written for someone comfortable with tools but not a developer. Do it once.
 
 Two paths. Pick one.
 
-### Option A — Desktop app (easiest, no terminal)
+### Option A: Desktop app (easiest, no terminal)
 Anthropic ships a **Claude desktop app that runs Claude Code with a graphical
-interface** — no command line needed. This is a good starting point if the terminal
+interface**, with no command line needed. This is a good starting point if the terminal
 isn't your comfort zone, and it's also what you'll use later for the **scheduled
 reply-check task** (your tracker's Phase 6). Download it for your OS from the Claude
 site and sign in with your paid account.
 
-### Option B — Terminal (native installer, recommended by Anthropic)
+### Option B: Terminal (native installer, recommended by Anthropic)
 The native installer bundles everything (no Node.js to manage) and auto-updates.
 
 - **macOS:** open Terminal and run
@@ -75,9 +75,9 @@ Do this in the browser (simplest):
 1. Go to github.com → **New repository** (the **+** menu, top right → New repository).
 2. **Repository name:** `outbound-engine` (or your preference).
 3. **Visibility:** **Private.** This repo will reference internal positioning and
-   process — keep it private.
+   process. Keep it private.
 4. Leave "Add a README" **unchecked** (this scaffold already includes one).
-5. Click **Create repository.** Leave the page open — you'll need the URL.
+5. Click **Create repository.** Leave the page open, since you'll need the URL.
 
 ---
 
@@ -135,11 +135,11 @@ Good first thing to type once you're in:
 
 ## 8. Where this maps to your Asana plan
 
-- ✅ **Row 5 — Create GitHub repo:** steps 4–5 above.
-- ✅ **Row 6 — Write CLAUDE.md:** done (`CLAUDE.md` in this scaffold; edit to taste).
+- ✅ **Row 5, Create GitHub repo:** steps 4 and 5 above.
+- ✅ **Row 6, Write CLAUDE.md:** done (`CLAUDE.md` in this scaffold; edit to taste).
 - ✅ **"Connect Claude Code to the repo":** step 6.
-- ⏭ **Phase 0 go/no-go:** still gates Smartlead + domain spend — do that in parallel.
-- ⏭ **Phase 3 — data layer / SQLite:** Claude Code will build this in `scripts/` and
+- ⏭ **Phase 0 go/no-go:** still gates Smartlead + domain spend. Do that in parallel.
+- ⏭ **Phase 3, data layer / SQLite:** Claude Code will build this in `scripts/` and
   `data/` when you get there.
-- ⏭ **Phase 4 — generation:** fill in `config/` + `instructions/message-generation.md`
+- ⏭ **Phase 4, generation:** fill in `config/` + `instructions/message-generation.md`
   first, then have Claude Code write the bulk-generation script.

@@ -1,4 +1,4 @@
-# CLAUDE.md — Outbound Engine Operating Manual
+# CLAUDE.md: Outbound Engine Operating Manual
 
 This file is read automatically by Claude Code. It is the top-level operating manual
 for the AI outbound email engine. Read it fully before doing anything in this repo.
@@ -35,7 +35,7 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
    by adding domains/mailboxes, never by spiking volume on existing ones.
 5. **Only make claims allowed in `config/positioning.md`.** Never invent
    capabilities, customers, metrics, or guarantees. Prohibited claims are listed
-   there — treat that list as hard rules.
+   there. Treat that list as hard rules.
 6. **Credentials live in environment variables (`.env`), never in code, prompts,
    or committed files.** See "Credentials" below. `.env` is git-ignored.
 7. **When unsure, stop and ask the human.** Ambiguous, sensitive, or high-value
@@ -55,13 +55,13 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 - Everything runs **locally**: Claude Code + Claude desktop scheduled tasks. No
   servers, queues, or webhook infrastructure.
 
-**Deferred (not v1) — do not wire into the live flow:**
+**Deferred (not v1). Do not wire into the live flow:**
 - **Lead qualification.** See `instructions/lead-qualification.DEFERRED.md`. The
   structure exists so we can revisit post-v1, but v1 does not qualify/score leads
   before generation. The review dataset therefore contains contact fields +
   message_1..3 only (no qualification columns).
 
-**Decided — campaign request channel: Slack brief.**
+**Decided: the campaign request channel is a Slack brief.**
 - A stakeholder posts the campaign audience (a lead source reference) + a short brief
   as a Slack message. That message *is* the campaign brief. Claude reads it, retrieves
   the leads, generates, posts the review link back in Slack, collects feedback, and
@@ -76,7 +76,7 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 | Email sending, warmup, mailboxes, deliverability | **Smartlead** | Source of truth for email/campaign activity and replies |
 | CRM: contacts, companies, sales status | **HubSpot** | Source of truth for CRM data |
 | Local working state | **SQLite** (`data/outbound.db`, optional) | Claude's own bookkeeping: ID mappings, message versions, approvals, processed reply IDs, last-check timestamps |
-| Human review | **Google Sheet / CSV** in `reviews/` | Review surface only — never authoritative |
+| Human review | **Google Sheet / CSV** in `reviews/` | Review surface only, never authoritative |
 | Bulk copy generation | **Selected LLM API** (cheap model) | Writes personalized messages at volume |
 
 **ID mapping (store in SQLite):** HubSpot contact ⇄ Smartlead lead ⇄ campaign ⇄
@@ -119,18 +119,18 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
 1. Take the lead source (HubSpot list / Google Sheet / CSV) and the brief.
 2. Retrieve the leads. For each, dedupe against HubSpot by email: use the existing
    contact if found, otherwise create it.
-3. Research each prospect using available company + contact data — see
+3. Research each prospect using available company + contact data. See
    `instructions/research.md`.
-4. Generate the 3-email sequence per prospect with the cheap LLM — see
+4. Generate the 3-email sequence per prospect with the cheap LLM. See
    `instructions/message-generation.md`. Later emails must read correctly even if
    earlier ones got no reply.
 5. Export the review dataset to a Google Sheet / CSV in `reviews/`
    (fields: first_name, last_name, email, job_title, company, message_1, message_2,
    message_3). Post the link + campaign brief in Slack.
 6. Collect feedback. Turn feedback into **reusable rules** in `config/` and
-   `instructions/message-generation.md` — do not just fix individual emails.
+   `instructions/message-generation.md`. Do not just fix individual emails.
    Regenerate a sample. Repeat until the copy consistently meets the bar.
-7. On explicit approval, create the Smartlead campaign — see
+7. On explicit approval, create the Smartlead campaign. See
    `instructions/campaign-creation.md`. Save the campaign ID in SQLite.
 8. Launch gradually, starting with a small batch across warmed mailboxes.
 
@@ -138,7 +138,7 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
 1. On a schedule, pull replies from Smartlead since the last successful check.
 2. Dedupe by Smartlead message ID; ignore already-processed replies.
 3. Read the **full conversation** before doing anything.
-4. Classify the reply and decide the next action — see
+4. Classify the reply and decide the next action. See
    `instructions/reply-handling.md`.
 5. Draft (and, only for allowed categories, send) the response through the
    review gate. Stop all sequence follow-ups once a live conversation starts.

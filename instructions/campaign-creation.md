@@ -8,18 +8,18 @@ API. **Never run this without a recorded approval.** Read
 - Explicit approval recorded (Slack + noted in SQLite).
 - Mailboxes are warmed and healthy in Smartlead.
 - Each prospect has message_1..3 in the approved dataset.
-- Suppression list checked — no opted-out / hard-bounced / stop-requested contacts.
+- Suppression list checked: no opted-out / hard-bounced / stop-requested contacts.
 
 ## Steps
 1. **Create the campaign.** Set a clear campaign name (convention in
    `config/smartlead-defaults.md`).
 2. **Configure sending:** schedule/timezone, assigned **warmed** mailboxes, daily
-   limit (~30/mailbox/day ceiling), and inter-email delays — all from defaults.
+   limit (~30/mailbox/day ceiling), and inter-email delays. All from defaults.
 3. **Add prospects** and attach each prospect's message_1..3 as the campaign's
    per-lead custom fields / personalized content.
 4. **Configure the 3-email sequence** using those personalized fields.
 5. **Stop-on-reply:** ensure follow-ups halt automatically when a prospect replies.
-6. **Verify settings** before activating — re-read them back and confirm with the
+6. **Verify settings** before activating. Re-read them back and confirm with the
    human if anything looks off.
 7. **Save the Smartlead campaign ID** to SQLite, mapped to the campaign/approval.
 

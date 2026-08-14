@@ -20,7 +20,7 @@
   connections, or events. If a field is missing, work with what's present.
 - Do not compile personal data beyond what's needed to write a relevant B2B message.
 - Keep the research per prospect to a compact structured note (a few fields), because
-  it will be fed into the generation step at volume — keep it cheap.
+  it will be fed into the generation step at volume, so keep it cheap.
 
 ## Output (per prospect)
 A small structured record, e.g.:

@@ -1,9 +1,9 @@
 # Instruction: Campaign Analysis
 
 **Purpose:** Read campaign performance from Smartlead and turn it into reusable
-improvements — not one-off tweaks.
+improvements, not one-off tweaks.
 
-## Metrics to pull (from Smartlead — source of truth for sending/replies)
+## Metrics to pull (from Smartlead, the source of truth for sending/replies)
 - Positive replies, negative replies, total reply rate.
 - Bounce rate (watch for deliverability trouble).
 - Unsubscribe / opt-out activity.
@@ -11,7 +11,7 @@ improvements — not one-off tweaks.
 
 ## Outcome metrics (your project's real signals)
 - **Meetings booked per week** (primary outcome; stretch target ~10/week).
-- **AE adoption** — how many AEs request campaigns and how often.
+- **AE adoption:** how many AEs request campaigns and how often.
 
 ## Turn results into rules
 - Compare across campaigns and messaging approaches.
@@ -20,4 +20,4 @@ improvements — not one-off tweaks.
 - Flag deliverability problems immediately (pause mailboxes/domains as needed).
 
 ## Cadence  [FILL IN]
-- `[FILL IN: how often to run this — e.g. weekly review feeding the next campaign]`
+- `[FILL IN: how often to run this, e.g. weekly review feeding the next campaign]`

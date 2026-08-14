@@ -1,9 +1,9 @@
-# Instruction: Lead Qualification  — ⚠️ DEFERRED, NOT IN v1
+# Instruction: Lead Qualification (⚠️ DEFERRED, NOT IN v1)
 
 **Status:** Intentionally **out of scope for v1** (per the project plan). This file
 is a placeholder so the structure exists when we revisit. **Do not wire qualification
 into the live campaign flow in v1.** The v1 review dataset has contact fields +
-message_1..3 only — no qualification columns.
+message_1..3 only, with no qualification columns.
 
 ## When revisited (post-v1), this should cover:
 - Qualification criteria for the ICP (a reusable, explicit rulebook).
