@@ -1,0 +1,18 @@
+# Python dependencies for the outbound engine.
+# Claude Code will use these when it writes the scripts in scripts/.
+# Install later with:  pip install -r requirements.txt
+# (Nothing here needs to be installed just to create the repo.)
+
+python-dotenv        # load credentials from .env
+requests             # simple HTTP calls to the Smartlead / HubSpot APIs
+httpx                # async HTTP if we batch LLM/API calls efficiently
+pandas               # build/read the human-review CSVs
+
+# ── Bulk LLM client (Claude Haiku via Anthropic API) ──
+anthropic
+
+# ── Google Sheets review surface (optional) ──
+# gspread
+# google-auth
+
+# SQLite needs no package — it's built into Python via the `sqlite3` module.

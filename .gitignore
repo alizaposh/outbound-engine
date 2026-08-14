@@ -1,0 +1,30 @@
+# ── Secrets — never commit ──
+.env
+*.key
+*service-account*.json
+credentials.json
+
+# ── Local working state (Smartlead + HubSpot are the real sources of truth) ──
+data/*
+!data/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Human review exports (Sheets/CSVs are review surfaces, not the database) ──
+reviews/*
+!reviews/.gitkeep
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# ── OS / editor noise ──
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
