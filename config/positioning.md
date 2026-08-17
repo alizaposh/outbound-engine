@@ -36,14 +36,21 @@ Primary problems we solve:
   financial incentives, a marketing push, and more.
 
 ## Proof: approved case studies
-Both stories below are **cleared for external use in cold outbound**, including their
-outcomes. Name them directly. No further sign-off is needed.
+All three stories below are **cleared for external use in cold outbound**, including
+their outcomes. Name them directly. No further sign-off is needed. Figures may be
+cited only where a bullet marks them cleared.
 
 - **Caché Life** (NYC nightlife/music): switched from TicketFairy for better brand
   alignment, and improved marketing conversion via Posh text blasts.
   **Fits:** nightlife, music, and upscale **Premium** organizers.
 - **We Belong Here** (multi-day festival): the marketplace drove organic growth.
   **Fits:** festival and large-scale **Pro** organizers.
+- **NARC Run Club** (community-focused run club, co-founders Noah and Omari):
+  transitioned from free events to a sustainable paid business, adding brand
+  partnerships and grant funding.
+  **Cleared figures:** 34 events on Posh, 6 months on Posh, 500+ total attendees.
+  **Fits:** community-focused organizers, free-to-paid transitions, run clubs, and
+  recurring community events.
 
 ### Using a case study: HARD RULES
 - **Relevance is the gate.** Cite a case study only when it genuinely applies to that
@@ -51,20 +58,26 @@ outcomes. Name them directly. No further sign-off is needed.
   drop one in as filler, as social-proof padding, or as a default closer.
 - **Match the story to the prospect.** Caché Life goes to nightlife and upscale
   Premium organizers. We Belong Here goes to festival and large-scale Pro organizers.
-  If neither fits, cite neither: no case study is better than a mismatched one.
-  Persona definitions live in `personas.md`.
-- **At most one case study per email.** Never stack both.
-- **Stay inside the outcomes written above.** Those sentences are the full approved
-  scope. No exact figures (GMV, revenue, ticket counts) have been cleared, so any
-  number attached to these customers would be invented.
+  NARC Run Club goes to community-focused organizers, run clubs, recurring community
+  events, and anyone moving from free events to paid. If none fits, cite none: no
+  case study is better than a mismatched one. Persona definitions live in
+  `personas.md`.
+- **At most one case study per email.** Never stack two or more.
+- **Stay inside what is written above.** Those bullets are the full approved scope.
+  **NARC Run Club's figures are cleared** (34 events on Posh, 6 months on Posh, 500+
+  total attendees) and may be cited in outbound exactly as written. **Caché Life and
+  We Belong Here have no cleared figures**, so any number attached to them would be
+  invented. Never invent, extrapolate, round, or restate any customer figure.
 - **Any customer not listed here still needs explicit approval before being named.**
 
 ## Prohibited claims: HARD RULES
 - No invented customers, logos, metrics, or results.
-- **Only Caché Life and We Belong Here may be named.** Their approved outcomes are in
-  "Proof" above. Any other customer requires explicit approval first.
-- **Never attach a figure to a customer story.** No exact customer numbers (GMV,
-  revenue growth, ticket counts) are cleared, so citing one means inventing it.
+- **Only Caché Life, We Belong Here, and NARC Run Club may be named.** Their approved
+  outcomes are in "Proof" above. Any other customer requires explicit approval first.
+- **Never invent or extrapolate a customer figure.** The only cleared customer figures
+  are NARC Run Club's (34 events on Posh, 6 months on Posh, 500+ total attendees),
+  cited exactly as written. Caché Life and We Belong Here have no cleared figures, so
+  attaching a number to either one means inventing it.
 - **Never use a case study that doesn't fit the prospect, and never more than one per
   email.** See "Using a case study" above.
 - Use the 13% / 40% stats **only as written**. Never inflate, round up, or restate
