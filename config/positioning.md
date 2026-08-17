@@ -35,22 +35,38 @@ Primary problems we solve:
   offer than an organizer's current ticketing solution: dedicated account support,
   financial incentives, a marketing push, and more.
 
-## Proof: CONFIRM before naming in cold outbound
-These customer stories are strong but come from internal material. **Get explicit
-approval before naming a specific customer or citing their private numbers (GMV,
-revenue growth) in cold email.** Organizers may not want those broadcast, and
-unapproved specifics create risk. Until sign-off, reference the *pattern* generically
-(e.g. "a NYC nightlife brand switched from TicketFairy and lifted marketing
-conversion with Posh text blasts") rather than the name + figures.
-- Caché Life (NYC nightlife/music): switched from TicketFairy for better brand
-  alignment; improved marketing conversion via Posh text blasts.
-- We Belong Here (multi-day festival): the marketplace drove organic growth.
-- [FILL IN] which customer names + exact figures are cleared for external use.
+## Proof: approved case studies
+Both stories below are **cleared for external use in cold outbound**, including their
+outcomes. Name them directly. No further sign-off is needed.
+
+- **Caché Life** (NYC nightlife/music): switched from TicketFairy for better brand
+  alignment, and improved marketing conversion via Posh text blasts.
+  **Fits:** nightlife, music, and upscale **Premium** organizers.
+- **We Belong Here** (multi-day festival): the marketplace drove organic growth.
+  **Fits:** festival and large-scale **Pro** organizers.
+
+### Using a case study: HARD RULES
+- **Relevance is the gate.** Cite a case study only when it genuinely applies to that
+  prospect's situation and strengthens the specific point the email is making. Never
+  drop one in as filler, as social-proof padding, or as a default closer.
+- **Match the story to the prospect.** Caché Life goes to nightlife and upscale
+  Premium organizers. We Belong Here goes to festival and large-scale Pro organizers.
+  If neither fits, cite neither: no case study is better than a mismatched one.
+  Persona definitions live in `personas.md`.
+- **At most one case study per email.** Never stack both.
+- **Stay inside the outcomes written above.** Those sentences are the full approved
+  scope. No exact figures (GMV, revenue, ticket counts) have been cleared, so any
+  number attached to these customers would be invented.
+- **Any customer not listed here still needs explicit approval before being named.**
 
 ## Prohibited claims: HARD RULES
 - No invented customers, logos, metrics, or results.
-- Don't cite a specific customer's private numbers (GMV, revenue growth) without
-  approval (see above).
+- **Only Caché Life and We Belong Here may be named.** Their approved outcomes are in
+  "Proof" above. Any other customer requires explicit approval first.
+- **Never attach a figure to a customer story.** No exact customer numbers (GMV,
+  revenue growth, ticket counts) are cleared, so citing one means inventing it.
+- **Never use a case study that doesn't fit the prospect, and never more than one per
+  email.** See "Using a case study" above.
 - Use the 13% / 40% stats **only as written**. Never inflate, round up, or restate
   them as guarantees ("you *will* convert 40% better"). They're platform averages,
   not promises.
