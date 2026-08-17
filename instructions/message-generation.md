@@ -39,15 +39,41 @@ drop the competitor reference and personalize on something you do know.
   generic.
 - **Length:** Email 1 is ~50 to 90 words. Follow-ups are shorter, ~40 to 70. All three
   should be skimmable on a phone in seconds.
-- **Subject lines:** 2 to 5 words, lowercase and conversational. Avoid spam-trigger
-  words and punctuation (free, guarantee, !!!, $$$).
+- **Subject lines:** conversational, and avoid spam-trigger words and punctuation
+  (free, guarantee, !!!, $$$). Word count and casing are in **Hard constraints** below.
 - **Sign-off:** appended by code, not written here. End the body at the CTA.
   `scripts/assemble.py` attaches the sender's first name and `Posh`, looked up from
   the sending mailbox in `config/senders.md`. See "Compliance in the copy" below.
 - **Personalization:** at least one line that could only be written for this prospect.
-- **No dashes.** Never use em dashes (`—`) or en dashes (`–`) in generated copy.
-  Rephrase so the sentence doesn't need one: use a period, comma, or colon, or split
-  into two sentences. Do not just swap in a hyphen.
+- **No dashes.** See **Hard constraints** below.
+
+## Hard constraints
+
+These three rules are checked mechanically, and two of them are also repaired
+automatically before review. They live here as the single source of truth: the block
+between the markers is **extracted verbatim and injected into every generation
+prompt**, adjacent to the output contract, by `scripts/repair.py`
+(`load_hard_constraints`). Do not restate them elsewhere, and do not edit them
+anywhere but here. They sit next to the output contract because buried rules were
+being dropped: on the first real run, rules stated only in the middle of this file
+were violated in most emails.
+
+<!-- HARD-CONSTRAINTS:BEGIN -->
+1. **No dashes.** Never use em dashes or en dashes. Rephrase so the sentence does not
+   need one: use a period, comma, or colon, split into two sentences, or use
+   parentheses for an aside that already contains commas. Do not swap in a hyphen.
+2. **The two approved stats appear only as these exact sentences:**
+   - "The average event sells 13% of its tickets through the Posh marketplace."
+   - "Posh events convert 40% better than other platforms."
+   No hedging ("on average", "roughly", "about", "up to"), no rewording, no
+   substituting a different noun for "the Posh marketplace".
+3. **Subject lines are 2 to 5 words, all lowercase.**
+<!-- HARD-CONSTRAINTS:END -->
+
+Rules 1 and 2 are additionally repaired in code by `scripts/repair.py` before
+validation, because punctuation and exact-claim wording are mechanical. Rule 3 is not
+auto-repaired: truncating a subject to fit a word count would mangle its meaning, so
+it stays caught rather than prevented.
 
 ### Structure of the 3-email sequence
 - **Email 1, the opener.**
