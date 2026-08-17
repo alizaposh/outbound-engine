@@ -6,6 +6,28 @@ cheap bulk LLM. This file is the rulebook. When stakeholders give feedback, upda
 
 Always read `config/positioning.md` and `config/personas.md` before generating.
 
+## Using the research signals
+The research note (see `instructions/research.md`) carries the persona call and the
+signals behind it. Three inputs matter most.
+
+- **`current_competitor`** is the sharpest personalization lever available. It sets the
+  persona and it points at the switch angle: what their current tool makes hard, and
+  what changes on Posh. Lead Email 1 with that problem where the signal is credible.
+- **`jobtitle`** decides whose problem the email speaks to. Write to what that person
+  actually owns (an owner/founder hears growth and revenue, an ops lead hears manual
+  work, a marketing lead hears conversion and reach). Never open by reciting their
+  title back at them.
+- **`estimated_gmv_usd`** informs persona routing upstream and nothing else. It should
+  not even appear in the research note. See the hard rule below.
+
+**Never assert a scraped signal as fact.** `current_competitor` is an estimate, so
+being wrong in writing is expensive: it reads as a mass-mailed guess and forfeits the
+credibility the personalization was meant to buy. Write so a wrong guess still lands.
+Prefer framings the prospect can correct ("if you're still running ticketing through
+Eventbrite...") or that name the problem instead of the tool ("when RSVPs and payouts
+live in different places..."). If the research note marks the signal low-confidence,
+drop the competitor reference and personalize on something you do know.
+
 ## The sequence: 3 emails
 - **Email 1, the opener.** Lead with the prospect's likely problem (per the brief
   and their persona), then the offer. Specific to the prospect via the research note.
@@ -42,6 +64,12 @@ Pull the authoritative list from `config/positioning.md`. Never:
 - Invent customers, logos, metrics, or results.
 - Promise outcomes or guarantees not sanctioned in positioning.
 - Misrepresent who the sender is or why they're reaching out.
+- **Write `estimated_gmv_usd`, or any figure derived from it, into an email.** Never
+  state, paraphrase, imply, or bracket a prospect's ticketing volume, revenue, or GMV.
+  It is a scraped estimate used only to route Premium vs Pro. Telling an organizer what
+  you think they gross is presumptuous when right and damaging when wrong, and it is
+  never approved copy. The same applies to any other internal scale estimate.
+- **State a scraped signal as established fact.** See "Using the research signals."
 - `[FILL IN any category-specific claims you must avoid]`
 
 ## Compliance in the copy
