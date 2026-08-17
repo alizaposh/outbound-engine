@@ -41,7 +41,9 @@ drop the competitor reference and personalize on something you do know.
   should be skimmable on a phone in seconds.
 - **Subject lines:** 2 to 5 words, lowercase and conversational. Avoid spam-trigger
   words and punctuation (free, guarantee, !!!, $$$).
-- **Sign-off:** simple. First name + Posh.
+- **Sign-off:** appended by code, not written here. End the body at the CTA.
+  `scripts/assemble.py` attaches the sender's first name and `Posh`, looked up from
+  the sending mailbox in `config/senders.md`. See "Compliance in the copy" below.
 - **Personalization:** at least one line that could only be written for this prospect.
 - **No dashes.** Never use em dashes (`—`) or en dashes (`–`) in generated copy.
   Rephrase so the sentence doesn't need one: use a period, comma, or colon, or split
@@ -93,26 +95,32 @@ Pull the authoritative list from `config/positioning.md`. Never:
 - `[FILL IN any category-specific claims you must avoid]`
 
 ## Compliance in the copy
-- **Every email ships with a footer.** Not just the first in a sequence. Each of
-  the three steps. The footer carries accurate sender identity, the physical mailing
-  address, and a working opt-out. Sender name and address come from
-  `config/positioning.md` (Sender identity & compliance basics); use those values
-  verbatim, don't retype them from memory.
+
+**Do not write a sign-off or a footer. Code appends both.** `scripts/assemble.py`
+attaches the sender sign-off and the compliance footer to every email after
+generation, reading the sender name from `config/senders.md` and the legal name and
+address from `config/positioning.md`. Generate the message body only, ending at the
+CTA.
+
+This is deliberate. On the first real generation run, six of nine emails silently
+shipped with no footer at all, and the sign-off named the recipient rather than the
+sender. Compliance-critical elements are the ones a missed instruction drops without
+any visible symptom, so they are no longer the model's job. `scripts/validate.py`
+flags any generated body that contains footer or sign-off content, because that means
+this instruction has drifted.
+
+What the copy itself must still do:
 - **Never hand-write an unsubscribe link.** Do not invent a URL, a `mailto:`, or
-  "reply STOP to unsubscribe" as a substitute. A fabricated link is worse than
+  "reply STOP to unsubscribe" anywhere in the body. A fabricated link is worse than
   none. It looks compliant while doing nothing, and it can't feed the suppression
-  list.
-- **Leave the opt-out to Smartlead's unsubscribe token.** Emit the token itself and
-  let Smartlead render the real per-recipient link at send time. This is what keeps
-  one-click opt-outs wired into Smartlead's own unsubscribe tracking, which is what
-  the suppression list and `instructions/reply-handling.md` depend on.
-  - Token to emit: `[FILL IN: confirm the exact merge tag in the Smartlead account;
-    do not guess the string]`. Until it's confirmed, emit a clearly-marked
-    `{{UNSUBSCRIBE_TOKEN}}` placeholder and flag the campaign as not send-ready
-    rather than substituting anything that looks like a live link.
-  - If a generated draft reaches review with a literal URL in the opt-out slot, treat
-    it as a defect and regenerate. Do not patch it by hand.
-- The body copy must not contradict the footer, and must never suggest the opt-out is
+  list. The real opt-out is Smartlead's unsubscribe token, emitted by the assembly
+  step, which is what keeps one-click opt-outs wired into Smartlead's own tracking,
+  which the suppression list and `instructions/reply-handling.md` depend on.
+  - The token lives in one place, `UNSUBSCRIBE_TOKEN` in `scripts/assemble.py`. It is
+    currently the placeholder `{{UNSUBSCRIBE_TOKEN}}`, pending
+    `[FILL IN: confirm the exact merge tag in the Smartlead account; do not guess the
+    string]`. While it is a placeholder, campaigns are **not send-ready**.
+- The body must not contradict the footer, and must never suggest the opt-out is
   unavailable, conditional, or slower than one click.
 - Never obscure that this is outbound from Posh.
 
