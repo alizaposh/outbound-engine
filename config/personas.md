@@ -12,12 +12,26 @@ Key off signals in the lead source / research:
 - **Event volume & attendance:** ~1 to 6 events/mo, 30 to 100 attendees → Premium;
   monthly/quarterly large-scale, 50+ to thousands, multi-city → Pro.
 - **Ticket price:** ~$5 to $100 → Premium; higher / festival pricing → Pro.
+- **Are they already selling tickets?** This is the cold-outbound gate, not a
+  Premium/Pro tell. A community, grassroots, or recurring-event organizer who charges
+  for tickets is **Premium**, even if smaller or less polished than a nightlife brand.
+  An organizer running only free events is **not a cold-outbound target** at all.
 If unclear, default to Premium framing and flag for human review.
 
 ## Persona: Premium organizer
-- **Typical profile:** mature organizers / small businesses; 1 to 6 events/month;
-  30 to 100 attendees; tickets ~$5 to $100; strong branding; lean teams (1 to 3
-  people).
+Covers two groups with the same core needs (less manual work, brand fit, growth), at
+different stages. Both must **already be selling tickets**.
+- **Typical profile, established:** mature organizers / small businesses; 1 to 6
+  events/month; 30 to 100 attendees; tickets ~$5 to $100; strong branding; lean teams
+  (1 to 3 people).
+- **Typical profile, smaller community and grassroots:** community, grassroots, and
+  recurring-event organizers (run clubs, meetups, recurring series) who are **already
+  charging for tickets**, just at a less polished or lower-volume level than nightlife
+  or festival brands. Earlier in the journey, same needs. Often still building
+  consistency, so growth and repeat attendance matter to them.
+- **Boundary:** an organizer running only free events today is out of scope for cold
+  outbound regardless of how promising they look. See "Not a cold-outbound target"
+  below.
 - **Likely on now:** Eventbrite, Instagram, Plots, RA.
 - **What they care about:** a platform that matches their premium aesthetic; less
   manual work (text blasts, follow-up campaigns); fast RSVPs, guest approval, simple
@@ -58,6 +72,10 @@ If unclear, default to Premium framing and flag for human review.
   tech) are typically already on Posh or very early. Handle as **product-led
   expansion / upsell**, not cold outbound. If one appears in a cold list, flag it
   rather than send.
+- **This exclusion is about what they do today, not their history.** An organizer who
+  used to run free events and now sells tickets is a valid **Premium** target. An
+  organizer running only free events today is not, however promising the trajectory
+  looks. Selling tickets today is the line.
 
 ## Default (no persona match)
 - Use Premium framing, keep it brand- and ops-focused, and flag for human review so

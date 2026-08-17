@@ -49,8 +49,13 @@ cited only where a bullet marks them cleared.
   transitioned from free events to a sustainable paid business, adding brand
   partnerships and grant funding.
   **Cleared figures:** 34 events on Posh, 6 months on Posh, 500+ total attendees.
-  **Fits:** community-focused organizers, free-to-paid transitions, run clubs, and
-  recurring community events.
+  **Fits:** community-focused and grassroots organizers **who already sell tickets**,
+  run clubs, and recurring community events. Strongest for smaller paid organizers who
+  are growing, or who previously ran free events and now sell tickets.
+  **Never cite NARC to an organizer running only free events today.** Its free-to-paid
+  arc is a relatability angle for smaller *paid* organizers, not a signal to target
+  free ones. Free-only organizers are excluded from cold outbound entirely; see
+  `personas.md`.
 
 ### Using a case study: HARD RULES
 - **Relevance is the gate.** Cite a case study only when it genuinely applies to that
@@ -58,10 +63,11 @@ cited only where a bullet marks them cleared.
   drop one in as filler, as social-proof padding, or as a default closer.
 - **Match the story to the prospect.** Caché Life goes to nightlife and upscale
   Premium organizers. We Belong Here goes to festival and large-scale Pro organizers.
-  NARC Run Club goes to community-focused organizers, run clubs, recurring community
-  events, and anyone moving from free events to paid. If none fits, cite none: no
-  case study is better than a mismatched one. Persona definitions live in
-  `personas.md`.
+  NARC Run Club goes to community-focused and grassroots organizers who already sell
+  tickets, run clubs, and recurring community events, and it is strongest for smaller
+  paid organizers who are growing or who moved from free events to paid. Never cite it
+  to an organizer running only free events today. If none fits, cite none: no case
+  study is better than a mismatched one. Persona definitions live in `personas.md`.
 - **At most one case study per email.** Never stack two or more.
 - **Stay inside what is written above.** Those bullets are the full approved scope.
   **NARC Run Club's figures are cleared** (34 events on Posh, 6 months on Posh, 500+
