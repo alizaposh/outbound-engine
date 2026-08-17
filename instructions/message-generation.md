@@ -33,23 +33,38 @@ Eventbrite...") or that name the problem instead of the tool ("when RSVPs and pa
 live in different places..."). If the research note marks the signal low-confidence,
 drop the competitor reference and personalize on something you do know.
 
-## The sequence: 3 emails
-- **Email 1, the opener.** Lead with the prospect's likely problem (per the brief
-  and their persona), then the offer. Specific to the prospect via the research note.
-- **Email 2, the follow-up.** Adds a new angle or proof point. **Must read
-  correctly even if Email 1 got no reply.** No "just circling back on my last
-  note" that assumes they read it. Reference the topic, not the prior email.
-- **Email 3, the final touch.** Short, low-friction, easy yes or a graceful close.
-  Again, must stand on its own.
-
-## Tone & structure  [FILL IN: refine with stakeholder feedback]
-- Tone: `[FILL IN: e.g. direct, peer-to-peer, no hype]`
-- Length: short. `[FILL IN target, e.g. under ~90 words each]`
-- Structure: `[FILL IN: e.g. one-line hook → one-line relevance → one-line offer → CTA]`
-- Personalization: at least one line that could only be written for this prospect.
+## Tone & structure
+- **Tone:** peer-to-peer and direct, like someone who understands the events world,
+  not a marketer. Low hype, no jargon, confident rather than salesy. Specific over
+  generic.
+- **Length:** Email 1 is ~50 to 90 words. Follow-ups are shorter, ~40 to 70. All three
+  should be skimmable on a phone in seconds.
+- **Subject lines:** 2 to 5 words, lowercase and conversational. Avoid spam-trigger
+  words and punctuation (free, guarantee, !!!, $$$).
+- **Sign-off:** simple. First name + Posh.
+- **Personalization:** at least one line that could only be written for this prospect.
 - **No dashes.** Never use em dashes (`—`) or en dashes (`–`) in generated copy.
   Rephrase so the sentence doesn't need one: use a period, comma, or colon, or split
   into two sentences. Do not just swap in a hyphen.
+
+### Structure of the 3-email sequence
+- **Email 1, the opener.**
+  1. A hook line specific to this prospect, drawn from the research note.
+  2. Connect it to their persona's pain: **Premium** is manual work plus brand
+     mismatch; **Pro** is scale, and they are probably already comparing platforms.
+  3. Exactly one value prop, chosen to fit the persona.
+  4. The soft interest-check CTA.
+- **Email 2, the follow-up** (~3 to 4 days later). Lead with a **different angle**
+  than Email 1, add one new value point, and close with a soft CTA. **Must read
+  correctly even if Email 1 got no reply:** no "just circling back on my last note"
+  that assumes they read it. Reference the topic, not the prior email.
+- **Email 3, the close** (~4 to 5 days later). Short and graceful, a closing-the-loop
+  breakup, with one easy CTA. Must also stand on its own.
+
+### Sequence rules
+- **Rotate the angles.** No value prop repeats across all three emails.
+- **One CTA per email.**
+- **Stay inside the approved claims** in `config/positioning.md`.
 
 ## CTA rules
 - **Goal: booked meetings.** Every sequence drives toward a conversation.
