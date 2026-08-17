@@ -122,10 +122,21 @@ message_1, message_2, message_3`. (No qualification fields, since qualification
 is deferred in v1.) Each message should include a subject line and body.
 
 ## Efficiency
-Generate with **Claude Haiku** (`BULK_LLM_MODEL` in `.env`), once per prospect or in
-efficient batches. Keep the prompt lean; feed in the research note + persona guidance
-rather than everything. Note this uses the Anthropic **API key**, billed separately
-from the Claude subscription that runs Claude Code.
+Generate with **Claude Haiku on Amazon Bedrock** (`BULK_LLM_MODEL` in `.env`), once
+per prospect or in efficient batches. Keep the prompt lean: feed in the research note
+plus persona guidance rather than everything.
+
+This runs on Bedrock, not the first-party Anthropic API. Auth is
+`AWS_BEARER_TOKEN_BEDROCK` sent as `Authorization: Bearer`, and **billing is AWS at
+Bedrock's rates**, separate from the Claude subscription that runs Claude Code. See
+`CLAUDE.md` (Credentials) for the endpoint and model-ID shape.
+
+**Cache the rulebook prefix.** Every prospect in a batch sees the same large fixed
+prompt (`config/positioning.md`, `config/personas.md`, and this file) followed by a
+small per-prospect note. Ordering the prompt that way, stable content first, lets the
+fixed portion be cached once and read on every subsequent prospect instead of being
+re-sent at full price. Any per-prospect value placed above the cached portion defeats
+this, so keep the note last.
 
 ## Persona-specific angles
 See `config/personas.md`. Example of the kind of rule that lives there:

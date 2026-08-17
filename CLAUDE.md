@@ -77,7 +77,7 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 | CRM: contacts, companies, sales status | **HubSpot** | Source of truth for CRM data |
 | Local working state | **SQLite** (`data/outbound.db`, optional) | Claude's own bookkeeping: ID mappings, message versions, approvals, processed reply IDs, last-check timestamps |
 | Human review | **Google Sheet / CSV** in `reviews/` | Review surface only, never authoritative |
-| Bulk copy generation | **Selected LLM API** (cheap model) | Writes personalized messages at volume |
+| Bulk copy generation | **Claude Haiku via Amazon Bedrock** | Writes personalized messages at volume |
 
 **ID mapping (store in SQLite):** HubSpot contact ⇄ Smartlead lead ⇄ campaign ⇄
 generated-message version ⇄ approval ⇄ processed reply.
@@ -152,6 +152,19 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
 All secrets come from environment variables loaded from `.env` (git-ignored).
 Never hardcode or commit a key. Copy `.env.example` → `.env` and fill it in.
 Expected variables are documented in `.env.example`.
+
+**Bulk generation runs on Amazon Bedrock, not the first-party Anthropic API.**
+Auth is a Bedrock long-term API key in `AWS_BEARER_TOKEN_BEDROCK`, sent as
+`Authorization: Bearer`, with the region in `AWS_REGION`. Two consequences worth
+keeping straight:
+- **Model IDs are Bedrock-shaped**, carrying the `anthropic.` provider prefix and a
+  version suffix, optionally with a `us.` cross-region inference profile in front:
+  `us.anthropic.claude-haiku-4-5-20251001-v1:0`, not the bare first-party ID.
+  Requests go to `bedrock-runtime.$AWS_REGION.amazonaws.com` with
+  `"anthropic_version": "bedrock-2023-05-31"` in the body and no `model` field,
+  since the model sits in the URL path.
+- **Billing is AWS at Bedrock's rates**, separate from both Anthropic's list pricing
+  and the Claude subscription that runs Claude Code.
 
 ---
 
