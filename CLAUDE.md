@@ -166,6 +166,36 @@ keeping straight:
 - **Billing is AWS at Bedrock's rates**, separate from both Anthropic's list pricing
   and the Claude subscription that runs Claude Code.
 
+### Bedrock integration: the decided shape
+
+Verified working end to end. Use this exactly rather than re-deriving it.
+
+| Piece | Value |
+|---|---|
+| Client | `anthropic.AnthropicBedrock` (**not** `AnthropicBedrockMantle`) |
+| Endpoint | `https://bedrock-runtime.$AWS_REGION.amazonaws.com` (resolved by the client) |
+| Auth | Bearer token from `AWS_BEARER_TOKEN_BEDROCK` |
+| Region | `AWS_REGION` (currently `us-east-1`) |
+| Model | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
+| SDK | `anthropic==0.122.0`, on Python 3.11+ |
+
+```python
+client = anthropic.AnthropicBedrock(aws_region=os.environ["AWS_REGION"])
+```
+
+- **Do not pass `api_key`.** The SDK reads `AWS_BEARER_TOKEN_BEDROCK` from the
+  environment on its own and sets `Authorization: Bearer`, skipping SigV4.
+- **Gotcha: never pass `api_key` together with AWS credentials.** Combining it with
+  `aws_access_key`, `aws_secret_key`, `aws_session_token`, or `aws_profile` raises
+  `ValueError`. The bearer token replaces AWS credentials, it does not supplement
+  them.
+- **Why not Mantle:** `AnthropicBedrockMantle` targets a different endpoint
+  (`bedrock-mantle.$AWS_REGION.api.aws/anthropic`) and takes bare `anthropic.`
+  prefixed model IDs. Our ID is the `bedrock-runtime` inference-profile form, so it
+  belongs to `AnthropicBedrock`.
+- **Why not boto3:** `invoke_model` would need hand-built JSON bodies and
+  byte-decoded responses. The Anthropic SDK speaks the Messages API shape directly.
+
 ---
 
 ## Sending & deliverability guardrails

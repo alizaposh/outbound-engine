@@ -2,14 +2,25 @@
 # Claude Code will use these when it writes the scripts in scripts/.
 # Install later with:  pip install -r requirements.txt
 # (Nothing here needs to be installed just to create the repo.)
+#
+# Python 3.11+ required. The Anthropic SDK recommends 3.10 or newer, and macOS
+# system Python is 3.9. Build the venv on a separately installed interpreter
+# rather than the system one:
+#   /opt/homebrew/bin/python3.12 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 
 python-dotenv        # load credentials from .env
 requests             # simple HTTP calls to the Smartlead / HubSpot APIs
 httpx                # async HTTP if we batch LLM/API calls efficiently
 pandas               # build/read the human-review CSVs
 
-# ── Bulk LLM client (Claude Haiku via Anthropic API) ──
-anthropic
+# ── Bulk LLM client (Claude Haiku via Amazon Bedrock) ──
+# Use the Anthropic SDK's AnthropicBedrock client, NOT boto3's invoke_model.
+# The SDK speaks the Messages API shape directly, so prompts, cache_control
+# blocks, and response parsing match the rest of the project. boto3 would mean
+# hand-built JSON bodies and byte-decoded responses for no gain, so it is
+# deliberately not a dependency here.
+# Pinned: the bearer-token auth path was verified against this exact version.
+anthropic==0.122.0
 
 # ── Google Sheets review surface (optional) ──
 # gspread
