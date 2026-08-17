@@ -13,11 +13,16 @@ signals behind it. Three inputs matter most.
 - **`current_competitor`** is the sharpest personalization lever available. It sets the
   persona and it points at the switch angle: what their current tool makes hard, and
   what changes on Posh. Lead Email 1 with that problem where the signal is credible.
+- **`vertical`** sets the vocabulary. `Party` and `Live Performance` can use nightlife
+  and show-night language (door, guest list, promo push). `Festival` speaks to multi-day
+  scale and production. `Other Social Communities` is community, civic, and recurring
+  gatherings, where nightlife framing lands badly and should be dropped. It also narrows
+  which case study fits, per `config/positioning.md`. It never changes the persona.
 - **`jobtitle`** decides whose problem the email speaks to. Write to what that person
   actually owns (an owner/founder hears growth and revenue, an ops lead hears manual
   work, a marketing lead hears conversion and reach). Never open by reciting their
   title back at them.
-- **`estimated_gmv_usd`** informs persona routing upstream and nothing else. It should
+- **`estimated_gmv_usd`** decides the persona track upstream and nothing else. It should
   not even appear in the research note. See the hard rule below.
 
 **Never assert a scraped signal as fact.** `current_competitor` is an estimate, so

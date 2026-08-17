@@ -5,9 +5,24 @@ organizers who are currently on a competitor platform. This is also where stakeh
 feedback ("for this persona, lead with X, not Y") gets encoded as a reusable rule.
 
 ## How to identify which persona
-Key off signals in the lead source / research:
+
+### Routing rule: `estimated_gmv_usd` is a hard override
+Check GMV first. When it has a value it decides the track and **overrides the
+competitor signal**, whatever platform the prospect appears to be on.
+- **`estimated_gmv_usd` >= $50,000 → Pro track.**
+- **`estimated_gmv_usd` < $50,000 → Premium track.**
+- **`estimated_gmv_usd` blank → fall through to the competitor signal below.**
+
+> **Threshold note.** The true Pro line is **$100,000**. The gate is deliberately set
+> at **$50,000** to keep lead volume workable for early campaigns, so the $50k to
+> $100k band routes to Pro on purpose and is wider than the real definition. Revisit
+> once volume allows and move it back toward $100,000.
+
+### Competitor signal
+Used when GMV is blank, and always for the switch angle regardless of how the
+prospect was routed.
 - **Current platform** (the biggest tell, and the thing to displace):
-  Eventbrite / Instagram / Plots / RA → likely **Premium**;
+  Eventbrite / Instagram / Plots / RA / Eventeny / Eventnoire → likely **Premium**;
   Dice / Tixr / Shotgun / large-scale Eventbrite → likely **Pro**.
 - **Event volume & attendance:** ~1 to 6 events/mo, 30 to 100 attendees → Premium;
   monthly/quarterly large-scale, 50+ to thousands, multi-city → Pro.
