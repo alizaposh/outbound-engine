@@ -22,6 +22,7 @@ import csv
 import json
 import os
 import pathlib
+import re
 import sys
 from dataclasses import dataclass, field
 
@@ -46,6 +47,12 @@ PRO_VERTICALS = {"festival"}
 
 RULEBOOK_FILES = ("config/positioning.md", "config/personas.md",
                   "instructions/message-generation.md")
+
+# Static copy for contacts whose generation failed after every retry. Deliberately not
+# in RULEBOOK_FILES: a ready-made sequence in the prompt is something the model would
+# echo. See config/generation-failure-fallback.md.
+FALLBACK_FILE = "config/generation-failure-fallback.md"
+FALLBACK_STATUS = "GENERATION_FAILED_FALLBACK"
 
 
 # ---- data ---------------------------------------------------------------------
@@ -88,9 +95,14 @@ class ContactResult:
     bedrock_message_id: str = ""
     attempts: int = 0
     error: str = ""
+    used_fallback: bool = False
 
     @property
     def status(self) -> str:
+        # Checked before error: a fallback row still carries its original failure
+        # reason, but must never read as either a clean row or a bare ERROR.
+        if self.used_fallback:
+            return FALLBACK_STATUS
         if self.error:
             return "ERROR"
         if any(m.validation and m.validation.failed for m in self.messages):
@@ -166,6 +178,25 @@ sign-off, footer, company name, address, or unsubscribe token. Code appends thos
     return rulebook, instruction
 
 
+def load_failure_fallback() -> dict:
+    """The static sequence used when a contact exhausts its retries.
+
+    Same shape as model output, so it flows through the identical assembly path.
+    Validated for shape at startup rather than on the failure path, where a broken
+    fallback would be discovered at the worst possible moment.
+    """
+    text = (ROOT / FALLBACK_FILE).read_text(encoding="utf-8")
+    m = re.search(r"```json\s*(.+?)```", text, re.S)
+    if not m:
+        raise RuntimeError(f"no json block found in {FALLBACK_FILE}")
+    data = json.loads(m.group(1))
+    for k in ("message_1", "message_2", "message_3"):
+        if not isinstance(data.get(k), dict) or "subject" not in data[k] \
+                or "body" not in data[k]:
+            raise RuntimeError(f"{FALLBACK_FILE} is missing or malformed {k}")
+    return data
+
+
 def research_note(c: Contact, persona, basis, platform_known) -> dict:
     """estimated_gmv_usd is deliberately absent: it routes upstream and stops."""
     note = {
@@ -235,7 +266,8 @@ def generate_with_retry(client, model, rulebook, instruction, note):
 # ---- per-contact pass ----------------------------------------------------------
 
 def process_contact(c, client, model, rulebook, instruction, *, mailbox,
-                    identity, sender_map, footer, token, literals, regexes):
+                    identity, sender_map, footer, token, literals, regexes,
+                    failure_fallback):
     persona, basis, platform_known = route(c)
     res = ContactResult(contact=c, persona=persona, persona_basis=basis,
                         platform_known=platform_known)
@@ -250,7 +282,18 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
         client, model, rulebook, instruction, note)
     res.attempts, res.bedrock_message_id = attempts, bid
     if emails is None:
+        # Recover with committed copy so the contact is not left unusable, but keep the
+        # failure on the row and out of the normal PASS/WARN/FAIL vocabulary. A
+        # generation failure that gets silently templated is worse than a flagged one.
         res.error = f"generation failed after {attempts} attempts: {err}"
+        res.used_fallback = True
+        for position in POSITIONS:
+            m = failure_fallback[f"message_{position}"]
+            body_final = assemble.assemble(m["body"], mailbox, identity=identity,
+                                           sender_map=sender_map)
+            res.messages.append(MessageResult(position, m["subject"], m["body"],
+                                              body_final))
+        assert len(res.messages) == len(POSITIONS), "fallback must fill all three"
         return res
 
     # The three-position guarantee. Not delegated to a caller.
@@ -357,6 +400,7 @@ def main(argv=None) -> int:
     contacts = load_contacts(a.contacts)
     if a.limit:
         contacts = contacts[:a.limit]
+    failure_fallback = load_failure_fallback()
     rulebook, instruction = build_system_prompt()
     client = anthropic.AnthropicBedrock(aws_region=os.environ["AWS_REGION"])
     model = os.environ["BULK_LLM_MODEL"]
@@ -367,9 +411,13 @@ def main(argv=None) -> int:
         r = process_contact(c, client, model, rulebook, instruction,
                             mailbox=a.mailbox, identity=identity,
                             sender_map=sender_map, footer=footer, token=token,
-                            literals=literals, regexes=regexes)
+                            literals=literals, regexes=regexes,
+                            failure_fallback=failure_fallback)
         results.append(r)
-        every_email.extend(m.validation for m in r.messages)
+        # Fallback rows carry committed copy, not model output. Scoring them would
+        # inflate the pass rate with emails the model never wrote.
+        if not r.used_fallback:
+            every_email.extend(m.validation for m in r.messages)
         note = f" ERROR: {r.error}" if r.error else ""
         print(f"  [{i}/{len(contacts)}] {c.display[:32]:32} {r.persona or '-':8} "
               f"{r.persona_basis:22} {r.status:5} "
@@ -382,8 +430,17 @@ def main(argv=None) -> int:
         w.writerows(to_row(r) for r in results)
 
     n_err = sum(1 for r in results if r.error)
+    n_fallback = sum(1 for r in results if r.used_fallback)
+    n_flagged = sum(1 for r in results if r.error and not r.used_fallback)
     print(f"\nCSV: {a.out}  ({len(results)} rows, one per input contact, "
           f"{n_err} with generation_error)")
+    print(f"  {len(results) - n_err:3} generated normally")
+    print(f"  {n_fallback:3} used the GENERATION-FAILURE FALLBACK "
+          f"(committed copy, NOT model output, not send-ready without review)")
+    for r in results:
+        if r.used_fallback:
+            print(f"        - {r.contact.display}: {r.error}")
+    print(f"  {n_flagged:3} flagged without generating (branch 3)")
 
     repairs = [(r.contact.display, m.position, rec)
                for r in results for m in r.messages for rec in m.repairs]
