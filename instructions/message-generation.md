@@ -214,7 +214,15 @@ it stays caught rather than prevented.
      "just circling back", no "following up on my last note", no "as I mentioned". Do
      not reference the earlier email at all. Reference the topic and open on the angle
      itself, as if this were the first time you raised it.
-  4. The concrete-offer CTA.
+  4. **Close on a concrete-offer CTA, in the anchor's register.** Offer to *do*
+     something: "happy to put together a tailored comparison, want me to?", "any
+     opportunity to compare what we could put together for your next one?". This email
+     defaults to the vague hedge if left to itself, and the whole "worth a quick
+     chat/look/conversation" family is a hard FAIL in `config/banned-phrases.md`. The
+     fix is not to soften that ask, it is to make a real offer instead.
+     **Vary the ask from Email 1's.** If Email 1 offered a custom proposal, offer the
+     tailored comparison here, or offer to walk them through the specific angle this
+     email developed. The same ask three times reads automated.
 
   **Its length should come from having something to say.** If this email is running
   short, the angle was too thin: choose a more specific one, or develop it further with
