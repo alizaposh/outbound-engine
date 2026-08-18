@@ -37,9 +37,9 @@ NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
 # Positional: messages 1 and 2 carry the package pitch; message 3 is a breakup.
 LENGTH_TARGETS = {1: (80, 110), 2: (80, 110), 3: (40, 70)}
 
-# Subject word count. Widened from 2-5 with the warmer voice, which pulls subjects
-# toward short phrases rather than fragments.
-SUBJECT_WORDS = (2, 6)
+# Subject word count. Widened from 2-5 to 2-6 to 2-7 as the warmer SDR voice settled:
+# it pulls subjects toward short natural phrases rather than clipped fragments.
+SUBJECT_WORDS = (2, 7)
 
 # Platform names that must never appear when current_competitor is unknown.
 # Naming a platform the sender did not actually verify proves they did not look.
@@ -301,6 +301,29 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
         markers = [m for m in footer.splitlines() if m.strip()]
         res.findings += check_model_wrote_footer(subject, raw_body, footer_markers=markers)
     return res
+
+
+def check_stat_budget(messages: list[tuple[int, str, str]]) -> list[Finding]:
+    """Sequence-level: at most one approved stat across all three messages.
+
+    Not a per-message check, so it cannot live in validate_email: reuse is only
+    visible with the whole sequence in hand. WARN rather than FAIL, because this is a
+    quality guideline about reading corporate, not a compliance rule.
+    """
+    hits: list[tuple[int, str]] = []
+    for position, subject, body in messages:
+        for m in STAT_MENTION.finditer(f"{subject}\n{body}"):
+            hits.append((position, m.group(1) + "%"))
+    if len(hits) <= 1:
+        return []
+    where = ", ".join(f"m{p}:{s}" for p, s in hits)
+    distinct = {s for _, s in hits}
+    kind = ("the same stat repeats" if len(distinct) == 1
+            else "more than one distinct stat appears")
+    return [Finding("stat_budget", WARN,
+        f"{len(hits)} stat mentions across the sequence ({where}); {kind}. "
+        f"The rule is at most one stat per 3-email sequence: lead with the package "
+        f"and the offer, not a number.")]
 
 
 def report(results: list[EmailResult]) -> str:

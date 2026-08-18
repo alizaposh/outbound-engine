@@ -43,6 +43,15 @@ SENTENCE_SPLIT = re.compile(r"(?<=[.!?])(\s+)")
 
 EM, EN = "—", "–"
 
+# A trailing sign-off the model wrote despite being told not to. Assembly appends the
+# real one, so leaving this in produces a doubled sign-off. Mechanical, unlike a CTA.
+SIGNOFF_LINE = re.compile(
+    r"^\s*(thanks|thank you|best|best regards|cheers|regards|sincerely|warmly|"
+    r"talk soon|all the best|appreciate it)\s*[,.!]?\s*$", re.I)
+# A bare name line following a sign-off ("Thanks,\nAliza"). Only stripped when a
+# sign-off was stripped immediately above it, so ordinary copy is never touched.
+NAME_LINE = re.compile(r"^\s*[A-Z][\w.'-]*(\s+[A-Z][\w.'-]*)?\s*$")
+
 
 class RepairError(RuntimeError):
     """Raised when repair cannot run safely."""
@@ -160,6 +169,41 @@ def normalize_dashes(text: str) -> tuple[str, list[RepairRecord]]:
     return "".join(parts), records
 
 
+# ---- sign-off ------------------------------------------------------------------
+
+def strip_signoff(text: str) -> tuple[str, list[RepairRecord]]:
+    """Remove a model-written trailing sign-off so assembly's is the only one."""
+    lines = text.rstrip().split("\n")
+    records: list[RepairRecord] = []
+    stripped_signoff = False
+
+    while lines:
+        while lines and not lines[-1].strip():
+            lines.pop()
+        if not lines:
+            break
+        last = lines[-1]
+        if SIGNOFF_LINE.match(last):
+            lines.pop()
+            records.append(RepairRecord("signoff", last.strip(), "(removed)",
+                note="model wrote a sign-off; assembly appends the real one"))
+            stripped_signoff = True
+            continue
+        # "Thanks,\nAliza": the name is the last line and the sign-off sits above it,
+        # so look one line up before deciding. Only a name directly under a sign-off
+        # is removed, which is why ordinary short closing lines are untouched.
+        prev = next((l for l in reversed(lines[:-1]) if l.strip()), "")
+        if (NAME_LINE.match(last) and len(last.split()) <= 2
+                and SIGNOFF_LINE.match(prev)):
+            lines.pop()
+            records.append(RepairRecord("signoff", last.strip(), "(removed)",
+                note="name line under a model-written sign-off"))
+            continue
+        break
+
+    return "\n".join(lines).rstrip(), records
+
+
 # ---- stats --------------------------------------------------------------------
 
 def snap_stats(text: str) -> tuple[str, list[RepairRecord]]:
@@ -208,12 +252,14 @@ def snap_stats(text: str) -> tuple[str, list[RepairRecord]]:
 # ---- driver -------------------------------------------------------------------
 
 def repair(body: str) -> tuple[str, list[RepairRecord]]:
-    """Dashes first, then stats: dash repair can split a stat sentence, and the stat
-    snapper needs clean sentence boundaries to find the right clause."""
+    """Sign-off first, then dashes, then stats. Sign-off removal changes what the last
+    line is, dash repair can split a stat sentence, and the stat snapper needs clean
+    sentence boundaries to find the right clause."""
     verify_canon()
+    body, r0 = strip_signoff(body)
     body, r1 = normalize_dashes(body)
     body, r2 = snap_stats(body)
-    return body, r1 + r2
+    return body, r0 + r1 + r2
 
 
 def format_records(records: list[RepairRecord], indent: str = "    ") -> str:

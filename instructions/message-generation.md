@@ -177,7 +177,7 @@ were violated in most emails.
    - "Posh events convert 40% better than other platforms."
    No hedging ("on average", "roughly", "about", "up to"), no rewording, no
    substituting a different noun for "the Posh marketplace".
-3. **Subject lines are 2 to 6 words, lowercase.** Canonical acronyms and initialisms
+3. **Subject lines are 2 to 7 words, lowercase.** Canonical acronyms and initialisms
    keep their standard casing: RA, NYC, DJ, RSVP, VIP, EDM, LA, SF, DM. Every other
    word is lowercase, including the first. (The authoritative list the validator
    checks is `CANONICAL_ACRONYMS` in `scripts/validate.py`.)
