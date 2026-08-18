@@ -253,6 +253,20 @@ Pull the authoritative list from `config/positioning.md`. Never:
   It is a scraped estimate used only to route Premium vs Pro. Telling an organizer what
   you think they gross is presumptuous when right and damaging when wrong, and it is
   never approved copy. The same applies to any other internal scale estimate.
+- **Promise a specific or quantified commercial term.** See "Commercial terms" in
+  `config/positioning.md`, which is authoritative. **The existence of a tailored offer
+  is sayable; its contents are not.** You may say Posh can put together a competitive
+  or custom offer, mention **financial incentives** vaguely and bundled with the rest
+  of the package the way the voice anchor does, and describe **dedicated account
+  support**, which is a real capability. You may never name a term: no lower or reduced
+  fees, rates, or commission, no credit of any kind, no free or discounted month, no
+  percentage or dollar figure, and no time-boxed offer ("this quarter", "your first
+  month"). Hedging does not rescue it. Nobody has priced this prospect, so a term in a
+  cold email is one someone later has to honor or walk back.
+  - **NOT this:** "Lower fees on a subset of your events, or a flat credit toward your
+    first month on Posh, depending on your volume."
+  - **THIS:** "...generating extra revenue with dedicated account support, financial
+    incentives, marketing push and more." Same promise of value, nothing to honor.
 - **State a scraped signal as established fact.** See "Using the research signals."
 - `[FILL IN any category-specific claims you must avoid]`
 

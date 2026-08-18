@@ -54,6 +54,40 @@ PLATFORM_NAMES = [
 CANONICAL_ACRONYMS = {"RA", "NYC", "DJ", "RSVP", "VIP", "EDM", "LA", "SF", "NY",
                       "DM", "US", "UK", "QR", "AI", "B2B", "VIPs"}
 
+# Quantified commercial terms, from config/positioning.md ("Commercial terms").
+# The existence of a tailored offer is approved copy; its contents are not. Nobody has
+# priced the prospect at cold-email time, so a named term is one a human later has to
+# honor or walk back. That outranks a clumsy CTA, so this is a hard FAIL.
+# Deliberately does NOT match the approved vague form: "financial incentives" bundled
+# with the rest of the package, as the voice anchor writes it.
+COMMERCIAL_TERMS = [
+    re.compile(r"\b(lower|lowered|reduced|reduce|discounted|discount|cheaper|cut|"
+               r"waive[ds]?|waiving)\s+(the\s+|your\s+|our\s+)?"
+               r"(platform\s+|ticket\s+|per[-\s]ticket\s+|service\s+)?"
+               r"(fee|fees|rate|rates|pricing|price|prices|commission|commissions)\b", re.I),
+    re.compile(r"\b(fee|fees|rate|rates|pricing|commission|commissions)\b[^.!?]{0,40}?"
+               r"\b(waived|reduced|lowered|discounted|cut)\b", re.I),
+    re.compile(r"\b(flat|account|onboarding|sign[-\s]?up|signup|starting)\s+credit\b", re.I),
+    re.compile(r"\bcredits?\s+(toward|towards|on|against)\b", re.I),
+    re.compile(r"\b(free|complimentary|no[-\s]cost)\s+(first\s+)?(month|quarter|trial)\b", re.I),
+    re.compile(r"\b(first|next)\s+(month|event|events)\b[^.!?]{0,20}?\bfree\b", re.I),
+    re.compile(r"\b\d+\s*(%|percent)\s+(off|lower|less|reduced|cheaper)\b", re.I),
+    re.compile(r"\bpercent\s+off\b", re.I),
+    re.compile(r"\bno\s+(platform\s+|ticket\s+|service\s+)?fees?\b", re.I),
+    re.compile(r"\$\s?\d[\d,.]*\s*(k\b|credit|off|back)", re.I),
+]
+
+# Urgency implies terms that expire, which implies terms. Only fires next to offer
+# language, so "your plans this quarter" is fine. "this year" is absent on purpose:
+# the voice anchor says "putting together very competitive offers this year".
+TIME_BOXED = re.compile(
+    r"\b(this\s+(quarter|month)|your\s+first\s+month|first\s+month|"
+    r"next\s+\d+\s+days|limited\s+time|through\s+the\s+end\s+of\s+(the\s+)?(month|quarter)|"
+    r"before\s+the\s+end\s+of\s+(the\s+)?(month|quarter))\b", re.I)
+OFFER_CONTEXT = re.compile(
+    r"\b(offer|offers|deal|deals|incentive|incentives|pricing|price|credit|credits|"
+    r"fee|fees|rate|rates|discount|promo|promotion|proposal|package)\b", re.I)
+
 DASHES = {"—": "em dash", "–": "en dash"}
 SIGNOFF_HINTS = re.compile(r"^\s*(best|thanks|cheers|regards|sincerely)\b[,.]?\s*$", re.I | re.M)
 
@@ -254,6 +288,30 @@ def check_no_invented_platform(subject: str, body: str, *,
     return out
 
 
+def check_commercial_terms(subject: str, body: str) -> list[Finding]:
+    """No specific or quantified commercial term may appear in a cold email.
+
+    Not auto-repaired, for the same reason the CTA family isn't: rewriting a commercial
+    claim is editorial. A vague, bundled "financial incentives" is approved and must
+    keep passing; naming what the incentive actually is must not.
+    """
+    out = []
+    hay = f"{subject}\n{body}"
+    for rx in COMMERCIAL_TERMS:
+        m = rx.search(hay)
+        if m:
+            out.append(Finding("commercial_terms", FAIL,
+                f"specific commercial term {m.group(0)!r}; the offer's existence is "
+                f"sayable, its terms are not (config/positioning.md, Commercial terms)"))
+    for sent in _sentences(hay):
+        t = TIME_BOXED.search(sent)
+        if t and OFFER_CONTEXT.search(sent):
+            out.append(Finding("commercial_terms", FAIL,
+                f"time-boxed offer {t.group(0)!r} next to offer language; urgency "
+                f"implies terms that expire: {sent!r}"))
+    return out
+
+
 def check_model_wrote_footer(subject: str, raw_body: str, *, footer_markers) -> list[Finding]:
     """Run against the RAW model output, before assembly. Detects prompt drift."""
     out = []
@@ -296,6 +354,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_case_studies(subject, body)
     res.findings += check_no_invented_platform(subject, body,
                                                competitor_known=competitor_known)
+    res.findings += check_commercial_terms(subject, body)
     res.findings += check_length(subject, body, position=position, footer=footer)
     if raw_body is not None:
         markers = [m for m in footer.splitlines() if m.strip()]

@@ -33,7 +33,9 @@ Primary problems we solve:
 - **Higher conversion:** **Posh events convert 40% better** than other platforms.
 - **A better deal than their current tool:** Posh can put together a more competitive
   offer than an organizer's current ticketing solution: dedicated account support,
-  financial incentives, a marketing push, and more.
+  financial incentives, a marketing push, and more. **Bundled and unquantified, exactly
+  as worded here.** See "Commercial terms" below: the *existence* of a tailored offer is
+  approved, its *contents* are not.
 
 ## Proof: approved case studies
 All three stories below are **cleared for external use in cold outbound**, including
@@ -76,8 +78,53 @@ cited only where a bullet marks them cleared.
   invented. Never invent, extrapolate, round, or restate any customer figure.
 - **Any customer not listed here still needs explicit approval before being named.**
 
+## Commercial terms: what the copy may and may not promise
+
+**The principle: the existence of a tailored offer is sayable. Its terms are not.**
+Nobody has priced this prospect at cold-email time, so any specific term in a cold
+email is a number someone would later have to honor or walk back with a real
+prospect. That is a materially worse failure than clumsy copy.
+
+**Allowed**, and no more specific than this:
+- That Posh can put together a **competitive** or **custom offer / proposal** for them.
+- That **financial incentives** are part of what gets worked out with organizers,
+  mentioned vaguely and bundled with the rest of the package, exactly as the voice
+  anchor does: "dedicated account support, financial incentives, marketing push and
+  more."
+- That **dedicated account support** is available. This is a real capability, not a
+  commercial term, and it may be described concretely.
+
+**Never**, in any email:
+- **Lower or reduced fees, rates, pricing, or commission.** Not as a promise, not as a
+  possibility, not hedged with "could" or "depending on your volume".
+- **A credit of any kind**: flat credit, account credit, credit toward anything.
+- **A free or discounted period**: free month, first month free, a discounted trial.
+- **Any percentage or dollar figure attached to an offer**: "20% off", "$500 credit".
+- **A time-boxed offer**: "this quarter", "this month", "your first month", "limited
+  time". Urgency implies terms that expire, which implies terms.
+
+**NOT this** (both from real generated copy, one sentence):
+> "Lower fees on a subset of your events, or a flat credit toward your first month on
+> Posh, depending on your volume."
+
+Two prohibited terms at once: a fee promise and a credit promise. The hedge
+("depending on your volume") does not rescue it. Neither would "could" or "may".
+
+**THIS**, the allowed vague form, from the voice anchor:
+> "We've been putting together very competitive offers this year, all focused on
+> helping organizers drive better reach, earlier conversions, and generating extra
+> revenue with dedicated account support, financial incentives, marketing push and
+> more."
+
+Same promise of value, no term anyone has to honor. Enforced by
+`check_commercial_terms` in `scripts/validate.py` as a hard FAIL, and deliberately not
+auto-repaired: rewriting a commercial claim is an editorial decision, not a mechanical
+one.
+
 ## Prohibited claims: HARD RULES
 - No invented customers, logos, metrics, or results.
+- **No specific or quantified commercial terms.** See "Commercial terms" above. The
+  offer's existence is approved; its contents are not.
 - **Only Caché Life, We Belong Here, and NARC Run Club may be named.** Their approved
   outcomes are in "Proof" above. Any other customer requires explicit approval first.
 - **Never invent or extrapolate a customer figure.** The only cleared customer figures
