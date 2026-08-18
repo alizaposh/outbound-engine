@@ -29,6 +29,15 @@ understanding what it prevented.
   Restates the approved 13% marketplace stat in unapproved wording. The stat must
   appear only as written in `positioning.md`.
 
+- `worth a quick conversation`
+  Vague ask. The CTA must be a concrete offer (custom proposal, tailored comparison).
+  See the Voice anchor in message-generation.md.
+- `one thing that stands out`
+  Formulaic message-2 opener the voice rules forbid.
+- `community in New York`
+  The voice anchor's closing clause is illustrative only. Prospecting is national and
+  no local-community claim is approved anywhere.
+
 ## Regex
 
 - `unlike\s+(eventbrite|dice|tixr|shotgun|resident\s+advisor|ra|plots|ticketfairy|eventeny|eventnoire)`
@@ -38,6 +47,10 @@ understanding what it prevented.
   "convert 40% better than other platforms", which names no competitor.
 - `(we|posh)\s+guarantee`
   Guarantees are prohibited outright, whatever follows.
+- `managing events on\s+\w+.{0,30}\bworks,?\s+but`
+  The cold-diagnosis opener named in the Voice anchor's this-not-that pair.
+- `(huge|large|active)\s+(and\s+\w+\s+)?community\s+in\s+[A-Z]`
+  Any local-community claim. National prospecting, no city-specific claim approved.
 - `(will|guaranteed to)\s+sell\s+out`
   Outcome promise. "help sell out your next event?" as a question is approved; a
   statement that it will happen is not.

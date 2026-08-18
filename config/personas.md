@@ -53,15 +53,14 @@ different stages. Both must **already be selling tickets**.
   payouts; growth data; responsive support.
 - **Lead with:** the operational headache + brand mismatch of their current tool.
   Posh automates the manual marketing (text blasts, follow-ups) and matches a premium
-  brand, with the marketplace bringing new attendees. The 40%-better-conversion and
-  13%-marketplace stats land well here.
+  brand, with the marketplace bringing new attendees. The stats land well here, but
+  use at most one across the whole sequence (see message-generation.md).
 - **Avoid:** heavy enterprise / "scale to thousands" language. They're lean, so
   don't overwhelm them.
-- **Preferred CTA:** soft interest-check that invites a reply and leads toward a
-  meeting. Example: "Open to exploring how Posh can help sell out your next event?
-  Let me know if you'd like to connect." Keep the opener reply-based, with no
-  booking link yet. Offer a specific time or scheduling link only once they show
-  interest.
+- **Preferred CTA:** a concrete offer that invites a reply. Example: "Any
+  opportunity to compare what Posh could put together for your next one? Let me know
+  if you're open to connecting." Keep the opener reply-based, with no booking link
+  yet. Offer a specific time or scheduling link only once they show interest.
 
 ## Persona: Pro organizer
 - **Typical profile:** high-revenue operators; monthly/quarterly festivals or large
@@ -72,15 +71,15 @@ different stages. Both must **already be selling tickets**.
 - **What they care about:** platform scalability/reliability; strategic partnership +
   high-touch sales/success; affiliate/ambassador tools for organic growth; deep
   analytics.
-- **Lead with:** scale + partnership + organic growth. They're in evaluation mode, so
-  pair the marketplace / organic-growth angle (13% of tickets via the marketplace)
-  with the competitive offer (dedicated support, financial incentives, marketing push).
+- **Lead with:** the competitive offer (dedicated support, financial incentives,
+  marketing push) plus scale and organic growth. They're in evaluation mode, so the
+  custom-proposal ask lands well. Use at most one stat across the whole sequence.
 - **Avoid:** "easy, lightweight tool" framing. Too basic, and it undersells the
   platform.
-- **Preferred CTA:** still a connect-ask, but a touch more concrete since they're
-  already comparing, so offer a quick tailored look. Example: "Worth a short call to
-  see how Posh stacks up for your next run of events? Happy to put together a
-  tailored comparison." Reply-based first; scheduling link once interested.
+- **Preferred CTA:** a concrete offer, which lands especially well since they're
+  already comparing. Example: "Any opportunity to compare what Posh could put together
+  in a custom proposal for your next run of events? Happy to pull together a tailored
+  comparison." Reply-based first; scheduling link once interested.
 
 ## Not a cold-outbound target: Free tier
 - Free-tier organizers (RSVP-only, $0 tickets, 1 to 50 attendees, often new to event
@@ -92,6 +91,39 @@ different stages. Both must **already be selling tickets**.
   organizer running only free events today is not, however promising the trajectory
   looks. Selling tickets today is the line.
 
-## Default (no persona match)
-- Use Premium framing, keep it brand- and ops-focused, and flag for human review so
-  we can refine the persona later.
+## Routing branches: what to do when signals are missing
+
+Blank `estimated_gmv_usd` is common, so routing every such lead to a human queue
+would defeat the system. Three branches, checked in order. Always record which one
+fired in `persona_basis`, so a reviewer can see how a given email got framed.
+
+### Branch 1: signals present
+`estimated_gmv_usd` and/or `current_competitor` are usable. Route by the normal rule
+above (GMV is the hard override; competitor routes when GMV is blank) and generate
+from the main voice anchor, naming the platform. `persona_basis` is `gmv` or
+`competitor`.
+
+### Branch 2: signals missing, lead otherwise valid
+GMV and/or competitor are missing, but the lead is a real organizer with a company or
+brand identity worth writing to. **Generate.** Do not queue it.
+- **Persona:** route on whatever secondary signal exists, in this order:
+  `vertical`, then `jobtitle`, then company type. `Festival` and large-scale signals
+  lean Pro; everything else leans Premium.
+- **If no secondary signal supports a confident call**, write a single
+  persona-neutral version: the package and the offer, without Premium's
+  manual-work framing or Pro's scale framing.
+- **Record it:** `persona_basis` is `fallback: vertical`, `fallback: jobtitle`,
+  `fallback: company-type`, or `fallback: neutral`.
+- **Copy:** if `current_competitor` is missing or unusable (blank, "Other",
+  "Unknown"), use the **no-platform fallback** in
+  `instructions/message-generation.md` (Voice anchor, "When the current platform is
+  unknown"). Ask the generic setup question and name no platform. If the competitor
+  is usable, the main anchor applies as normal.
+
+### Branch 3: not enough to write a credible email
+No company or brand identity, not an organizer, or the row is junk. **Flag for human
+review and generate nothing.** `persona_basis` is `flag: insufficient`.
+
+This escape hatch matters more than it looks: lead qualification is deferred out of
+v1, so this branch is currently the only thing standing between a garbage row and an
+email going out to it. Do not widen branch 2 to swallow it.

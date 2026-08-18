@@ -33,6 +33,27 @@ CLEARED_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here", "NARC Run Cl
 # Only NARC has cleared figures; a numeral next to the other two means invention.
 NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
 
+# Length is a target, never a gate: check_length only ever emits WARN.
+# Positional: messages 1 and 2 carry the package pitch; message 3 is a breakup.
+LENGTH_TARGETS = {1: (80, 110), 2: (80, 110), 3: (40, 70)}
+
+# Subject word count. Widened from 2-5 with the warmer voice, which pulls subjects
+# toward short phrases rather than fragments.
+SUBJECT_WORDS = (2, 6)
+
+# Platform names that must never appear when current_competitor is unknown.
+# Naming a platform the sender did not actually verify proves they did not look.
+PLATFORM_NAMES = [
+    "Eventbrite", "Resident Advisor", "RA", "DICE", "Dice", "Tixr", "Shotgun",
+    "Plots", "TicketFairy", "Ticket Fairy", "Eventeny", "Eventnoire",
+    "Ticketmaster", "Universe", "Ticketor", "Luma", "Partiful",
+]
+
+# Canonical acronyms and initialisms keep their standard casing in subject lines.
+# Authoritative list; message-generation.md hard constraint 3 points here.
+CANONICAL_ACRONYMS = {"RA", "NYC", "DJ", "RSVP", "VIP", "EDM", "LA", "SF", "NY",
+                      "DM", "US", "UK", "QR", "AI", "B2B", "VIPs"}
+
 DASHES = {"—": "em dash", "–": "en dash"}
 SIGNOFF_HINTS = re.compile(r"^\s*(best|thanks|cheers|regards|sincerely)\b[,.]?\s*$", re.I | re.M)
 
@@ -128,13 +149,25 @@ def check_approved_stats(subject: str, body: str) -> list[Finding]:
 def check_subject_shape(subject: str, body: str) -> list[Finding]:
     out = []
     words = subject.split()
-    if not 2 <= len(words) <= 5:
+    lo, hi = SUBJECT_WORDS
+    if not lo <= len(words) <= hi:
         out.append(Finding("subject_shape", FAIL,
-            f"subject is {len(words)} words, rule is 2 to 5: {subject!r}"))
-    if any(c.isupper() for c in subject):
-        upper = "".join(sorted({c for c in subject if c.isupper()}))
+            f"subject is {len(words)} words, rule is {lo} to {hi}: {subject!r}"))
+    bad = []
+    for w in words:
+        stripped = w.strip(".,!?:;'\"()")
+        if not any(c.isupper() for c in stripped):
+            continue
+        # Canonical acronyms keep their casing, including a plural "s" (DMs).
+        if stripped.upper() in CANONICAL_ACRONYMS:
+            continue
+        if stripped.endswith("s") and stripped[:-1].upper() in CANONICAL_ACRONYMS:
+            continue
+        bad.append(stripped)
+    if bad:
         out.append(Finding("subject_shape", FAIL,
-            f"subject must be lowercase, found {upper!r}: {subject!r}"))
+            f"subject must be lowercase except canonical acronyms; offending "
+            f"word(s) {bad}: {subject!r}"))
     return out
 
 
@@ -201,6 +234,26 @@ def check_case_studies(subject: str, body: str) -> list[Finding]:
     return out
 
 
+def check_no_invented_platform(subject: str, body: str, *,
+                               competitor_known: bool) -> list[Finding]:
+    """When the prospect's platform is unknown, no platform may be named.
+
+    Guessing a competitor from the vertical or the company name is the most expensive
+    error in a cold email: a confidently wrong platform proves the sender never
+    looked. No data means ask generically.
+    """
+    if competitor_known:
+        return []
+    out = []
+    hay = f"{subject}\n{body}"
+    for name in PLATFORM_NAMES:
+        if re.search(rf"\b{re.escape(name)}\b", hay):
+            out.append(Finding("invented_platform", FAIL,
+                f"named {name!r} but current_competitor is unknown for this contact; "
+                f"the no-platform fallback must ask the generic setup question"))
+    return out
+
+
 def check_model_wrote_footer(subject: str, raw_body: str, *, footer_markers) -> list[Finding]:
     """Run against the RAW model output, before assembly. Detects prompt drift."""
     out = []
@@ -220,7 +273,7 @@ def check_length(subject: str, body: str, *, position: int, footer: str) -> list
     copy = body.replace(footer, "")
     copy = re.sub(r"\n\s*\w+\s*\nPosh\s*$", "", copy.strip())
     n = len(copy.split())
-    lo, hi = (50, 90) if position == 1 else (40, 70)
+    lo, hi = LENGTH_TARGETS.get(position, LENGTH_TARGETS[1])
     if not lo <= n <= hi:
         return [Finding("length", WARN,
             f"email {position} is {n} words, target is {lo} to {hi}")]
@@ -231,7 +284,7 @@ def check_length(subject: str, body: str, *, position: int, footer: str) -> list
 
 def validate_email(subject: str, body: str, *, position: int, footer: str, token: str,
                    literals, regexes, raw_body: str | None = None,
-                   label: str = "") -> EmailResult:
+                   label: str = "", competitor_known: bool = True) -> EmailResult:
     res = EmailResult(label=label or f"message_{position}")
     res.findings += check_no_dashes(subject, body)
     res.findings += check_approved_stats(subject, body)
@@ -241,6 +294,8 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
     res.findings += check_gmv_leak(subject, body)
     res.findings += check_case_studies(subject, body)
+    res.findings += check_no_invented_platform(subject, body,
+                                               competitor_known=competitor_known)
     res.findings += check_length(subject, body, position=position, footer=footer)
     if raw_body is not None:
         markers = [m for m in footer.splitlines() if m.strip()]

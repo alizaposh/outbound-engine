@@ -11,8 +11,9 @@ The research note (see `instructions/research.md`) carries the persona call and 
 signals behind it. Three inputs matter most.
 
 - **`current_competitor`** is the sharpest personalization lever available. It sets the
-  persona and it points at the switch angle: what their current tool makes hard, and
-  what changes on Posh. Lead Email 1 with that problem where the signal is credible.
+  persona and it points at the switch angle. Use it to ask about their setup, not to
+  diagnose it: "are you locked in on Eventbrite?" rather than a critique of Eventbrite.
+  See **Voice anchor** above.
 - **`vertical`** sets the vocabulary. `Party` and `Live Performance` can use nightlife
   and show-night language (door, guest list, promo push). `Festival` speaks to multi-day
   scale and production. `Other Social Communities` is community, civic, and recurring
@@ -34,11 +35,16 @@ live in different places..."). If the research note marks the signal low-confide
 drop the competitor reference and personalize on something you do know.
 
 ## Tone & structure
-- **Tone:** peer-to-peer and direct, like someone who understands the events world,
-  not a marketer. Low hype, no jargon, confident rather than salesy. Specific over
-  generic.
-- **Length:** Email 1 is ~50 to 90 words. Follow-ups are shorter, ~40 to 70. All three
-  should be skimmable on a phone in seconds.
+- **Tone:** a warm SDR who is genuinely excited to help, not a consultant diagnosing
+  the prospect's problems. Peer-to-peer and direct, like someone who understands the
+  events world. No jargon, specific over generic. See **Voice anchor** above, which is
+  the authoritative register.
+- **Length:** messages 1 and 2 are roughly **80 to 110 words**, calibrated to the
+  voice anchor, which is itself about 100 words: the warmth and the package pitch need
+  the room. Message 3 is a breakup and is shorter, roughly **40 to 70 words**. These
+  are **targets, not caps**. The validator reports drift as a WARN and never fails an
+  email on length, because a good email slightly outside is better than a gutted one
+  exactly on target. Stay skimmable on a phone.
 - **Subject lines:** conversational, and avoid spam-trigger words and punctuation
   (free, guarantee, !!!, $$$). Word count and casing are in **Hard constraints** below.
 - **Sign-off:** appended by code, not written here. End the body at the CTA.
@@ -46,6 +52,110 @@ drop the competitor reference and personalize on something you do know.
   the sending mailbox in `config/senders.md`. See "Compliance in the copy" below.
 - **Personalization:** at least one line that could only be written for this prospect.
 - **No dashes.** See **Hard constraints** below.
+
+## Voice anchor
+
+The block between the markers is **extracted verbatim and injected into every
+generation prompt**, next to the output contract, by `scripts/repair.py`
+(`load_voice_anchor`). Edit the voice here and nowhere else.
+
+<!-- VOICE-ANCHOR:BEGIN -->
+### The register to match
+
+This is a real SDR email. Match its **register**: warm, direct, genuinely excited to
+help. Not a consultant diagnosing the prospect's problems.
+
+> Hey [first name]'s team,
+>
+> Hope this finds you well! Reaching out to see if you're locked in on your current
+> ticketing setup with [competitor]? Any opportunity to compare what Posh could put
+> together in a custom proposal?
+>
+> We've been putting together very competitive offers this year, all focused on
+> helping organizers drive better reach, earlier conversions, and generating extra
+> revenue with dedicated account support, financial incentives, marketing push and
+> more — with a huge and active community in New York.
+>
+> Let me know if you're open to connecting, would love to hear more about your plans
+> this year and see what we can bring to the table!
+>
+> Thanks,
+
+### This is a tone target, not a template
+
+- **The bracketed specifics are illustrative.** Never hardcode a literal from the
+  example: no "TicketWeb", no "Lucinda", no platform or person name carried over.
+  Use the actual prospect's details from the research note.
+- **Do not reference New York, or any city.** Prospecting is national. Match the
+  warmth and the benefit-bundling of that closing clause, but never claim a local
+  community anywhere. Where the anchor leans on a local community, use Posh's
+  national reach and the marketplace instead: organic demand the organizer did not
+  have to source.
+- **Do not reuse the greeting.** "Hope this finds you well" and "...'s team" are
+  illustrative, not required. Vary the opening line across prospects. Thirty emails
+  opening identically reads more templated than any single phrase ever could.
+- **The anchor contains an em dash. Do not reproduce it.** Hard constraint 1 still
+  governs everything you write. The anchor is quoted as written for register only.
+
+### Tone rules
+
+- **Open warm, then ask about their current setup.** "Are you locked in on
+  [competitor]?" Do **not** open with a diagnosis of what is wrong with their tool.
+  Never open with "Managing events on [platform] works, but...".
+- **The CTA is a concrete offer**, not a vague ask. "Compare what Posh could put
+  together in a custom proposal." "A tailored comparison, want me to?" Never "worth a
+  quick conversation."
+- **Sell the bundled package with enthusiasm:** dedicated account support, financial
+  incentives, marketing push. That bundle is the pitch.
+- **At most one stat per 3-email sequence, not one per email.** Lead with the package
+  and the offer, not a number. A stat in every opener reads corporate.
+- **One idea per email, developed fully. This is the main lever on length.** Email 1
+  carries the warm question plus **one** facet of the package, not the whole bundle.
+  The other facets (financial incentives, marketing push, dedicated support) belong in
+  emails 2 and 3. If an opener is running long, move a facet later in the sequence
+  rather than compressing the voice. Concrete nouns over abstract benefit language.
+  Short sentences. No rule-of-three cadence. Do not open message 2 with "One thing
+  that stands out..."
+
+### When the current platform is unknown
+
+If the research note has no usable `current_competitor`, **never guess one.** Do not
+infer a platform from the vertical, the company name, the email domain, or anything
+else. A wrong platform named confidently is the single most expensive mistake in a
+cold email: it proves the sender did not actually look. Ask the generic question
+instead, and name no platform anywhere in the sequence.
+
+Use this pattern. Same voice rules, same greeting-variation caveat: do not stamp
+"Hope this finds you well" or "...'s team" on every email in the batch.
+
+> Hey [first name]'s team,
+>
+> Hope this finds you well! Reaching out to see if you're locked in on your current
+> ticketing setup? Any opportunity to compare what Posh could put together in a
+> custom proposal?
+>
+> We've been putting together very competitive offers this year, all focused on
+> helping organizers drive better reach, earlier conversions, and generating extra
+> revenue with dedicated account support, financial incentives, marketing push and
+> more.
+>
+> Let me know if you're open to connecting, would love to hear more about your plans
+> this year and see what we can bring to the table!
+>
+> Thanks,
+
+Note this is the same email as the main anchor with the platform reference and the
+local-community clause removed. Everything else about the register is unchanged.
+
+### This, not that
+
+**NOT** (cold diagnosis, then a vague ask):
+> Managing events on Resident Advisor works, but it's built for discovery, not for
+> running the show... Worth a quick conversation about how it could simplify your
+> next event?
+
+**THIS:** the warm question plus custom-proposal pattern from the anchor above.
+<!-- VOICE-ANCHOR:END -->
 
 ## Hard constraints
 
@@ -67,7 +177,10 @@ were violated in most emails.
    - "Posh events convert 40% better than other platforms."
    No hedging ("on average", "roughly", "about", "up to"), no rewording, no
    substituting a different noun for "the Posh marketplace".
-3. **Subject lines are 2 to 5 words, all lowercase.**
+3. **Subject lines are 2 to 6 words, lowercase.** Canonical acronyms and initialisms
+   keep their standard casing: RA, NYC, DJ, RSVP, VIP, EDM, LA, SF, DM. Every other
+   word is lowercase, including the first. (The authoritative list the validator
+   checks is `CANONICAL_ACRONYMS` in `scripts/validate.py`.)
 <!-- HARD-CONSTRAINTS:END -->
 
 Rules 1 and 2 are additionally repaired in code by `scripts/repair.py` before
@@ -77,28 +190,35 @@ it stays caught rather than prevented.
 
 ### Structure of the 3-email sequence
 - **Email 1, the opener.**
-  1. A hook line specific to this prospect, drawn from the research note.
-  2. Connect it to their persona's pain: **Premium** is manual work plus brand
-     mismatch; **Pro** is scale, and they are probably already comparing platforms.
-  3. Exactly one value prop, chosen to fit the persona.
-  4. The soft interest-check CTA.
-- **Email 2, the follow-up** (~3 to 4 days later). Lead with a **different angle**
-  than Email 1, add one new value point, and close with a soft CTA. **Must read
-  correctly even if Email 1 got no reply:** no "just circling back on my last note"
-  that assumes they read it. Reference the topic, not the prior email.
-- **Email 3, the close** (~4 to 5 days later). Short and graceful, a closing-the-loop
-  breakup, with one easy CTA. Must also stand on its own.
+  1. A warm opening line, varied across prospects, then a question about their
+     current setup. Not a diagnosis of it.
+  2. Persona context: **Premium** is manual work plus brand mismatch; **Pro** is
+     scale, and they are probably already comparing platforms.
+  3. **One** facet of the package, not the whole bundle. Pick the single facet that
+     fits this persona and develop it properly.
+  4. The concrete-offer CTA.
+- **Email 2, the follow-up** (~3 to 4 days later). Take up a **different facet of the
+  package** than Email 1 (if Email 1 led on dedicated support, this one leads on the
+  marketing push, or the financial incentives), develop that one idea, and close with a
+  concrete offer. **Must read correctly even if Email 1 got no reply:** no "just
+  circling back on my last note" that assumes they read it. Reference the topic, not
+  the prior email. It carries its own facet, so it stands alone by construction.
+- **Email 3, the close** (~4 to 5 days later). Graceful, a closing-the-loop message
+  carrying the **remaining facet** of the package plus one easy concrete offer. Must
+  also stand on its own.
 
 ### Sequence rules
+- **At most one stat across all three emails.** Not one per email.
 - **Rotate the angles.** No value prop repeats across all three emails.
 - **One CTA per email.**
 - **Stay inside the approved claims** in `config/positioning.md`.
 
 ## CTA rules
 - **Goal: booked meetings.** Every sequence drives toward a conversation.
-- **Default CTA:** a soft, low-friction interest-check that invites a reply, e.g.
-  "Open to exploring how Posh can help sell out your next event? Let me know if you'd
-  like to connect." Persona-specific wording lives in `config/personas.md`.
+- **Default CTA:** a concrete offer that invites a reply, e.g. "Any opportunity to
+  compare what Posh could put together in a custom proposal?" or "Happy to put
+  together a tailored comparison, want me to?" Never a vague "worth a quick
+  conversation." Persona-specific wording lives in `config/personas.md`.
 - **One clear CTA per email. No stacked asks.**
 - **Keep the opener link-light.** A booking link in a cold first email can hurt
   deliverability and reads as presumptuous. Introduce a scheduling link or a specific

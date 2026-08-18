@@ -23,6 +23,8 @@ MESSAGE_GEN = ROOT / "instructions" / "message-generation.md"
 
 HARD_CONSTRAINTS_BEGIN = "<!-- HARD-CONSTRAINTS:BEGIN -->"
 HARD_CONSTRAINTS_END = "<!-- HARD-CONSTRAINTS:END -->"
+VOICE_ANCHOR_BEGIN = "<!-- VOICE-ANCHOR:BEGIN -->"
+VOICE_ANCHOR_END = "<!-- VOICE-ANCHOR:END -->"
 
 # The only approved wordings, from config/positioning.md. verify_canon() asserts
 # these still match the file, so a positioning edit cannot leave repair snapping
@@ -68,6 +70,27 @@ def verify_canon(path: pathlib.Path = POSITIONING) -> None:
                 f"to wording positioning.md does not approve. Update CANON_* together "
                 f"with positioning.md."
             )
+
+
+def _extract_block(path: pathlib.Path, begin: str, end: str, what: str) -> str:
+    text = path.read_text(encoding="utf-8")
+    try:
+        block = text.split(begin, 1)[1].split(end, 1)[0]
+    except IndexError:
+        raise RepairError(
+            f"Could not find the {begin} / {end} markers in {path.name}. The "
+            f"generation prompt injects the {what} block verbatim and must not fall "
+            f"back to a restatement."
+        )
+    block = block.strip()
+    if not block:
+        raise RepairError(f"The {what} block in {path.name} is empty.")
+    return block
+
+
+def load_voice_anchor(path: pathlib.Path = MESSAGE_GEN) -> str:
+    """Extract the voice anchor for injection. Read from the file, never restated."""
+    return _extract_block(path, VOICE_ANCHOR_BEGIN, VOICE_ANCHOR_END, "voice-anchor")
 
 
 def load_hard_constraints(path: pathlib.Path = MESSAGE_GEN) -> str:
