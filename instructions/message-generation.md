@@ -94,6 +94,15 @@ help. Not a consultant diagnosing the prospect's problems.
 - **Do not reuse the greeting.** "Hope this finds you well" and "...'s team" are
   illustrative, not required. Vary the opening line across prospects. Thirty emails
   opening identically reads more templated than any single phrase ever could.
+- **Never reuse an opening sentence verbatim across prospects.** This is about the
+  exact words, not the shape. Recurring opener *structures* are fine and expected: "One
+  thing that..." is a good move and should stay. What must not happen is the identical
+  sentence landing in two prospects' inboxes. In one real batch "One thing that tends
+  to surprise organizers" went out three times and "One thing that comes up a lot"
+  twice, across unrelated contacts. Byte-identical sentences are what make a batch look
+  machine-written, and repeated strings across many recipients are exactly what spam
+  heuristics are built to notice. Keep the structure, change the words: what surprises
+  *this* organizer, in *their* vertical, is different every time.
 - **The anchor contains an em dash. Do not reproduce it.** Hard constraint 1 still
   governs everything you write. The anchor is quoted as written for register only.
 

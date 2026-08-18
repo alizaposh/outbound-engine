@@ -385,6 +385,49 @@ def check_stat_budget(messages: list[tuple[int, str, str]]) -> list[Finding]:
         f"and the offer, not a number.")]
 
 
+GREETING_LINE = re.compile(r"^\s*(hey|hi|hello)?[\w' .]{0,40},\s*$", re.I)
+
+
+def opening_sentence(body: str) -> str:
+    """First real sentence of a body, skipping the greeting line."""
+    for raw in body.strip().splitlines():
+        line = raw.strip()
+        if not line or GREETING_LINE.match(line):
+            continue
+        parts = _sentences(line)
+        return parts[0] if parts else line
+    return ""
+
+
+def check_batch_opening_reuse(openings: list[tuple[str, int, str]]) -> list[Finding]:
+    """Batch-level: the same opening sentence must not go to two prospects.
+
+    Cannot live in validate_email, which sees one email at a time, nor in
+    check_stat_budget, which sees one sequence. Verbatim reuse is only visible with the
+    whole batch in hand, so it sits one more level up and the orchestrator calls it.
+
+    WARN, not FAIL: no individual contact is defective here, and failing a contact for
+    what a different contact's email happens to say would be wrong. It is the batch
+    that reads machine-written, and repeated strings across many recipients are what
+    spam heuristics are built to notice.
+    """
+    groups: dict[tuple[int, str], tuple[str, list[str]]] = {}
+    for label, position, body in openings:
+        s = opening_sentence(body)
+        if not s:
+            continue
+        _, labels = groups.setdefault((position, s.lower()), (s, []))
+        labels.append(label)
+    out = []
+    for (position, _), (sentence, labels) in sorted(groups.items()):
+        uniq = sorted(set(labels))
+        if len(uniq) > 1:
+            out.append(Finding("batch_opening_reuse", WARN,
+                f"message {position} opens with the same sentence for {len(uniq)} "
+                f"contacts ({', '.join(uniq)}): {sentence!r}"))
+    return out
+
+
 def report(results: list[EmailResult]) -> str:
     """Human-readable summary. Says plainly what is not machine-checked."""
     lines = ["=" * 72, "VALIDATION REPORT", "=" * 72]

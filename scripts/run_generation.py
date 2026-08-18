@@ -454,6 +454,16 @@ def main(argv=None) -> int:
     for who, f in seq:
         print(f"  {f.severity}  {who}: {f.detail}")
 
+    # Batch-level: only visible with every contact in hand. Fallback rows are excluded
+    # because they are the same committed copy by construction, so they would always
+    # trip this and drown the real signal.
+    batch = validate.check_batch_opening_reuse(
+        [(r.contact.display, m.position, m.body_final)
+         for r in results if not r.used_fallback for m in r.messages])
+    print(f"\n{'=' * 72}\nBATCH-LEVEL FINDINGS: {len(batch)}")
+    for f in batch:
+        print(f"  {f.severity}  {f.detail}")
+
     if not a.quiet:
         print("\n" + validate.report(every_email))
     return 1 if n_err else 0
