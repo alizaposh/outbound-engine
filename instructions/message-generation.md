@@ -197,12 +197,28 @@ it stays caught rather than prevented.
   3. **One** facet of the package, not the whole bundle. Pick the single facet that
      fits this persona and develop it properly.
   4. The concrete-offer CTA.
-- **Email 2, the follow-up** (~3 to 4 days later). Take up a **different facet of the
-  package** than Email 1 (if Email 1 led on dedicated support, this one leads on the
-  marketing push, or the financial incentives), develop that one idea, and close with a
-  concrete offer. **Must read correctly even if Email 1 got no reply:** no "just
-  circling back on my last note" that assumes they read it. Reference the topic, not
-  the prior email. It carries its own facet, so it stands alone by construction.
+- **Email 2, the follow-up** (~3 to 4 days later). Its job is to **develop one specific
+  angle that Email 1 did not cover**, with enough substance to stand on its own.
+  1. **Pick the angle.** Exactly one of: a **proof point** (an approved case study from
+     `config/positioning.md`, cited only where it genuinely fits this prospect), a
+     **concrete capability** (something the platform actually does, described in
+     specifics), or **the part of the package Email 1 left on the table**. If Email 1 led
+     on marketplace reach, this one develops dedicated account support and financial
+     incentives. The sequence-level rule of at most one stat across all three emails
+     still governs, so a proof point here is usually the story, not a number.
+  2. **Develop it properly.** What it is, and what it changes for an organizer in their
+     vertical at their scale. Concrete nouns over benefit language. The substance is the
+     whole point of this email: naming an angle and moving straight to the ask is not
+     doing this email's job.
+  3. **It must read correctly if Email 1 got no reply**, which is the normal case. No
+     "just circling back", no "following up on my last note", no "as I mentioned". Do
+     not reference the earlier email at all. Reference the topic and open on the angle
+     itself, as if this were the first time you raised it.
+  4. The concrete-offer CTA.
+
+  **Its length should come from having something to say.** If this email is running
+  short, the angle was too thin: choose a more specific one, or develop it further with
+  real detail. Never pad it to fill space.
 - **Email 3, the close** (~4 to 5 days later). Graceful, a closing-the-loop message
   carrying the **remaining facet** of the package plus one easy concrete offer. Must
   also stand on its own.
