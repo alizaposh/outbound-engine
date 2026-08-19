@@ -104,3 +104,63 @@ then build an "export review dataset to Google Sheet" step. The sheet is the art
 share its link in Slack for review, which fits the planned Slack review/approval flow.
 
 **Until then:** generation writes to a local CSV.
+
+---
+
+## Sync Smartlead unsubscribes to HubSpot
+**Trigger:** Stage 1 once reply retrieval via the Smartlead API is running (Phase 6);
+Stage 2 only after Stage 1 has run several cycles and the email matching is trusted.
+
+**Priority: Medium, and the reason matters.** This is *not* send-safety. When a lead
+clicks Smartlead's unsubscribe, Smartlead suppresses them on its own side immediately
+and across all future campaigns, with no action from us. Nobody is at risk of a re-send
+while this sits in the backlog. What is missing is the opt-out reaching HubSpot as the
+authoritative record that reps, marketing, and the pre-send eligibility check read.
+
+### Stage 1 — log to a Google Sheet, write nothing
+On each scheduled reply-check run, pull the leads that unsubscribed in Smartlead since
+the last run and append them to a Sheet. No HubSpot write yet. The point is to verify
+the sync pulls the right emails with no bad matches *before* anything irreversible
+happens, and to keep a human-controlled suppression checkpoint.
+
+Sheet schema, import-ready so suppression is export → HubSpot opt-out import:
+`email` (match key), `unsubscribed_at`, `campaign`, `smartlead_lead_id`, and
+`pushed_to_hubspot` (blank until suppressed, date-stamped once imported).
+
+Suppression itself stays manual: export the not-yet-pushed rows, import them through
+HubSpot's **opt-out list** import ("List of contacts to opt-out of emails"), which sets
+the native `hs_email_optout`, then stamp `pushed_to_hubspot`.
+
+### Stage 2 — write the native opt-out programmatically
+Flip the task from "append to sheet" to calling HubSpot's Communication Preferences API
+(`POST /communication-preferences/v4/statuses/{email}/unsubscribe-all?channel=EMAIL`;
+confirm the current API version and required scopes against HubSpot's docs). It sets the
+same native `hs_email_optout` the manual import does, so nothing downstream changes and
+the export/import step simply disappears. Optionally stamp `optout_source = Smartlead`
+and `optout_date` as an audit trail.
+
+**Carry this caution into Stage 2:** native opt-out is global and sticky. It opts the
+contact out of *all* HubSpot email, not just cold outbound, and is hard to reverse. Good
+for compliance, but a wrong email match globally suppresses the wrong person with no
+easy undo. That is the whole reason Stage 1 verifies matching first.
+
+**No webhooks in v1.** Both stages fold into the existing polling reply-check task. A
+Smartlead `LEAD_UNSUBSCRIBED` webhook is the natural real-time upgrade if the system
+ever moves to hosted infrastructure.
+
+**Depends on:** reply retrieval via the Smartlead API; HubSpot write-back plumbing; a
+reliable Smartlead-lead → HubSpot-contact match by email (shared with the pre-send check
+and every other write-back).
+
+**Related:** the one-time Artisan opt-out backfill has the same destination (HubSpot
+opt-out list via manual CSV import), once the CSM provides the list.
+
+> **Open conflict to resolve — the pre-send check does not gate on `hs_email_optout`
+> today.** The source note for this item assumes it does. It does not:
+> `instructions/pre-send-eligibility-check.md` has seven gates and none of them is
+> opt-out, and both that file and `config/pre-send-defaults.md` record the omission as a
+> known compliance-adjacent gap. Useful half of the conflict: that gap was parked on
+> "needs the property name confirmed first", and this item supplies the name. Adding an
+> eighth gate on `hs_email_optout = true` is a small change and is what makes both
+> stages here worth doing — decide it before Stage 1 ships, or Stage 1 populates a field
+> nothing reads.
