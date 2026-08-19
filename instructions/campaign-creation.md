@@ -11,9 +11,10 @@ API. **Never run this without a recorded approval.** Read
 - Suppression list checked: no opted-out / hard-bounced / stop-requested contacts.
 - Every prospect cleared the pre-send eligibility check
   (`instructions/pre-send-eligibility-check.md`) before generation, and the annotated
-  list (ELIGIBLE plus EXCLUDED with reasons) is in the review Sheet. Note that check
-  has **no HubSpot opt-out gate**, so the suppression check above is not redundant
-  with it.
+  list (ELIGIBLE plus EXCLUDED with reasons) is in the review Sheet. That check gates
+  on `hs_email_optout`, but it is still **not redundant** with the suppression check
+  above: Smartlead catches hard bounces, and catches unsubscribes that have not yet
+  been written back to HubSpot. Run both.
 
 ## Steps
 1. **Create the campaign.** Set a clear campaign name (convention in

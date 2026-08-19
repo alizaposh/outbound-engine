@@ -11,6 +11,8 @@ them. Change a value here rather than hand-waving an exception for one list.
 ## Canonical values
 
 ```
+optout_property: hs_email_optout        # native HubSpot opt-out; true -> exclude
+
 recency_window_days: 30
 recency_fields:
   - notes_last_updated
@@ -40,6 +42,12 @@ new_contact_lifecycle: lead
 
 ## Why each value is what it is
 
+- **`optout_property: hs_email_optout`** — the **native** HubSpot opt-out field
+  ("Unsubscribed from all email"), not a custom property, and the same field set by
+  HubSpot's opt-out-list import and by the Communication Preferences API. It is gate 1,
+  evaluated before everything else, so an opted-out contact is reported as "opted out"
+  rather than as stale or owned. Do not repoint this at a custom property: a custom
+  field would miss opt-outs recorded through any other channel.
 - **`recency_window_days: 30`** — inside 30 days, assume a human is actively working
   the contact and stay out of their way.
 - **`recency_fields`** includes `notes_last_updated` **on purpose**. Reps log manual
@@ -73,12 +81,15 @@ differ from the labels shown in the UI. Confirm each before the first live run.
   create writes to: `[FILL IN]`
 - Owner-name → `hubspot_owner_id` resolution for all eight names above: `[FILL IN]`
 
-## Known gap: no opt-out gate
+## Opt-out: resolved, and still not the only check
 
-There is no HubSpot email opt-out property in this check, so unsubscribe enforcement
-rests entirely on Smartlead's suppression list. That covers anyone who unsubscribed
-from a Smartlead send, but **not** a HubSpot-only opt-out from another channel. This is
-compliance-adjacent: the suppression check in
-`instructions/campaign-creation.md` is not redundant with this filter, and neither
-should be removed on the assumption the other covers it. Adding an opt-out gate here
-needs the property name confirmed first.
+`hs_email_optout` is gated on as of 2026-08-19. What was previously recorded here as a
+known gap is closed: a HubSpot-side opt-out, including one recorded through a channel
+this engine never touched, now excludes the contact before generation.
+
+The Smartlead suppression check in `instructions/campaign-creation.md` remains
+**separate and not redundant**. It catches hard bounces, and it catches anyone who
+unsubscribed from a Smartlead send in the window before that opt-out reaches HubSpot.
+Neither check should be removed on the assumption the other covers it. The backlog item
+that syncs Smartlead unsubscribes into HubSpot narrows that window but does not remove
+the need for both.

@@ -9,7 +9,11 @@ until its trigger is met.
 
 *Replace this whole section on each checkpoint — do not append a second one.*
 
-**Last updated:** 2026-08-18 · **HEAD = `8221aef`** (pushed to `origin/main`)
+**Last updated:** 2026-08-18, describing the state after the third 34-run.
+
+*No commit hash here on purpose.* It went stale three times; `git log --oneline -5` is
+always right and this line never was. Date the section, describe the state, and let git
+answer "which commit".
 
 Three full 34-contact runs have now happened, all draft-only. Review CSVs live in
 `reviews/`, which is git-ignored, so the artifacts are local to whoever ran them.
@@ -155,12 +159,7 @@ and every other write-back).
 **Related:** the one-time Artisan opt-out backfill has the same destination (HubSpot
 opt-out list via manual CSV import), once the CSM provides the list.
 
-> **Open conflict to resolve — the pre-send check does not gate on `hs_email_optout`
-> today.** The source note for this item assumes it does. It does not:
-> `instructions/pre-send-eligibility-check.md` has seven gates and none of them is
-> opt-out, and both that file and `config/pre-send-defaults.md` record the omission as a
-> known compliance-adjacent gap. Useful half of the conflict: that gap was parked on
-> "needs the property name confirmed first", and this item supplies the name. Adding an
-> eighth gate on `hs_email_optout = true` is a small change and is what makes both
-> stages here worth doing — decide it before Stage 1 ships, or Stage 1 populates a field
-> nothing reads.
+**Resolved 2026-08-19: the pre-send check now gates on `hs_email_optout`.** It is gate 1
+of eight in `instructions/pre-send-eligibility-check.md`, with `optout_property` in
+`config/pre-send-defaults.md`. This item's premise therefore holds — both stages feed a
+field the engine actually reads, so Stage 1 is worth shipping on its own.
