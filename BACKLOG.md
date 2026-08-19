@@ -163,3 +163,58 @@ opt-out list via manual CSV import), once the CSM provides the list.
 of eight in `instructions/pre-send-eligibility-check.md`, with `optout_property` in
 `config/pre-send-defaults.md`. This item's premise therefore holds — both stages feed a
 field the engine actually reads, so Stage 1 is worth shipping on its own.
+
+---
+
+## Build the pre-send eligibility filter as a pre-generation step
+**Trigger:** before the first campaign generated from a sales-provided list.
+
+The spec is written (`instructions/pre-send-eligibility-check.md`, values in
+`config/pre-send-defaults.md`); nothing implements it yet. Today every documented
+"ELIGIBLE leads only" rule is honored by whoever remembers to honor it.
+
+**It is a separate step that runs before generation, not a change to
+`run_generation.py`.** That file is deliberately HubSpot-free — it takes a CSV, calls
+Bedrock, and writes a CSV — and it should stay that way. The filter:
+
+1. Reads the sales-provided lead list.
+2. Queries HubSpot and applies the eight gates.
+3. Emits `eligible.csv` in the shape `run_generation.py --contacts` already expects.
+4. Emits the full annotated list, every EXCLUDED contact with its reason included, for
+   the review Sheet. Targeting decisions are visible, never silent.
+
+Generation is then just `--contacts eligible.csv`, and the two steps stay independently
+runnable and independently testable.
+
+**Optional belt-and-braces:** a guard in `load_contacts` that hard-skips any row whose
+`decision` is not `ELIGIBLE`. Only meaningful for a list that carries the column, so it
+catches "ran generation on the raw list by mistake", not "never ran the filter at all".
+Cheap, and worth it once the filter exists.
+
+---
+
+## Copy-rule pass from the 2026-08-19 34-run
+**Trigger:** before the next generation run. One pass, all four items together — three
+rule changes plus the checkpoint that records them.
+
+Findings measured on `reviews/draft-run-34-20260819-cta-opener.csv` (7 PASS / 13 WARN /
+13 FAIL / 1 fallback; 83 of 99 emails passed). Deferred deliberately, not forgotten:
+
+1. **The `worth …` hedge family belongs in `banned-phrases.md`.** The m2 CTA rule cut the
+   banned form from 13/32 bodies to 5/33, but the hedge migrated to unbanned siblings
+   rather than disappearing: "Worth exploring…" ×4, "Worth comparing…" ×4, "Worth digging
+   into…" ×1, and one form nothing would catch, "Worth 15 minutes?". 21 of 33 contacts
+   carry at least one. A candidate pattern was tested against all 99 emails with zero
+   false positives; a bare-gerund pattern has one ("One thing worth mentioning", a
+   transition, not a CTA).
+2. **No check exists for m2 back-references.** 7 of 33 m2 bodies open with "Following up
+   on…" or "Quick follow-up.", against the explicit rule that m2 must stand alone because
+   no reply is the normal case. 2 of the 7 are PASS rows, so the pass rate currently
+   over-reports readiness.
+3. **m1 length and opener variety.** m1 median is 113 words with 18 of 33 over the 80-110
+   target and none under, so all length findings are now overshoot rather than the old
+   undershoot. Separately, 26 of 33 m1 openers share the prefix "Quick question: are …"
+   and 19 of 33 m2 openers share "One thing that …" — a generation-side problem the
+   whole-sentence batch check sees only 4 of.
+4. **Refresh the Current state section** for this run once the three land. It still
+   describes the three-run state and names a next task that has since been done.
