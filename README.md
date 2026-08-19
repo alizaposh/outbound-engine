@@ -13,8 +13,9 @@ in version-controlled instruction and config files, not in one-off prompts.
 
 ## Layout
 - `CLAUDE.md`: the operating manual Claude Code reads automatically.
-- `instructions/`: reusable "how to do each job" files (research, generation,
-  campaign creation, reply handling, analysis; qualification is deferred).
+- `instructions/`: reusable "how to do each job" files (pre-send eligibility check,
+  research, generation, campaign creation, reply handling, analysis; qualification is
+  deferred).
 - `config/`: company-specific facts (positioning, personas, Smartlead defaults).
 - `scripts/`: Python that Claude Code writes to call the Smartlead / HubSpot / LLM APIs.
 - `data/`: local SQLite working state (git-ignored).
@@ -26,6 +27,8 @@ in version-controlled instruction and config files, not in one-off prompts.
 - **3 emails** per sequence.
 - **Nothing sends or launches without explicit human approval.**
 - Smartlead + HubSpot are the sources of truth; CSV/Sheets are review surfaces only.
+- **Every lead list clears the pre-send eligibility check against HubSpot before
+  generation** — no enrolling existing customers or anyone a rep is already working.
 - Lead qualification is **deferred** to a later version.
 
 ## Status

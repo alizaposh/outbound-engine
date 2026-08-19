@@ -9,6 +9,11 @@ API. **Never run this without a recorded approval.** Read
 - Mailboxes are warmed and healthy in Smartlead.
 - Each prospect has message_1..3 in the approved dataset.
 - Suppression list checked: no opted-out / hard-bounced / stop-requested contacts.
+- Every prospect cleared the pre-send eligibility check
+  (`instructions/pre-send-eligibility-check.md`) before generation, and the annotated
+  list (ELIGIBLE plus EXCLUDED with reasons) is in the review Sheet. Note that check
+  has **no HubSpot opt-out gate**, so the suppression check above is not redundant
+  with it.
 
 ## Steps
 1. **Create the campaign.** Set a clear campaign name (convention in

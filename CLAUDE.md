@@ -94,6 +94,7 @@ GETTING-STARTED.md         ← setup: install, create repo, first session
 requirements.txt           ← Python dependencies (for scripts Claude Code writes)
 
 instructions/              ← reusable "how to do each job" files
+  pre-send-eligibility-check.md  ← HubSpot eligibility filter; RUN THIS BEFORE GENERATING
   research.md              ← how to research a prospect from available data
   message-generation.md    ← tone, structure, CTA, prohibited claims, 3-email logic
   campaign-creation.md     ← how to build & configure a Smartlead campaign via API
@@ -102,6 +103,7 @@ instructions/              ← reusable "how to do each job" files
   lead-qualification.DEFERRED.md  ← out of v1 scope; kept for later
 
 config/                    ← company-specific facts Claude relies on
+  pre-send-defaults.md     ← eligibility gates: recency window, excluded owners, etc.
   positioning.md           ← what we sell, value props, proof, PROHIBITED claims
   personas.md              ← per-persona angles and messaging guidance
   smartlead-defaults.md    ← default schedule, limits, delays, sequence config
@@ -117,8 +119,12 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
 
 ### A. Campaign creation
 1. Take the lead source (HubSpot list / Google Sheet / CSV) and the brief.
-2. Retrieve the leads. For each, dedupe against HubSpot by email: use the existing
-   contact if found, otherwise create it.
+2. **Before generating anything, run the pre-send eligibility check.** Filter the list
+   against HubSpot per `instructions/pre-send-eligibility-check.md`. Only **ELIGIBLE**
+   leads go on to generation; the full annotated list, including every EXCLUDED contact
+   and its reason, goes into the review surface so targeting decisions are visible.
+   This step absorbs the old dedupe-and-create pass: email is the match key, and a lead
+   with no HubSpot record is eligible and gets created there (that file's Step 4).
 3. Research each prospect using available company + contact data. See
    `instructions/research.md`.
 4. Generate the 3-email sequence per prospect with the cheap LLM. See
@@ -214,6 +220,10 @@ client = anthropic.AnthropicBedrock(aws_region=os.environ["AWS_REGION"])
 
 ## How to work in this repo (for Claude Code)
 
+- **Before generating any campaign, run the pre-send eligibility check per
+  `instructions/pre-send-eligibility-check.md`.** Generate for ELIGIBLE leads only. A
+  list that has not been through that filter is not ready to generate from, however
+  the leads arrived.
 - Before generating copy, read `config/positioning.md`, `config/personas.md`, and
   `instructions/message-generation.md`.
 - Before creating a campaign, read `instructions/campaign-creation.md` and

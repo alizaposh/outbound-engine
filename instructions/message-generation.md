@@ -6,6 +6,11 @@ cheap bulk LLM. This file is the rulebook. When stakeholders give feedback, upda
 
 Always read `config/positioning.md` and `config/personas.md` before generating.
 
+**Generate only for leads marked ELIGIBLE** by the pre-send eligibility check
+(`instructions/pre-send-eligibility-check.md`). That filter runs before this step and
+decides who we are allowed to enroll at all; never generate from a list that has not
+been through it.
+
 ## Using the research signals
 The research note (see `instructions/research.md`) carries the persona call and the
 signals behind it. Three inputs matter most.
