@@ -76,11 +76,15 @@ Write direction (v1 policy):
 - On a Smartlead unsubscribe, set `outbound_suppressed = true` + `outbound_opt_out_date`
   + `outbound_opt_out_source`. This, plus Smartlead's own block list, satisfies the
   CAN-SPAM duty to stop the outbound that prompted the opt-out.
-- Do **NOT** auto-cascade a cold-outbound unsubscribe into native "Unsubscribed from
-  all email" in v1. Setting the global native flag has a wide blast radius (kills the
-  team's marketing and one-to-one HubSpot email too), and a contact-initiated global
-  unsubscribe cannot be manually reversed. Whether a cold-outbound opt-out *should*
-  broaden to all-email is a RevOps/legal decision — deferred, not automated.
+- **Cascade policy (settled): scope-match the opt-out.** A standard cold-outbound
+  unsubscribe sets `outbound_suppressed` + Smartlead block + opt-out metadata only; it
+  does NOT touch native `hs_email_optout`. The scoped suppression already satisfies
+  CAN-SPAM, and setting the global native flag has a wide blast radius (kills the team's
+  marketing and one-to-one HubSpot email too) that conflates two different consent
+  contexts. EXCEPTION: if the prospect explicitly asks to be removed from ALL email /
+  all communication (not just this outreach), honor that scope — but a HUMAN sets native
+  `hs_email_optout`; the classifier never automates the global opt-out. (Default is
+  RevOps/legal-informed, not legal advice.)
 - Native opt-out is READ as a suppression input; it is never written by the engine.
 
 Naming decision (resolved): the flag is `outbound_suppressed`, not `outbound_opted_out`.

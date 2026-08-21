@@ -32,21 +32,27 @@ These are different things and the distinction drives the open question below.
 - So for 9 of 12 mailboxes, the person who sent the cold email is **not** the person
   who takes the meeting. That handoff needs a defined shape.
 
-## `[CONFIRM]` Handoff model — undecided, do not assume
+## Handoff model: persona-fronted, Zach-owned (decided 2026-08-21)
 
-When a conversation starts on one of the 9 non-Zach mailboxes, which happens?
+The sending persona stays the correspondent; the meeting belongs to Zach.
 
-- **Option A — book onto Zach's calendar.** The sender persona stays the
-  correspondent and shares Zach's booking link, introducing him as the person who'll
-  run the call.
-- **Option B — Zach takes over the thread.** Once a live conversation starts, Zach
-  joins or takes over the reply thread and books it himself.
+- **The sending persona remains the thread correspondent.** Whoever's name signs the
+  cold email keeps signing the replies. There is **no automatic mid-thread identity
+  swap** — the engine never silently substitutes one human for another in a live thread.
+- **On `interested` and `question` replies, the persona shares Zach's booking link.**
+  The meeting lands on Zach's calendar even though a different persona is writing.
+- **Substantive live conversations escalate to Zach** via human review. He decides, per
+  thread, whether to introduce himself. That judgment is deliberately his and not the
+  handler's: whether a mid-thread introduction reads as a natural handoff or as a
+  bait-and-switch depends on the specific conversation.
+- **This applies to all 12 mailboxes**, including Zach's own 3. On his mailboxes the
+  correspondent and the meeting owner simply happen to be the same person, so no
+  escalation-for-identity is needed — only the normal escalation for a substantive
+  conversation.
 
-**Do not pick one in code, copy, or config until this is decided.** It changes the
-reply copy (whose name and calendar the prospect sees), whether a third party gets
-introduced mid-thread, and how the reply handler drafts an interested response. Until
-it is resolved, drafts from a non-Zach mailbox that reach the meeting step go to
-**human review** rather than assuming a model.
+What the reply handler does with this: draft the reply in the persona's voice, include
+the meeting owner's booking link from this file, and flag the thread for Zach once the
+conversation goes beyond a first reply.
 
 ## Consumers
 

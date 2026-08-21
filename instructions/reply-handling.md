@@ -45,8 +45,8 @@ are no longer in the enum, and **nothing routes to either**:
 
 | Intent | outbound_status write | outbound_suppressed | Smartlead sequence | Action |
 |---|---|---|---|---|
-| interested | replied | no | stop | Answer (send any materials asked for); drive to a meeting with the **meeting owner** in `config/meeting-routing.md` |
-| question | replied | no | stop | Answer the question, then drive to a meeting with the **meeting owner** (`config/meeting-routing.md`) |
+| interested | replied | no | stop | Answer (send any materials asked for) **in the persona's voice**; share the **meeting owner's** booking link from `config/meeting-routing.md` |
+| question | replied | no | stop | Answer the question, then share the **meeting owner's** booking link (`config/meeting-routing.md`) — persona stays the correspondent |
 | objection | replied | no | stop | Handle the objection, keep engaging |
 | not_now | replied | no | stop | Acknowledge; **set `outbound_recycle_after`** (see recycle windows below); nurture later |
 | not_interested | replied | no | stop | Polite close; **set `outbound_recycle_after`**; stays recyclable. Flag firm/definitive rejections for optional human review — a human may manually suppress, automation does not |
@@ -140,10 +140,12 @@ engagement. Every other intent correctly leaves the sequence stopped.
 - Unusual, sensitive, high-value, or ambiguous conversations → **always human**. This
   flag — not an enum value — is where genuinely ambiguous replies go, now that
   `needs_qualification` is retired.
-- **Meetings:** never hardcode the meeting owner or booking link. Both come from
-  `config/meeting-routing.md`, and the non-Zach-mailbox handoff model is still
-  `[CONFIRM]` there — until it's decided, an interested reply on one of those 9
-  mailboxes goes to human review rather than assuming a handoff.
+- **Meetings — persona-fronted, owner-booked.** Never hardcode the meeting owner or
+  booking link; both come from `config/meeting-routing.md`. The **sending persona stays
+  the correspondent** and shares the meeting owner's booking link, so the meeting lands
+  on the owner's calendar without any mid-thread identity swap. **Escalate substantive
+  live conversations to the meeting owner** (human review) — he decides per thread
+  whether to introduce himself. Never make that introduction automatically.
 
 ### Auto-send allowlist  [FILL IN: start empty / conservative]
 Begin with an empty allowlist (everything reviewed), then add safe categories over
@@ -165,6 +167,13 @@ definitions and allowed values: `config/hubspot-properties.md`.
 - **`outbound_suppressed`** — only for `asked_to_stop`, with `outbound_opt_out_date` and
   `outbound_opt_out_source`. No other intent auto-suppresses; a human may suppress
   manually.
+- **Scope-match the opt-out, and never automate the global one.** A standard
+  "stop emailing me" sets `outbound_suppressed` + the Smartlead block + opt-out metadata
+  and **does not touch native `hs_email_optout`**. If the prospect asks to be removed
+  from **all** email or all communication, that wider scope must be honored — but
+  **flag it for a human**, who sets the native flag. The classifier never writes the
+  global opt-out: it is irreversible and kills the team's marketing and one-to-one email
+  too. Policy in `config/hubspot-properties.md`.
 - **`outbound_recycle_after`** — on `not_now` and `not_interested` only, per the recycle
   windows above. Never shorten an existing future date.
 - **Exception — `out_of_office` and `automated_reply` do NOT move status.** Log the

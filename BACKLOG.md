@@ -200,27 +200,29 @@ OR `outbound_suppressed`.** Gate 1 of nine in `instructions/pre-send-eligibility
 with `optout_properties` (plural) in `config/pre-send-defaults.md`. This item's premise
 therefore holds — both stages feed a field the engine actually reads.
 
-**⚠️ Stage 2 now conflicts with the write-direction policy — resolve before building it.**
-`config/hubspot-properties.md` decided that a cold-outbound unsubscribe must **NOT**
-auto-cascade into native `hs_email_optout` (global blast radius, kills the team's
-marketing and one-to-one email, and a contact-initiated global unsubscribe cannot be
-reversed), and that native opt-out is **read-only** for the engine. Stage 2 as written
-does exactly the opposite: it calls the Communication Preferences API to set native
-opt-out programmatically.
+**⚠️ Stage 2 as written is superseded by the cascade policy (settled 2026-08-21).**
+`config/hubspot-properties.md` now settles the scope question: **scope-match the
+opt-out.** A standard cold-outbound unsubscribe sets `outbound_suppressed` + the
+Smartlead block + opt-out metadata and does **not** touch native `hs_email_optout` —
+the scoped suppression already satisfies CAN-SPAM, and the global flag conflates two
+different consent contexts. Only an explicit "remove me from all email" earns the
+native flag, and **a human sets it**; nothing automates the global opt-out.
 
-The two are reconcilable, and the newer policy should win:
+Rewrite the stages accordingly:
 
-- **Stage 1 is unaffected** and still worth shipping — it writes nothing.
+- **Stage 1 is unaffected** and still worth shipping — it writes nothing. But its
+  suppression path (export → HubSpot opt-out-list import → native `hs_email_optout`) is
+  now the **wrong routine path**: it globally opts out every cold-outbound unsub. Retarget
+  it, or keep the import strictly for the human-escalated all-email cases.
 - **Stage 2 should retarget `outbound_suppressed`** (+ `outbound_opt_out_date` +
-  `outbound_opt_out_source = smartlead`) instead of native opt-out. That is the field
-  the engine's own gate reads, it is scoped to outbound rather than global, and it is
-  reversible.
-- **The manual opt-out-list import in Stage 1 has the same problem** — it sets native
-  `hs_email_optout` globally. Fine as a deliberate human decision, wrong as the routine
-  path for a cold-outbound unsub. Whether cold-outbound opt-outs *should* broaden to
-  all-email is the open RevOps/legal question recorded in `hubspot-properties.md`.
-
-Until that is decided, treat Stage 2's endpoint as **not approved for use**.
+  `outbound_opt_out_source = smartlead`), not the Communication Preferences API. That
+  field is what the engine's own gate reads, it is scoped to outbound, and it is
+  reversible. **The Communication Preferences `unsubscribe-all` endpoint is not approved
+  for automated use** — it is the global flag the policy reserves for a human.
+- The **Artisan opt-out backfill** needs the same review: it was scoped to the HubSpot
+  opt-out list, which is the global flag. Whether historical cold-outbound opt-outs
+  should land global or scoped is now answerable by the same rule — scoped, unless the
+  original request was all-email.
 
 ---
 
@@ -297,22 +299,17 @@ Carried from `config/pre-send-defaults.md`; all block a first live run:
 
 ---
 
-## Decide the meeting handoff model
-**Trigger:** before any reply gets a meeting-driving response — so, before the reply
-handler goes live.
+## Meeting handoff model — RESOLVED 2026-08-21
+**Model: persona-fronted, Zach-owned.** The sending persona stays the thread
+correspondent and shares Zach's booking link on `interested` / `question` replies; the
+meeting lands on Zach's calendar. No automatic mid-thread identity swap. Substantive
+live conversations escalate to Zach via human review, and he decides per thread whether
+to introduce himself. Written up in `config/meeting-routing.md`; consumed by
+`instructions/reply-handling.md`, which references the config meeting-owner value rather
+than a name.
 
-`config/meeting-routing.md` carries this as `[CONFIRM]`. Zach Hickman is the single
-meeting owner but holds only **3 of 12 mailboxes**, so for 9 of them the sender is not
-the person who takes the meeting. Two options:
-
-- **A — book onto Zach's calendar.** The sender persona stays the correspondent and
-  shares Zach's link, introducing him.
-- **B — Zach takes over the thread** once a live conversation starts.
-
-It changes reply copy (whose name and calendar the prospect sees), whether a third party
-appears mid-thread, and how the handler drafts an interested response. Until it is
-decided, interested replies on the 9 non-Zach mailboxes go to **human review**. The
-booking link itself is still a `<ZACH_BOOKING_LINK>` placeholder and a send-blocker.
+**Still open here:** the booking link is a `<ZACH_BOOKING_LINK>` placeholder and remains
+a send-blocker until filled in.
 
 ---
 
