@@ -9,7 +9,8 @@ until its trigger is met.
 
 *Replace this whole section on each checkpoint — do not append a second one.*
 
-**Last updated:** 2026-08-18, describing the state after the third 34-run.
+**Last updated:** 2026-08-21. Copy-testing state is still the third 34-run; the
+reply-to-CRM state model landed since (`712a437`).
 
 *No commit hash here on purpose.* It went stale three times; `git log --oneline -5` is
 always right and this line never was. Date the section, describe the state, and let git
@@ -49,6 +50,36 @@ stat-budget WARN, and the `VOICE-ANCHOR` injection. Added since:
   Flags byte-identical opening sentences reused across contacts. Caught 3 real reuses
   on replay, two of them in **m1**, not m2.
 
+### Reply-to-CRM state model, documented not built (2026-08-21, `712a437`)
+
+A design pass on paper only — no code, and the HubSpot properties do not exist in the
+portal yet. What is now decided and written down:
+
+- **Ten reply intents** with an action map, precedence rules, and per-intent status
+  writes (`instructions/reply-handling.md`). `requested_info` and `needs_qualification`
+  are retired: materials/pricing/deck/demo requests are buying signals → `interested`,
+  and ambiguity goes to the human-review flag rather than a status.
+- **The stop-on-reply trap is handled.** Smartlead halts follow-ups on *any* reply and
+  cannot tell an auto-reply from a human, so `out_of_office` and `automated_reply` must
+  RESUME the sequence and must not advance the lead. Without this, an OOO silently
+  freezes a lead who never engaged.
+- **Two-tier eligibility.** HARD/never-contact = `outbound_suppressed` OR
+  `hs_email_optout` OR status in (`opted_out`, `bounced`). SOFT/skip-this-campaign =
+  status in (`disqualified`, `in_sequence`), a reply within 30d, or a future
+  `outbound_recycle_after`. The soft tier is the point: `not_qualified` and declines
+  previously wrote to fields no gate read, so those contacts returned next campaign.
+- **Declines are timed waits, not suppressions.** `not_now` → the date named in the
+  reply, else +90d; `not_interested` → +180d. Suppression stays reserved for opt-outs,
+  which is also why the flag is named `outbound_suppressed` rather than
+  `outbound_opted_out`.
+- **`wrong_contact` creates a referral, never an enrollment.** The named replacement is
+  created (deduped by email, `referral_source_value`) and must clear the eligibility
+  check plus human review before any send.
+- **Campaign creation is not fully hands-off.** Smartlead's HubSpot activity logging is
+  a per-campaign UI toggle with no API endpoint, so every campaign needs a human to
+  enable it before sends start — gated once, in `instructions/campaign-creation.md`.
+- **Meeting owner is config, not a hardcoded name** (`config/meeting-routing.md`).
+
 **Empty responses were never a retry gap.** They surface as `JSONDecodeError` from
 `json.loads("")` and are caught by the same clause as malformed JSON, so they always
 got the retry. Verified with a stub client. The `char 0` error signature cannot
@@ -86,9 +117,14 @@ passed. Branch distribution unchanged across every run: 25 `gmv`, 9 `competitor`
 
 ### Still parked
 
-- **Placeholder sender names** in `config/senders.md` and the **unconfirmed Smartlead
-  unsubscribe token** remain deliberate send-blockers. Both clear during Smartlead
-  setup, still pending finance approval.
+- **Placeholder sender names** in `config/senders.md`, the **unconfirmed Smartlead
+  unsubscribe token**, and the **`<ZACH_BOOKING_LINK>` placeholder** in
+  `config/meeting-routing.md` remain deliberate send-blockers. The first two clear
+  during Smartlead setup, still pending finance approval.
+- **None of the `outbound_*` HubSpot properties exist yet.** `config/hubspot-properties.md`
+  specifies them; the portal has none. Every status/intent/recycle write documented in
+  `instructions/reply-handling.md` fails until they are created. See the new section
+  below.
 - **Mailbox-assignment timing.** Assembly needs the sender name during generation, but
   mailbox assignment currently happens at campaign creation. Documented in
   `config/senders.md`; not implemented.
@@ -159,10 +195,32 @@ and every other write-back).
 **Related:** the one-time Artisan opt-out backfill has the same destination (HubSpot
 opt-out list via manual CSV import), once the CSM provides the list.
 
-**Resolved 2026-08-19: the pre-send check now gates on `hs_email_optout`.** It is gate 1
-of eight in `instructions/pre-send-eligibility-check.md`, with `optout_property` in
-`config/pre-send-defaults.md`. This item's premise therefore holds — both stages feed a
-field the engine actually reads, so Stage 1 is worth shipping on its own.
+**Resolved 2026-08-19, widened 2026-08-21: the pre-send check gates on `hs_email_optout`
+OR `outbound_suppressed`.** Gate 1 of nine in `instructions/pre-send-eligibility-check.md`,
+with `optout_properties` (plural) in `config/pre-send-defaults.md`. This item's premise
+therefore holds — both stages feed a field the engine actually reads.
+
+**⚠️ Stage 2 now conflicts with the write-direction policy — resolve before building it.**
+`config/hubspot-properties.md` decided that a cold-outbound unsubscribe must **NOT**
+auto-cascade into native `hs_email_optout` (global blast radius, kills the team's
+marketing and one-to-one email, and a contact-initiated global unsubscribe cannot be
+reversed), and that native opt-out is **read-only** for the engine. Stage 2 as written
+does exactly the opposite: it calls the Communication Preferences API to set native
+opt-out programmatically.
+
+The two are reconcilable, and the newer policy should win:
+
+- **Stage 1 is unaffected** and still worth shipping — it writes nothing.
+- **Stage 2 should retarget `outbound_suppressed`** (+ `outbound_opt_out_date` +
+  `outbound_opt_out_source = smartlead`) instead of native opt-out. That is the field
+  the engine's own gate reads, it is scoped to outbound rather than global, and it is
+  reversible.
+- **The manual opt-out-list import in Stage 1 has the same problem** — it sets native
+  `hs_email_optout` globally. Fine as a deliberate human decision, wrong as the routine
+  path for a cold-outbound unsub. Whether cold-outbound opt-outs *should* broaden to
+  all-email is the open RevOps/legal question recorded in `hubspot-properties.md`.
+
+Until that is decided, treat Stage 2's endpoint as **not approved for use**.
 
 ---
 
@@ -178,10 +236,19 @@ The spec is written (`instructions/pre-send-eligibility-check.md`, values in
 Bedrock, and writes a CSV — and it should stay that way. The filter:
 
 1. Reads the sales-provided lead list.
-2. Queries HubSpot and applies the eight gates.
+2. Queries HubSpot and applies the **nine** gates, in **two tiers** — HARD
+   (never contact) and SOFT (skip this campaign, reversible).
 3. Emits `eligible.csv` in the shape `run_generation.py --contacts` already expects.
-4. Emits the full annotated list, every EXCLUDED contact with its reason included, for
-   the review Sheet. Targeting decisions are visible, never silent.
+4. Emits the full annotated list, every EXCLUDED contact with its reason **and its
+   `exclusion_tier`**, for the review Sheet. Targeting decisions are visible, never
+   silent — and a reviewer must be able to tell a compliance opt-out from a contact
+   who is merely recycling until a date.
+
+**Two of the nine gates read properties that do not exist yet** (`outbound_suppressed`,
+`outbound_status`, `outbound_recycle_after`). Until the properties are created, those
+gates no-op silently — which looks identical to "everyone passed". Either create the
+properties first, or have the filter **fail loudly** when a gated property is missing
+from the HubSpot response rather than treating absent as passing.
 
 Generation is then just `--contacts eligible.csv`, and the two steps stay independently
 runnable and independently testable.
@@ -190,6 +257,75 @@ runnable and independently testable.
 `decision` is not `ELIGIBLE`. Only meaningful for a list that carries the column, so it
 catches "ran generation on the raw list by mistake", not "never ran the filter at all".
 Cheap, and worth it once the filter exists.
+
+---
+
+## Create the `outbound_*` HubSpot properties
+**Trigger:** before the reply handler writes anything, and before the eligibility filter
+is trusted. This blocks both.
+
+`config/hubspot-properties.md` is the spec; the portal has none of it. Create in the
+**"Outbound Engine"** property group on **Contact**:
+
+| Property | Type |
+|---|---|
+| `outbound_status` | Dropdown — `in_sequence`, `no_response`, `replied`, `meeting_booked`, `bounced`, `disqualified`, `opted_out` |
+| `outbound_reply_intent` | Dropdown — the ten reply intents |
+| `outbound_suppressed` | Single checkbox |
+| `outbound_opt_out_date` | Date |
+| `outbound_recycle_after` | Date |
+| `outbound_opt_out_source` | Dropdown — `smartlead`, `manual`, `backfill_artisan` (recommended) |
+| `outbound_last_campaign_id` | Single-line text (recommended) |
+
+- **Use the internal names exactly**, and confirm none collide with existing properties
+  before creating.
+- Dropdown **internal values** are the lowercase-underscored forms, not the display
+  labels.
+- **Absent ≠ false.** A missing property reads as empty, so every gate that depends on
+  one silently passes everybody. Create them before the first filtered run, or make the
+  filter fail loudly on a missing property.
+
+### Portal values still unconfirmed  [FILL IN]
+Carried from `config/pre-send-defaults.md`; all block a first live run:
+- `hs_lead_status` internals for In Progress / Connected / Open Deal.
+- `lifecyclestage` internals (this portal labels `lead` as *created*, `customer` as
+  *outreached*).
+- The **Source property's own internal field key**, and whether the dropdown has an
+  **"Outbound Referral"** option for `referral_source_value` — a write to a
+  non-existent option fails or silently drops.
+- Owner-name → `hubspot_owner_id` resolution for all eight excluded owners.
+
+---
+
+## Decide the meeting handoff model
+**Trigger:** before any reply gets a meeting-driving response — so, before the reply
+handler goes live.
+
+`config/meeting-routing.md` carries this as `[CONFIRM]`. Zach Hickman is the single
+meeting owner but holds only **3 of 12 mailboxes**, so for 9 of them the sender is not
+the person who takes the meeting. Two options:
+
+- **A — book onto Zach's calendar.** The sender persona stays the correspondent and
+  shares Zach's link, introducing him.
+- **B — Zach takes over the thread** once a live conversation starts.
+
+It changes reply copy (whose name and calendar the prospect sees), whether a third party
+appears mid-thread, and how the handler drafts an interested response. Until it is
+decided, interested replies on the 9 non-Zach mailboxes go to **human review**. The
+booking link itself is still a `<ZACH_BOOKING_LINK>` placeholder and a send-blocker.
+
+---
+
+## Check for a Smartlead account-level activity-logging default
+**Trigger:** ~10 minutes, any time. Worth doing early — it is the only lever that
+reduces a recurring manual step.
+
+HubSpot activity logging is per-campaign and UI-only (no API), so today every campaign
+needs a human to toggle it before sends start. If Smartlead exposes an
+account/workspace-level default that turns it on for all new campaigns, set it once and
+keep the per-campaign verification as the safety net. If it does not exist, the manual
+gate in `instructions/campaign-creation.md` is permanent for v1 and the self-serve
+request workflow (tracker row 71) has to route through it rather than around it.
 
 ---
 
@@ -217,4 +353,19 @@ Findings measured on `reviews/draft-run-34-20260819-cta-opener.csv` (7 PASS / 13
    and 19 of 33 m2 openers share "One thing that …" — a generation-side problem the
    whole-sentence batch check sees only 4 of.
 4. **Refresh the Current state section** for this run once the three land. It still
-   describes the three-run state and names a next task that has since been done.
+   describes the three-run state and names a next task that has since been done. (The
+   2026-08-21 checkpoint added the reply-to-CRM state model but deliberately did not
+   reconstruct this run's copy numbers — that is still this item's job.)
+
+---
+
+## Move the recycle constants into config
+**Trigger:** low priority; do it if the windows get tuned more than once, or when the
+reply handler is implemented.
+
+`RECYCLE_NOT_NOW_DAYS = 90` and `RECYCLE_NOT_INTERESTED_DAYS = 180` currently live in
+`instructions/reply-handling.md`. Repo convention puts tunable values in `config/`
+(`config/pre-send-defaults.md` is the precedent) and instructions describe the logic
+that consumes them. A `config/reply-defaults.md` would be the consistent home, and would
+also give the auto-send allowlist and response-guidance placeholders somewhere to live.
+Not worth a new file for two constants alone.
