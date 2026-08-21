@@ -21,17 +21,29 @@ API. **Never run this without a recorded approval.** Read
    `config/smartlead-defaults.md`).
 2. **Configure sending:** schedule/timezone, assigned **warmed** mailboxes, daily
    limit (~30/mailbox/day ceiling), and inter-email delays. All from defaults.
-3. **Add prospects** and attach each prospect's message_1..3 as the campaign's
+3. **HubSpot activity logging — STOP and hand off to a human. Manual UI step, no API.**
+   Activity logging is per-campaign and can **only** be toggled in the Smartlead UI
+   (campaign's HubSpot settings); there is no API endpoint for it. A campaign that
+   sends without it logs nothing to HubSpot — silently, with no error. Claude Code
+   cannot complete this step: ask a human to enable it and confirm they have, before
+   any sends start. Full rule + verification gate in the "HubSpot activity logging"
+   section of `config/smartlead-defaults.md`.
+4. **Add prospects** and attach each prospect's message_1..3 as the campaign's
    per-lead custom fields / personalized content.
-4. **Configure the 3-email sequence** using those personalized fields.
-5. **Stop-on-reply:** ensure follow-ups halt automatically when a prospect replies.
-6. **Verify settings** before activating. Re-read them back and confirm with the
+5. **Configure the 3-email sequence** using those personalized fields.
+6. **Stop-on-reply:** ensure follow-ups halt automatically when a prospect replies.
+7. **Verify settings** before activating. Re-read them back and confirm with the
    human if anything looks off.
-7. **Save the Smartlead campaign ID** to SQLite, mapped to the campaign/approval.
+8. **Save the Smartlead campaign ID** to SQLite, mapped to the campaign/approval.
 
 ## Launch
 - Start with a **small batch** (per your plan, ~100 contacts) across multiple warmed
   mailboxes. Watch deliverability + reply quality, then ramp gradually.
+- **Gate the full lead set behind the activity-logging check** in
+  `config/smartlead-defaults.md`: after the first send, confirm on a test contact that
+  it lands as an EMAIL activity and moved native "Last Contacted", not just "Last
+  Activity Date". Only then release the rest of the leads — this also catches a broken
+  integration connection on that campaign.
 - Never spike volume on one mailbox/domain; scale by adding mailboxes/domains.
 - Pause any mailbox/domain showing deliverability problems.
 

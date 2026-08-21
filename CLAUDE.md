@@ -51,9 +51,20 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 - Reply retrieval via the Smartlead API on a schedule (**polling, no webhooks**).
 - Reply classification + drafted responses, with autonomous follow-up that is
   **review-gated** (a quality check runs before anything goes out).
-- HubSpot updates when a reply changes a prospect's sales status.
+- HubSpot updates on a reply, to the engine's **own** fields only: the classified
+  intent goes to `outbound_reply_intent`, and the reply also moves `outbound_status`
+  (`replied`, `meeting_booked`, or `opted_out`). v1 writes **no native HubSpot sales
+  fields** (Lead Status, Lifecycle Stage) — that mapping is deferred to v2. See
+  `config/hubspot-properties.md`.
 - Everything runs **locally**: Claude Code + Claude desktop scheduled tasks. No
   servers, queues, or webhook infrastructure.
+
+**v1 scope caveat — campaign creation is not fully hands-off.** Enabling Smartlead's
+HubSpot activity logging is a per-campaign UI toggle with no API endpoint. Every
+campaign therefore has one mandatory manual step (a human enabling activity logging
+in the Smartlead UI before sends start), gated in instructions/campaign-creation.md.
+This is the single point where v1 requires a human in the Smartlead UI; everything
+else in campaign creation is API-driven.
 
 **Deferred (not v1). Do not wire into the live flow:**
 - **Lead qualification.** See `instructions/lead-qualification.DEFERRED.md`. The
@@ -103,10 +114,15 @@ instructions/              ← reusable "how to do each job" files
   lead-qualification.DEFERRED.md  ← out of v1 scope; kept for later
 
 config/                    ← company-specific facts Claude relies on
-  pre-send-defaults.md     ← eligibility gates: recency window, excluded owners, etc.
+  pre-send-defaults.md     ← eligibility gates: hard/soft tiers, recency, excluded owners
+  hubspot-properties.md    ← the outbound_* Contact properties: names, values, write rules
   positioning.md           ← what we sell, value props, proof, PROHIBITED claims
   personas.md              ← per-persona angles and messaging guidance
-  smartlead-defaults.md    ← default schedule, limits, delays, sequence config
+  meeting-routing.md       ← meeting owner + booking link; never hardcode a name
+  senders.md               ← mailbox → sign-off name (PLACEHOLDER data today)
+  banned-phrases.md        ← phrasing the generator must never produce
+  generation-failure-fallback.md  ← what to do when generation fails a prospect
+  smartlead-defaults.md    ← schedule, limits, delays, HubSpot activity-logging gate
 
 scripts/                   ← Python scripts Claude Code writes (empty to start)
 data/                      ← local SQLite + working state (git-ignored)
@@ -148,7 +164,10 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
    `instructions/reply-handling.md`.
 5. Draft (and, only for allowed categories, send) the response through the
    review gate. Stop all sequence follow-ups once a live conversation starts.
-6. Update HubSpot if the reply changes sales status.
+6. Update HubSpot's `outbound_*` fields: write the classified intent to
+   `outbound_reply_intent`, and move `outbound_status` to `replied`,
+   `meeting_booked`, or `opted_out`. **Never write native sales fields in v1.**
+   Exception: an `out_of_office` intent must not move `outbound_status`.
 7. Record the processed reply ID + the successful-run timestamp in SQLite.
 
 ---

@@ -51,7 +51,10 @@ Look each lead up by email via the contacts search endpoint
 
 | Property (internal name) | Gate | Role |
 |---|---|---|
-| Unsubscribed from all email (`hs_email_optout`) | Opt-out | Native HubSpot opt-out; `true` = never contact |
+| Unsubscribed from all email (`hs_email_optout`) | Opt-out | Native HubSpot opt-out; `true` = never contact. Read-only input |
+| Outbound Suppressed (`outbound_suppressed`) | Opt-out (hard) | Custom; engine do-not-send flag (row 59 sync + `asked_to_stop`). `true` = never contact |
+| Outbound Status (`outbound_status`) | Status (hard **and** soft) | Custom; **hard** if `opted_out` / `bounced`, **soft** if `disqualified` / `in_sequence`, or `replied` within 30d |
+| Recycle After (`outbound_recycle_after`) | Recycle (soft) | Custom; set on `not_now` / `not_interested`. A **future** date = skip until it passes. Empty/past = passes |
 | Last activity date (`notes_last_updated`) | Recency | Includes logged notes = manual rep outreach |
 | Last contacted (`notes_last_contacted`) | Recency | Chat/call/sales-email/meeting logged |
 | Last engagement date (`hs_last_sales_activity_timestamp`) | Recency | Last sales activity |
@@ -68,26 +71,79 @@ A contact is **ELIGIBLE** only if it passes **every** gate below. If any gate
 fails, the contact is **EXCLUDED** with the corresponding reason. (Evaluate in
 order; report the first failing reason.)
 
-1. **Opt-out (hard gate, evaluated first)** — `hs_email_optout` must NOT be `true`.
-   Exclude if `hs_email_optout = true` ("Unsubscribed from all email"). This is the
-   **native** HubSpot opt-out property, not a custom one, and it is the same field set
-   by HubSpot's opt-out-list import and by the Communication Preferences API. It is
-   evaluated before every other gate so an opted-out contact reports "opted out" as its
-   reason rather than whichever gate happens to fail next — an opt-out is a compliance
-   fact, and it should never be recorded as merely stale or owned.
-2. **Lifecycle stage** — `lifecyclestage` must be `lead` or `opportunity`.
+1. **Opt-out (hard gate, evaluated first)** — exclude the contact if **ANY** of these
+   is `true`:
+
+   ```
+   Exclude from sending (NEVER contact) if ANY of:
+     - outbound_suppressed == true       # engine do-not-send flag (row 59 sync + asked_to_stop)
+     - hs_email_optout == true           # native HubSpot global opt-out (read-only input)
+     - outbound_status in (opted_out, bounced)   # compliance / deliverability facts
+     # optional third floor if outbound maps to a subscription type:
+     # - "Opted out of email: <type>" == true
+   ```
+
+   **Neither field wins — it is an OR, and both are mandatory.** `hs_email_optout` is
+   the native property ("Unsubscribed from all email"), the same field set by HubSpot's
+   opt-out-list import and the Communication Preferences API, so it catches opt-outs
+   recorded through channels this engine never touches; the engine only ever reads it.
+   `outbound_suppressed` is the custom field the unsubscribe-sync job (row 59) writes for
+   Smartlead-side unsubscribes, which may never reach the native field. Checking only
+   one silently reopens sending to the other's opt-outs.
+
+   **Two `outbound_status` values are hard, not soft.** `opted_out` is a compliance fact
+   and `bounced` a deliverability one; neither becomes contactable by waiting a campaign.
+   `opted_out` normally rides with `outbound_suppressed = true`, but if the two ever
+   disagree — manual edit, partial write, backfill — status alone must still block.
+
+   This gate is evaluated before every other one so an opted-out contact reports "opted
+   out" as its reason rather than whichever gate happens to fail next — an opt-out is a
+   compliance fact, and it should never be recorded as merely stale or owned.
+2. **Outbound status (soft gate, evaluated second)** — skip the contact for **this
+   campaign** if `outbound_status` is any of:
+
+   ```
+   Skip for this campaign (reversible) if outbound_status in:
+     - disqualified          # not_qualified / wrong_contact — reversible, not suppressed
+     - in_sequence           # already live in another campaign
+   ...or status == replied within the last 30 days (status_recent_reply_skip_days)
+   ...or outbound_recycle_after is a FUTURE date   # declined; waiting out the window
+
+   NOTE: opted_out and bounced are NOT here — they are hard, in gate 1.
+   ```
+
+   **This is a soft, reversible exclusion, not suppression.** It is the gate that makes
+   `not_qualified` and `wrong_contact` mean something: the reply handler writes those to
+   `outbound_status = disqualified` **without** setting `outbound_suppressed`, because
+   suppression is reserved for opt-outs. If nothing reads status, a disqualified contact
+   flows straight back into the next campaign and the classification is a no-op. Report
+   the reason as "disqualified" / "in sequence" / "replied recently" — never as "opted
+   out", which would misrepresent a reversible skip as a compliance opt-out.
+
+   **`status_recent_reply_skip_days: 30` is the mid-conversation floor, not a recycle
+   window.** It asks "is someone still mid-thread with this contact?" — a different
+   question from when a declined contact may be approached again.
+
+   **The recycle gate: `outbound_recycle_after` in the future = skip.** The reply handler
+   stamps that date on `not_now` (the date named in the reply, else +90d) and
+   `not_interested` (+180d), so this gate is what turns a decline into an actual wait
+   rather than a note nobody reads. It is **self-clearing** — once the date passes the
+   contact is eligible again with no cleanup job — and an **empty or past date passes**,
+   so contacts predating the property need no backfill. Report the reason as "recycling
+   until <date>" so a reviewer can see it is a timed wait, not a rejection.
+3. **Lifecycle stage** — `lifecyclestage` must be `lead` or `opportunity`.
    Exclude otherwise (notably `customer`).
-3. **Has group** — `has_group` must NOT equal `yes`. Empty is allowed.
+4. **Has group** — `has_group` must NOT equal `yes`. Empty is allowed.
    Exclude if `has_group = yes` (existing customer).
-4. **Customer Success Manager** — `customer_success_manager` must be empty.
+5. **Customer Success Manager** — `customer_success_manager` must be empty.
    Exclude if it has any value (managed customer).
-5. **Contact owner** — `hubspot_owner_id` must be empty OR not one of the
+6. **Contact owner** — `hubspot_owner_id` must be empty OR not one of the
    excluded owners (see config). Exclude if owned by a listed rep.
-6. **Lead status** — `hs_lead_status` must be empty OR not one of
+7. **Lead status** — `hs_lead_status` must be empty OR not one of
    {In Progress, Connected, Open Deal}. Exclude if it is one of those.
-7. **Now in Sequence** — `hs_sequences_is_enrolled` must be `false`.
+8. **Now in Sequence** — `hs_sequences_is_enrolled` must be `false`.
    Exclude if already enrolled in a HubSpot sequence.
-8. **Recency** — each of `notes_last_updated`, `notes_last_contacted`, and
+9. **Recency** — each of `notes_last_updated`, `notes_last_contacted`, and
    `hs_last_sales_activity_timestamp` must be empty OR older than 30 days ago.
    Exclude if ANY of the three falls within the last 30 days (someone is
    actively working them; a logged note counts).
@@ -122,7 +178,8 @@ One row per input lead:
 | `email` | Match key |
 | `hubspot_contact_id` | Resolved ID, or "to-create" / "created" |
 | `decision` | `ELIGIBLE` / `EXCLUDED` |
-| `reason` | e.g. "opted out", "active in last 30d", "has CSM", "owned by Rob Dong", "new to HubSpot" |
+| `reason` | e.g. "opted out", "bounced", "disqualified", "in sequence", "replied recently", "recycling until 2026-11-19", "active in last 30d", "has CSM", "owned by Rob Dong", "new to HubSpot" |
+| `exclusion_tier` | `hard` (never contact) or `soft` (skipped this campaign, reversible). **`hard`** for opt-out, `hs_email_optout`, `opted_out`, `bounced`. **`soft`** for `disqualified`, `in sequence`, `replied recently`, `recycling until …`, and the recency/owner/customer gates |
 | `notes_last_updated` / `notes_last_contacted` / `hs_last_sales_activity_timestamp` | For transparency |
 | `lifecyclestage`, `hs_lead_status`, `owner` | For transparency in review |
 
@@ -158,10 +215,12 @@ changing gets changed there.
 - **Lifecycle allow-list is strict.** Only `lead` and `opportunity` pass, so
   other stages (subscriber, MQL, SQL, etc.) are currently excluded. Confirm
   that's intended; widen `lifecycle_allow` if not.
-- **Opt-out is gated here (resolved 2026-08-19).** Gate 1 excludes any contact with
-  `hs_email_optout = true`, so a HubSpot-side opt-out — including one made through a
-  channel this engine never touched — is caught before generation. This closes what
-  was previously recorded as an open gap.
+- **Opt-out is gated here (resolved 2026-08-19; widened to two fields 2026-08-21).**
+  Gate 1 excludes any contact with `hs_email_optout = true` **or**
+  `outbound_suppressed = true`, so both a HubSpot-side opt-out — including one made
+  through a channel this engine never touched — and a Smartlead-side unsubscribe synced
+  by row 59 are caught before generation. This closes what was previously recorded as an
+  open gap.
   Smartlead's own suppression list still runs independently and is **not** redundant
   with this gate: it covers hard bounces and anyone who unsubscribed from a Smartlead
   send but has not yet been written back to HubSpot. Keep both. The Smartlead → HubSpot

@@ -10,17 +10,126 @@ no webhooks**, and follow-ups are **autonomous but review-gated**.
 4. After processing, store the message ID and update the last-check timestamp.
 
 ## Classification
-Read the whole thread, then classify the prospect's reply as one of:
-- **Interested:** wants to engage / learn more / meet.
-- **Question:** asking something before deciding.
-- **Requesting info:** wants materials/details.
-- **Objection:** has a concern to address.
-- **Not interested:** a soft or hard no.
-- **Stop / opt-out:** asked to stop. → Suppress everywhere, halt all contact.
-- **Needs qualification:** unclear fit (relevant because qualification is deferred
-  in v1; flag these for a human).
+Read the whole thread, then classify the reply as exactly one `outbound_reply_intent`
+value (enum in `config/hubspot-properties.md`):
 
-Then decide the next action for that category.
+- **`interested`** — wants to engage / learn more / meet. **Also covers a request for
+  materials, pricing, a deck, or a demo** — those are buying signals, not questions.
+- **`question`** — asking something before deciding, with no buying lean.
+- **`objection`** — has a concern to address.
+- **`not_interested`** — a decline, with nothing stronger present.
+- **`not_now`** — positive or neutral, but explicitly later.
+- **`not_qualified`** — structural non-fit (out of business, doesn't run ticketed events).
+- **`wrong_contact`** — the sender has left, or isn't the right person.
+- **`asked_to_stop`** — explicit removal / unsubscribe request.
+- **`out_of_office`** — an away/on-leave auto-responder.
+- **`automated_reply`** — any other machine-generated reply.
+
+A single reply can carry several signals; resolve it with the **precedence** rules
+below, then take the action from the **action map**.
+
+**Retired values (resolved 2026-08-21).** `requested_info` and `needs_qualification`
+are no longer in the enum, and **nothing routes to either**:
+
+- **`requested_info` → route by signal.** A request for materials, pricing, a deck, or
+  a demo is a **forward/buying signal** → classify as **`interested`** (send the
+  materials *and* drive to the meeting). A bare informational question with no buying
+  lean → **`question`**. So "send me the deck" and "send pricing" are `interested`,
+  not `question`.
+- **`needs_qualification` → removed as a destination; nothing routes here.** A reply
+  showing structural non-fit is **`not_qualified`**. A genuinely ambiguous reply is
+  handled by the **human-review flag** (see Responding), not by an enum value — v1 has
+  no "park it in a status" option for ambiguity.
+
+## Reply-intent action map (outbound_reply_intent → what the handler does)
+
+| Intent | outbound_status write | outbound_suppressed | Smartlead sequence | Action |
+|---|---|---|---|---|
+| interested | replied | no | stop | Answer (send any materials asked for); drive to a meeting with the **meeting owner** in `config/meeting-routing.md` |
+| question | replied | no | stop | Answer the question, then drive to a meeting with the **meeting owner** (`config/meeting-routing.md`) |
+| objection | replied | no | stop | Handle the objection, keep engaging |
+| not_now | replied | no | stop | Acknowledge; **set `outbound_recycle_after`** (see recycle windows below); nurture later |
+| not_interested | replied | no | stop | Polite close; **set `outbound_recycle_after`**; stays recyclable. Flag firm/definitive rejections for optional human review — a human may manually suppress, automation does not |
+| not_qualified | disqualified | no | stop | Mark disqualified; excluded from future campaigns by the eligibility status filter (reversible) |
+| wrong_contact | disqualified (old contact) | no | stop | Old contact excluded; named replacement created as a **referral lead only — never enrolled, never sent**. See below |
+| asked_to_stop | opted_out | YES (+ opt_out_date + opt_out_source) | stop | Confirm removal. The ONLY classifier-driven suppression |
+| out_of_office | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
+| automated_reply | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
+
+### Recycle windows — `outbound_recycle_after` (set on not_now / not_interested)
+
+A decline is a *wait*, not a suppression. The handler writes a date to
+`outbound_recycle_after`: the earliest day the contact may re-enter a campaign. The
+SOFT eligibility tier skips anyone whose date is still in the future, so the field is
+what actually enforces the wait.
+
+Named constants — **defaults/floors, tunable**:
+
+```
+RECYCLE_NOT_NOW_DAYS        = 90    # not_now, when the reply names no date
+RECYCLE_NOT_INTERESTED_DAYS = 180   # not_interested, always
+```
+
+- **`not_now`** → the **date named in the reply** if there is one ("circle back after
+  the summer", "ask me in Q1") — use it. Otherwise `reply_date + RECYCLE_NOT_NOW_DAYS`.
+  A named date **earlier** than the floor is still honored: the prospect asked for that
+  timing, and honoring it is the point of the intent.
+- **`not_interested`** → always `reply_date + RECYCLE_NOT_INTERESTED_DAYS`. No date is
+  read from the reply here; a decline is not an invitation to negotiate timing.
+- Compute from the **reply date**, not the processing date, so a delayed poll doesn't
+  quietly extend the wait.
+- **Never shorten an existing future date.** If a contact already carries a later
+  `outbound_recycle_after`, keep the later one — declines accumulate patience, they
+  don't reset it.
+
+### Precedence (a reply can carry several signals — highest wins)
+
+1. **asked_to_stop** — an explicit removal/unsubscribe beats everything (a "not interested + please remove me" is asked_to_stop, not not_interested).
+2. **out_of_office / automated_reply** — classify by FORM. If it's an auto-responder, stop there; do not mine the auto-text for intent.
+3. **wrong_contact** — sender has left / isn't the right person.
+4. **not_qualified** — structural non-fit (out of business, doesn't run ticketed events).
+5. **interested** — a buying-signal question or pricing ask beats a stated objection ("happy with our tool, but is yours free?" → interested).
+6. **question / objection** — engaged, needs a response.
+7. **not_now** — positive-or-neutral but explicitly later.
+8. **not_interested** — the default decline when nothing stronger is present.
+
+### `wrong_contact` — two contacts, and the replacement is NOT a lead to send to
+
+A `wrong_contact` reply ("I've left", "that's not me, talk to Dana") touches two
+records. Handle them separately.
+
+**1. The old contact (the one who replied)**
+- `outbound_status` = `disqualified`. **Not suppressed** — this is a reversible,
+  campaign-level exclusion, not an opt-out.
+- Excluded from sends by the SOFT eligibility tier.
+
+**2. The named replacement — a referral lead, not an enrollment**
+- **Create or update** the HubSpot contact, **deduping by email** — the person may
+  already exist, and a second record would fragment their history and risk a
+  double-send. No email in the reply? Record the referral on the old contact and hand
+  it to a human; do not guess an address from a naming pattern.
+- Tag **source = `referral_source_value`** from `config/pre-send-defaults.md`
+  (currently "Outbound Referral") — **not** `new_contact_source_value`, which would file
+  an unvetted referral as an outbound lead the engine had already mailed. Attribute the
+  referral to the departed contact so the origin stays visible and reportable.
+- **DO NOT enroll in a campaign. DO NOT send anything.** Not even a "your colleague
+  suggested I reach out" note.
+- The candidate must clear the **normal pre-send eligibility check**
+  (`instructions/pre-send-eligibility-check.md`) **and human/AE review** before any
+  outreach. A referral is not pre-qualified: they may be an existing customer, a rep's
+  active contact, or already opted out — exactly what that check is for.
+
+Why this is strict: a referral arrives mid-conversation and feels warm, which is how a
+never-vetted contact ends up receiving cold email without passing a single gate. The
+handler's job here ends at *creating a well-attributed record*.
+
+### Stop-on-reply resume rule (critical)
+
+Smartlead halts follow-ups on ANY reply and cannot tell an auto-reply from a human.
+So out_of_office and automated_reply will trip stop-on-reply and silently freeze the
+sequence for a lead who never engaged. For those two intents ONLY, the handler must
+RESUME the paused sequence, must not set outbound_status = replied, and must not log
+engagement. Every other intent correctly leaves the sequence stopped.
 
 ## Responding
 - **Draft first, gate always.** A quality check runs before anything goes out.
@@ -28,7 +137,13 @@ Then decide the next action for that category.
   Everything else is drafted for human review.
 - **Stop all sequence follow-ups the moment a live conversation starts.** Hand off
   from sequence automation to conversation mode.
-- Unusual, sensitive, high-value, or ambiguous conversations → **always human**.
+- Unusual, sensitive, high-value, or ambiguous conversations → **always human**. This
+  flag — not an enum value — is where genuinely ambiguous replies go, now that
+  `needs_qualification` is retired.
+- **Meetings:** never hardcode the meeting owner or booking link. Both come from
+  `config/meeting-routing.md`, and the non-Zach-mailbox handoff model is still
+  `[CONFIRM]` there — until it's decided, an interested reply on one of those 9
+  mailboxes goes to human review rather than assuming a handoff.
 
 ### Auto-send allowlist  [FILL IN: start empty / conservative]
 Begin with an empty allowlist (everything reviewed), then add safe categories over
@@ -37,8 +152,24 @@ time as trust builds. Candidate first additions:
 - `[FILL IN: e.g. "sending the one-pager you asked for"]`
 
 ## HubSpot updates
-- When a reply changes sales status (interested, meeting, not interested, opt-out),
-  update the HubSpot contact accordingly.
+
+Write **only** the engine's own `outbound_*` properties. **No native HubSpot sales
+fields (Lead Status, Lifecycle Stage) in v1** — that mapping is deferred to v2. Field
+definitions and allowed values: `config/hubspot-properties.md`.
+
+- **Always: `outbound_reply_intent`** — the classified intent, every time, including
+  for `out_of_office` and `automated_reply`.
+- **`outbound_status`** — per the action map above, which is the authority on the write
+  for each intent. `meeting_booked` is set separately when the conversation produces a
+  booked meeting.
+- **`outbound_suppressed`** — only for `asked_to_stop`, with `outbound_opt_out_date` and
+  `outbound_opt_out_source`. No other intent auto-suppresses; a human may suppress
+  manually.
+- **`outbound_recycle_after`** — on `not_now` and `not_interested` only, per the recycle
+  windows above. Never shorten an existing future date.
+- **Exception — `out_of_office` and `automated_reply` do NOT move status.** Log the
+  intent, leave `outbound_status` untouched, and RESUME the sequence. Neither is a real
+  reply, so neither may advance the lead.
 
 ## Response guidance by category  [FILL IN with real examples over time]
 - Interested → `[FILL IN]`
