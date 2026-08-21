@@ -117,10 +117,10 @@ passed. Branch distribution unchanged across every run: 25 `gmv`, 9 `competitor`
 
 ### Still parked
 
-- **Placeholder sender names** in `config/senders.md`, the **unconfirmed Smartlead
-  unsubscribe token**, and the **`<ZACH_BOOKING_LINK>` placeholder** in
-  `config/meeting-routing.md` remain deliberate send-blockers. The first two clear
-  during Smartlead setup, still pending finance approval.
+- **Placeholder sender names** in `config/senders.md` and the **unconfirmed Smartlead
+  unsubscribe token** remain deliberate send-blockers. Both clear during Smartlead
+  setup, still pending finance approval. (The booking-link placeholder is resolved:
+  `https://meetings.hubspot.com/zach-hickman`, verified reachable 2026-08-21.)
 - **None of the `outbound_*` HubSpot properties exist yet.** `config/hubspot-properties.md`
   specifies them; the portal has none. Every status/intent/recycle write documented in
   `instructions/reply-handling.md` fails until they are created. See the new section
@@ -308,8 +308,10 @@ to introduce himself. Written up in `config/meeting-routing.md`; consumed by
 `instructions/reply-handling.md`, which references the config meeting-owner value rather
 than a name.
 
-**Still open here:** the booking link is a `<ZACH_BOOKING_LINK>` placeholder and remains
-a send-blocker until filled in.
+**Booking link filled in 2026-08-21:** `https://meetings.hubspot.com/zach-hickman`
+(HubSpot meetings link, so bookings land natively and the native meetings-tool date
+carries the meeting per the v1 tracking decision). No longer a send-blocker. This item
+is closed.
 
 ---
 

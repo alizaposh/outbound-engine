@@ -11,12 +11,14 @@ one place rather than a search across instruction files.
 |---|---|
 | Name | Zach Hickman |
 | Role | SDR |
-| Booking link | `<ZACH_BOOKING_LINK>`  ← **placeholder, fill before any live send** |
+| Booking link | `https://meetings.hubspot.com/zach-hickman` |
 
 - **One owner in v1.** Every meeting from every sender persona lands with Zach. There
   is no round-robin and no territory split.
-- **The booking link is a placeholder.** Sending `<ZACH_BOOKING_LINK>` to a prospect
-  would be a broken email; assembly must fail loudly rather than send the placeholder.
+- **The booking link is a HubSpot meetings link**, so a booking made through it lands
+  natively in HubSpot — which is what lets the native "Date of last meeting booked in
+  meetings tool" property carry the date, per the v1 meeting-tracking decision in
+  `config/hubspot-properties.md`. A non-HubSpot scheduler would break that.
 - **Never paste a booking link into an opener.** Per `config/personas.md`, both
   personas open reply-based; a scheduling link appears only after the prospect shows
   interest.
