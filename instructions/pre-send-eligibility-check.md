@@ -140,7 +140,9 @@ order; report the first failing reason.)
 6. **Contact owner** — `hubspot_owner_id` must be empty OR not one of the
    excluded owners (see config). Exclude if owned by a listed rep.
 7. **Lead status** — `hs_lead_status` must be empty OR not one of
-   {In Progress, Connected, Open Deal}. Exclude if it is one of those.
+   {`IN_PROGRESS`, `CONNECTED`, `OPEN_DEAL`}. Exclude if it is one of those.
+   **Match the internal values, not the display labels** ("In Progress" matches
+   nothing and would exclude no one).
 8. **Now in Sequence** — `hs_sequences_is_enrolled` must be `false`.
    Exclude if already enrolled in a HubSpot sequence.
 9. **Recency** — each of `notes_last_updated`, `notes_last_contacted`, and
@@ -203,12 +205,12 @@ changing gets changed there.
   names. Resolve the eight names to their owner IDs once via the Owners API (or
   the owner-search tool), cache the ID set, and compare against that. If a name
   doesn't resolve, surface it rather than silently skipping.
-- **Confirm enum internals.** `hs_lead_status` and `lifecyclestage` store
-  internal values that can differ from display labels. In your portal the
-  lifecycle "lead" stage is labeled *created* and "customer" is labeled
-  *outreached* — the internal values (`lead`, `opportunity`, `customer`) are what
-  the filter uses. Verify the `hs_lead_status` internals for In Progress /
-  Connected / Open Deal too.
+- **Enum internals, confirmed 2026-08-24.** `hs_lead_status` and `lifecyclestage`
+  store internal values that differ from display labels, and the filter matches
+  the internals. `hs_lead_status` excludes `IN_PROGRESS`, `CONNECTED`,
+  `OPEN_DEAL`. Lifecycle `lead` is labeled *Created* and `customer` *Outreached*;
+  the allow-list uses `lead` / `opportunity`. Values live in
+  `config/pre-send-defaults.md`. Re-confirm if the portal's enums are edited.
 - **Recency intentionally includes `notes_last_updated`.** A logged note counts
   as a contact touch here, because reps log manual outreach (Instagram, text) as
   notes. This is deliberate for this workflow.

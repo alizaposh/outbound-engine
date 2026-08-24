@@ -42,24 +42,24 @@ recency_fields:
 
 has_group_exclude_value: "yes"          # has_group = yes -> existing customer
 
-excluded_owners:                        # resolve NAMES -> hubspot_owner_id via Owners API
-  - Dani Edelstein
-  - Bastian Delalande
-  - Ty Scearce
-  - Pavlos Tiftikidis
-  - Rob Dong
-  - Avante Price
-  - Jenny Blake
-  - Will Heyman
+excluded_owners:                        # name -> hubspot_owner_id, all 8 resolved 2026-08-24
+  - Dani Edelstein      # 82992386   danielle@posh.vip
+  - Bastian Delalande   # 89417305   bastian@posh.vip
+  - Ty Scearce          # 91700241   ty@posh.vip
+  - Pavlos Tiftikidis   # 87936293   pavlos@posh.vip
+  - Rob Dong            # 88177403   rob@posh.vip
+  - Avante Price        # 10486941   avante@posh.vip
+  - Jenny Blake         # 90391601   jenny@posh.vip
+  - Will Heyman         # 90391665   will@posh.vip
+                                        # IDs are a convenience copy; resolve by name at
+                                        # runtime so an owner change can't go unnoticed.
 
-lead_status_exclude: [In Progress, Connected, Open Deal]   # confirm internal enum values
+lead_status_exclude: [IN_PROGRESS, CONNECTED, OPEN_DEAL]   # internals confirmed 2026-08-24
 csm_property: customer_success_manager  # any non-empty value -> exclude
-lifecycle_allow: [lead, opportunity]    # confirm internal values (custom labels in portal)
+lifecycle_allow: [lead, opportunity]    # internals confirmed 2026-08-24 (labels differ)
 sequence_property: hs_sequences_is_enrolled   # must be false
 create_missing_contacts: true
 new_contact_source_value: "Outbound Email Engine"   # Source dropdown option for engine-created contacts
-referral_source_value: "Outbound Referral"          # Source option for wrong_contact replacements
-                                        # (created, never enrolled — see reply-handling.md)
 new_contact_lifecycle: lead
 ```
 
@@ -132,32 +132,38 @@ new_contact_lifecycle: lead
   leads through without creating records.
 - **`new_contact_source_value`** attributes engine-created contacts so they can be
   reported separately from other sources (e.g. "Internal Lead Scraper").
-- **`referral_source_value` — a separate source, deliberately not the engine one.**
-  A `wrong_contact` reply names a replacement, and the reply handler creates that person
-  as a **referral lead that is never enrolled and never sent to**
-  (`instructions/reply-handling.md`). Tagging them `new_contact_source_value` would file
-  them as an outbound lead the engine had already vetted and mailed, which is exactly
-  backwards: they have passed no gate. A distinct source keeps them findable as a
-  hand-off queue for a human, and keeps referral-sourced pipeline separable from
-  cold-sourced pipeline in reporting. **Both values write to the same Source property**
-  — one field, two option values — so the internal field key below covers both.
+- **No separate referral source in v1** (decided 2026-08-24). A `wrong_contact`
+  replacement is created without its own Source option; the constraint that actually
+  matters — never enrolled, never sent to until it clears this check and human review —
+  is enforced in `instructions/reply-handling.md`, not by the source tag. Revisit if
+  referral-sourced pipeline ever needs separating from cold-sourced in reporting.
 
-## Needs confirming in the portal  [FILL IN]
+## Portal values — confirmed 2026-08-24
 
-These are the values most likely to be wrong, because HubSpot internal values can
-differ from the labels shown in the UI. Confirm each before the first live run.
+Read from the live portal (hub `50950747`) via the properties and owners APIs, not from
+UI labels. HubSpot internal values differ from displayed labels, which is what made this
+list necessary.
 
-- `hs_lead_status` internals for **In Progress / Connected / Open Deal**: `[FILL IN]`
-- `lifecyclestage` internals — in this portal the `lead` stage is **labeled** *created*
-  and `customer` is **labeled** *outreached*. The filter uses the internal values
-  (`lead`, `opportunity`, `customer`). Confirmed? `[FILL IN]`
-- The **Source property's own internal field key** (not the option value) that a
-  create writes to: `[FILL IN]`
-- **Does the Source dropdown have an "Outbound Referral" option?** `referral_source_value`
-  assumes that label exists. A dropdown write to a non-existent option fails (or silently
-  drops, depending on the endpoint), so either create the option or change the value here
-  to an existing one: `[FILL IN]`
-- Owner-name → `hubspot_owner_id` resolution for all eight names above: `[FILL IN]`
+- **`hs_lead_status`** — the excluded three are `IN_PROGRESS`, `CONNECTED`, `OPEN_DEAL`
+  (uppercase, underscored). The full enum is `NEW`, `OPEN`, `IN_PROGRESS`, `OPEN_DEAL`,
+  `UNQUALIFIED`, `ATTEMPTED_TO_CONTACT`, `CONNECTED`, `BAD_TIMING`. **`lead_status_exclude`
+  previously held display labels** ("In Progress"), which would have matched nothing and
+  silently excluded no one.
+- **`lifecyclestage`** — confirmed: `lead` is labeled *Created*, `customer` *Outreached*,
+  and `opportunity` *Opportunity*. The allow-list uses internals, so it is correct.
+  **Also present:** two custom numeric stages, `1403597677`
+  (*Google_Paid Ads_Call Booked*) and `1421690440` (*Meta_Paid Ads_Call Booked*). Neither
+  is in `lifecycle_allow`, so paid-ads contacts who booked a call are excluded — right by
+  default (someone is working them), but now a deliberate exclusion rather than an
+  accident of the allow-list.
+- **Source property** — internal key is plain `source`; the `"Outbound Email Engine"`
+  option exists, so `new_contact_source_value` writes cleanly.
+- **Owners** — all eight names resolve; IDs recorded inline in `excluded_owners` above.
+  Requires the `crm.objects.owners.read` scope, granted 2026-08-24.
+
+**Re-confirm if the portal changes.** These are point-in-time reads: a renamed lifecycle
+stage or a deactivated owner breaks a gate quietly, and the owner case is the dangerous
+one — an unresolved name makes that rep's contacts eligible.
 
 ## Opt-out: resolved, and still not the only check
 

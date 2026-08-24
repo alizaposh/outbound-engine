@@ -52,7 +52,7 @@ are no longer in the enum, and **nothing routes to either**:
 | not_interested | replied | no | stop | Polite close; **set `outbound_recycle_after`**; stays recyclable. Flag firm/definitive rejections for optional human review — a human may manually suppress, automation does not |
 | not_qualified | disqualified | no | stop | Mark disqualified; excluded from future campaigns by the eligibility status filter (reversible) |
 | wrong_contact | disqualified (old contact) | no | stop | Old contact excluded; named replacement created as a **referral lead only — never enrolled, never sent**. See below |
-| asked_to_stop | opted_out | YES (+ opt_out_date + opt_out_source) | stop | Confirm removal. The ONLY classifier-driven suppression |
+| asked_to_stop | opted_out | YES (+ opt_out_date) | stop | Confirm removal. The ONLY classifier-driven suppression |
 | out_of_office | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
 | automated_reply | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
 
@@ -108,10 +108,10 @@ records. Handle them separately.
   already exist, and a second record would fragment their history and risk a
   double-send. No email in the reply? Record the referral on the old contact and hand
   it to a human; do not guess an address from a naming pattern.
-- Tag **source = `referral_source_value`** from `config/pre-send-defaults.md`
-  (currently "Outbound Referral") — **not** `new_contact_source_value`, which would file
-  an unvetted referral as an outbound lead the engine had already mailed. Attribute the
-  referral to the departed contact so the origin stays visible and reportable.
+- **No special source tag in v1** (decided 2026-08-24). Note the referral's origin — who
+  named them — where it is visible to whoever reviews the record, but do not create or
+  write a dedicated Source option for it. What keeps this safe is the no-send rule below,
+  not the tag.
 - **DO NOT enroll in a campaign. DO NOT send anything.** Not even a "your colleague
   suggested I reach out" note.
 - The candidate must clear the **normal pre-send eligibility check**
@@ -164,9 +164,9 @@ definitions and allowed values: `config/hubspot-properties.md`.
 - **`outbound_status`** — per the action map above, which is the authority on the write
   for each intent. `meeting_booked` is set separately when the conversation produces a
   booked meeting.
-- **`outbound_suppressed`** — only for `asked_to_stop`, with `outbound_opt_out_date` and
-  `outbound_opt_out_source`. No other intent auto-suppresses; a human may suppress
-  manually.
+- **`outbound_suppressed`** — only for `asked_to_stop`, with `outbound_opt_out_date`. No
+  other intent auto-suppresses; a human may suppress manually. (No opt-out *source*
+  field in v1 — dropped 2026-08-24; the date plus the status is the compliance record.)
 - **Scope-match the opt-out, and never automate the global one.** A standard
   "stop emailing me" sets `outbound_suppressed` + the Smartlead block + opt-out metadata
   and **does not touch native `hs_email_optout`**. If the prospect asks to be removed

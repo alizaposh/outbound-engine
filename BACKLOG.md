@@ -73,8 +73,8 @@ portal yet. What is now decided and written down:
   which is also why the flag is named `outbound_suppressed` rather than
   `outbound_opted_out`.
 - **`wrong_contact` creates a referral, never an enrollment.** The named replacement is
-  created (deduped by email, `referral_source_value`) and must clear the eligibility
-  check plus human review before any send.
+  created (deduped by email) and must clear the eligibility check plus human review
+  before any send. No dedicated referral Source option in v1.
 - **Campaign creation is not fully hands-off.** Smartlead's HubSpot activity logging is
   a per-campaign UI toggle with no API endpoint, so every campaign needs a human to
   enable it before sends start — gated once, in `instructions/campaign-creation.md`.
@@ -214,10 +214,12 @@ Rewrite the stages accordingly:
   suppression path (export → HubSpot opt-out-list import → native `hs_email_optout`) is
   now the **wrong routine path**: it globally opts out every cold-outbound unsub. Retarget
   it, or keep the import strictly for the human-escalated all-email cases.
-- **Stage 2 should retarget `outbound_suppressed`** (+ `outbound_opt_out_date` +
-  `outbound_opt_out_source = smartlead`), not the Communication Preferences API. That
-  field is what the engine's own gate reads, it is scoped to outbound, and it is
-  reversible. **The Communication Preferences `unsubscribe-all` endpoint is not approved
+- **Stage 2 should retarget `outbound_suppressed`** (+ `outbound_opt_out_date`), not the
+  Communication Preferences API. That field is what the engine's own gate reads, it is
+  scoped to outbound, and it is reversible. There is no opt-out *source* field in v1
+  (dropped 2026-08-24), so origin — live Smartlead unsub vs Artisan backfill — is not
+  distinguishable on the contact; if the backfill needs separating later, that is the
+  reason to add it back. **The Communication Preferences `unsubscribe-all` endpoint is not approved
   for automated use** — it is the global flag the policy reserves for a human.
 - The **Artisan opt-out backfill** needs the same review: it was scoped to the HubSpot
   opt-out list, which is the global flag. Whether historical cold-outbound opt-outs
@@ -262,40 +264,41 @@ Cheap, and worth it once the filter exists.
 
 ---
 
-## Create the `outbound_*` HubSpot properties
-**Trigger:** before the reply handler writes anything, and before the eligibility filter
-is trusted. This blocks both.
+## `outbound_*` HubSpot properties — DONE 2026-08-24
 
-`config/hubspot-properties.md` is the spec; the portal has none of it. Create in the
-**"Outbound Engine"** property group on **Contact**:
+All five v1 properties exist in the **"Outbound Engine"** group on **Contact**, verified
+against the spec value-by-value:
 
-| Property | Type |
-|---|---|
-| `outbound_status` | Dropdown — `in_sequence`, `no_response`, `replied`, `meeting_booked`, `bounced`, `disqualified`, `opted_out` |
-| `outbound_reply_intent` | Dropdown — the ten reply intents |
-| `outbound_suppressed` | Single checkbox |
-| `outbound_opt_out_date` | Date |
-| `outbound_recycle_after` | Date |
-| `outbound_opt_out_source` | Dropdown — `smartlead`, `manual`, `backfill_artisan` (recommended) |
-| `outbound_last_campaign_id` | Single-line text (recommended) |
+| Property | Type | State |
+|---|---|---|
+| `outbound_status` | Dropdown, 7 options | Rebuilt via API — the UI-created version had Title-Case internal values |
+| `outbound_reply_intent` | Dropdown, exactly 10 | Rebuilt via API — Title-Case values, plus a stray `Disqualified` (belongs on status) |
+| `outbound_suppressed` | Single checkbox | Correct as created |
+| `outbound_opt_out_date` | Date | Correct as created |
+| `outbound_recycle_after` | Date | Correct as created |
 
-- **Use the internal names exactly**, and confirm none collide with existing properties
-  before creating.
-- Dropdown **internal values** are the lowercase-underscored forms, not the display
-  labels.
-- **Absent ≠ false.** A missing property reads as empty, so every gate that depends on
-  one silently passes everybody. Create them before the first filtered run, or make the
-  filter fail loudly on a missing property.
+Both dropdowns had zero data, confirmed by `HAS_PROPERTY` search, so delete + recreate
+was safe; archived internal names proved reusable (probed on a disposable property
+first). Old definitions were backed up before deletion.
 
-### Portal values still unconfirmed  [FILL IN]
-Carried from `config/pre-send-defaults.md`; all block a first live run:
-- `hs_lead_status` internals for In Progress / Connected / Open Deal.
-- `lifecyclestage` internals (this portal labels `lead` as *created*, `customer` as
-  *outreached*).
-- The **Source property's own internal field key**, and whether the dropdown has an
-  **"Outbound Referral"** option for `referral_source_value` — a write to a
-  non-existent option fails or silently drops.
-- Owner-name → `hubspot_owner_id` resolution for all eight excluded owners.
+**Not built, deliberately:** `outbound_opt_out_source` (dropped 2026-08-24 — the opt-out
+date plus status is the compliance record) and `outbound_last_campaign_id` (recommended
+tier, nothing depends on it; the SQLite mapping already ties contact to campaign).
+
+**Still true and worth keeping in the filter's design:** *absent ≠ false*. A property
+that goes missing reads as empty, so any gate depending on it silently passes everybody
+— which looks identical to a clean run. The filter should fail loudly rather than treat
+an absent gated property as a pass.
+
+### Portal values — confirmed 2026-08-24
+Recorded in `config/pre-send-defaults.md`; none of these block a run any more.
+- **`hs_lead_status`:** `IN_PROGRESS`, `CONNECTED`, `OPEN_DEAL`. The config previously
+  held display labels, which would have matched nothing and excluded no one.
+- **`lifecyclestage`:** `lead` (*Created*), `customer` (*Outreached*), `opportunity`.
+  Two custom numeric paid-ads stages also exist and fall outside the allow-list.
+- **Source:** internal key `source`; the `"Outbound Email Engine"` option exists.
+- **Owners:** all eight names resolve (IDs recorded inline in the config), via the
+  `crm.objects.owners.read` scope granted 2026-08-24.
 
 ---
 
