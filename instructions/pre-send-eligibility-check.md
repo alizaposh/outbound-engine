@@ -154,22 +154,20 @@ Empty timestamp fields on the recency gate mean "never" and pass.
 
 ## Step 4 — Leads not in HubSpot
 
-No record = no activity history, no owner, no CSM, not in a sequence, not a
-customer, and no recorded opt-out — so it clears every gate.
+**Leads are assumed to already exist in HubSpot** (`create_missing_contacts: false`,
+set 2026-08-24). This filter never writes to the CRM, so a lead with no record is a
+**disagreement between the list and the CRM**, not a routine case.
 
-- Decision: **ELIGIBLE**.
-- Default action: create the contact so there's a record to write reply status
-  back to later. On creation, set:
-  - `lifecyclestage` = `lead` (also satisfies the lifecycle gate)
-  - **Source** dropdown = option value `Outbound Email Engine` — this attributes
-    every engine-created contact so it can be reported on separately from other
-    sources (e.g. the "Internal Lead Scraper" source). The option's internal
-    value equals its label, `Outbound Email Engine`. Confirm the internal name of
-    the **Source property itself** (the field key, not the option) in HubSpot
-    property settings, since that's what the API write targets.
-- Configurable: `create_missing_contacts = false` to pass them through without
-  creating a record.
-- Annotate as "new to HubSpot" in the output.
+No record = no activity history, no owner, no CSM, not in a sequence, not a customer,
+and no recorded opt-out — so it clears every gate:
+
+- Decision: **ELIGIBLE**, reason `NOT IN HUBSPOT - verify before sending`.
+- **Surfaced, not created.** The run lists these by email, because two things are true
+  of them that are not true of any other ELIGIBLE lead: nothing was actually verified
+  against the CRM, and there is nowhere to write reply status back to later.
+- **No contact creation anywhere in this step.** If a creation step is wanted later it
+  is a separate, explicitly-invoked script — setting `create_missing_contacts: true`
+  aborts this filter rather than silently doing nothing.
 
 ## Output schema
 
@@ -186,6 +184,51 @@ One row per input lead:
 | `lifecyclestage`, `hs_lead_status`, `owner` | For transparency in review |
 
 ELIGIBLE leads flow into generation. The full list goes into the review Sheet.
+
+## How to run it
+
+Implemented in `scripts/eligibility.py` (stdlib only — no pip install needed).
+
+```
+./.venv/bin/python scripts/eligibility.py --leads path/to/leads.csv
+```
+
+Outputs two CSVs in `reviews/` (git-ignored): the **annotated list** (every input lead
+with decision, reason, tier) for the review Sheet, and an **ELIGIBLE-only list** in the
+exact shape `run_generation.py --contacts` expects. Generation is then:
+
+```
+./.venv/bin/python scripts/run_generation.py --contacts reviews/eligible-<date>.csv --mailbox <mailbox>
+```
+
+**Strictly read-only.** It never writes to HubSpot — no contact creation, no property
+writes. It reads, decides, and writes two CSVs.
+
+**It aborts rather than run a weakened filter** (exit code 2) if a gated property is
+missing from the portal, if an `excluded_owners` name doesn't resolve to an owner ID, or
+if `create_missing_contacts` is `true`. Each would otherwise let contacts through, or
+silently not do what the config says, while looking like a clean run.
+
+### How `replied` gets dated
+`outbound_status = replied` records **that** a prospect replied, not **when** — it is a
+status, not a date. Gate 2 needs the timing ("within
+`status_recent_reply_skip_days`"), so the two work together:
+
+- **`outbound_status` supplies the fact.** Only a contact whose status is `replied` is
+  considered for this gate at all.
+- **HubSpot's native activity timestamps supply the date.** A logged reply *is* an email
+  activity, so it bumps `notes_last_contacted` / `notes_last_updated`. The freshest of
+  the three recency fields dates the reply.
+
+This is sound precisely because per-campaign HubSpot activity logging is **mandatory**
+(see `config/smartlead-defaults.md`) — a reply on a properly configured campaign always
+leaves a timestamp. So no `outbound_replied_at` property is needed.
+
+**The failure case is diagnostic:** a contact with `status = replied` and *no* activity
+timestamp means the reply never got logged, which points straight at activity logging
+being off for that campaign. Such a contact is skipped as `replied (date unknown)` —
+reversible, unlike mailing into a live conversation — and the run flags the count as a
+signal to check that campaign's logging toggle.
 
 ## Config values
 

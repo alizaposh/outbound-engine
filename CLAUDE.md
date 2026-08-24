@@ -124,7 +124,11 @@ config/                    ← company-specific facts Claude relies on
   generation-failure-fallback.md  ← what to do when generation fails a prospect
   smartlead-defaults.md    ← schedule, limits, delays, HubSpot activity-logging gate
 
-scripts/                   ← Python scripts Claude Code writes (empty to start)
+scripts/                   ← Python (stdlib + anthropic only)
+  eligibility.py           ← THE PRE-SEND FILTER. Run before generation. Read-only
+                             unless --create-missing
+  run_generation.py        ← draft-only generation: CSV in, reviewed CSV out
+  assemble.py / repair.py / validate.py  ← sign-off assembly, repairs, copy checks
 data/                      ← local SQLite + working state (git-ignored)
 reviews/                   ← exported review CSV/Sheet links (git-ignored)
 ```

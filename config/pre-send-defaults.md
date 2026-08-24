@@ -58,8 +58,11 @@ lead_status_exclude: [IN_PROGRESS, CONNECTED, OPEN_DEAL]   # internals confirmed
 csm_property: customer_success_manager  # any non-empty value -> exclude
 lifecycle_allow: [lead, opportunity]    # internals confirmed 2026-08-24 (labels differ)
 sequence_property: hs_sequences_is_enrolled   # must be false
-create_missing_contacts: true
-new_contact_source_value: "Outbound Email Engine"   # Source dropdown option for engine-created contacts
+create_missing_contacts: false          # 2026-08-24: the filter never writes to HubSpot.
+                                        # Leads are assumed to exist there already; one
+                                        # that doesn't is surfaced, not created.
+# Unused while create_missing_contacts is false. Kept for the day a creation step exists:
+new_contact_source_value: "Outbound Email Engine"   # Source option for engine-created contacts
 new_contact_lifecycle: lead
 ```
 
@@ -126,10 +129,13 @@ new_contact_lifecycle: lead
 - **`lifecycle_allow: [lead, opportunity]`** is deliberately strict: subscriber, MQL,
   SQL, and everything else are excluded today. Widen this list if that turns out to be
   too tight.
-- **`create_missing_contacts: true`** — a lead with no HubSpot record clears every gate
-  by definition (no activity, no owner, no CSM, not a customer), and gets created so
-  there is somewhere to write reply status back to later. Set `false` to pass those
-  leads through without creating records.
+- **`create_missing_contacts: false` (2026-08-24).** The filter is strictly read-only —
+  it decides, it does not write. Leads are assumed to already exist in HubSpot, so a
+  lead with no record is a **list/CRM disagreement**, not a normal path. Such a lead
+  still clears every gate by definition (no activity, no owner, no CSM, not a
+  customer), so it stays ELIGIBLE, but the run flags it by email: nothing about it was
+  actually verified, and there is nowhere to write its reply status back to later.
+  Setting this to `true` aborts the filter, because no creation step exists to honor it.
 - **`new_contact_source_value`** attributes engine-created contacts so they can be
   reported separately from other sources (e.g. "Internal Lead Scraper").
 - **No separate referral source in v1** (decided 2026-08-24). A `wrong_contact`

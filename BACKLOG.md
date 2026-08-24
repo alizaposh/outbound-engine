@@ -228,39 +228,49 @@ Rewrite the stages accordingly:
 
 ---
 
-## Build the pre-send eligibility filter as a pre-generation step
-**Trigger:** before the first campaign generated from a sales-provided list.
+## Pre-send eligibility filter — BUILT 2026-08-24
+`scripts/eligibility.py`. Stdlib only, so it runs on the existing venv with no
+`pip install`. Separate step before generation, as designed — `run_generation.py`
+stays HubSpot-free and takes `--contacts eligible-<date>.csv`.
 
-The spec is written (`instructions/pre-send-eligibility-check.md`, values in
-`config/pre-send-defaults.md`); nothing implements it yet. Today every documented
-"ELIGIBLE leads only" rule is honored by whoever remembers to honor it.
+Nine gates in two tiers, first failure wins so the reported reason is the most
+important one. Emits the annotated list (every input lead, with reason and
+`exclusion_tier`) plus the ELIGIBLE-only list in the shape generation expects.
 
-**It is a separate step that runs before generation, not a change to
-`run_generation.py`.** That file is deliberately HubSpot-free — it takes a CSV, calls
-Bedrock, and writes a CSV — and it should stay that way. The filter:
+**Verified:** 31 offline gate cases covering every gate, both tiers, precedence, epoch
+and ISO timestamps, and the label-vs-internal lead-status trap. Then a live read-only
+run over 18 real contacts + 3 synthetic rows: 21 in, 21 out, gates firing, and the
+ELIGIBLE output parsed by `run_generation.load_contacts` and routed.
 
-1. Reads the sales-provided lead list.
-2. Queries HubSpot and applies the **nine** gates, in **two tiers** — HARD
-   (never contact) and SOFT (skip this campaign, reversible).
-3. Emits `eligible.csv` in the shape `run_generation.py --contacts` already expects.
-4. Emits the full annotated list, every EXCLUDED contact with its reason **and its
-   `exclusion_tier`**, for the review Sheet. Targeting decisions are visible, never
-   silent — and a reviewer must be able to tell a compliance opt-out from a contact
-   who is merely recycling until a date.
+**Safety properties, all exercised:**
+- **Strictly read-only.** No contact creation, no property writes
+  (`create_missing_contacts: false`, 2026-08-24 — leads are assumed to exist in HubSpot
+  already). A lead with no record is ELIGIBLE but flagged by email as a list/CRM
+  disagreement: nothing about it was verified, and it has nowhere to write reply status.
+- **Aborts (exit 2) if a gated property is missing** from the portal, naming the gate it
+  would have disabled. A renamed property reads as empty and its gate would pass
+  everybody — indistinguishable from a clean run.
+- **Aborts (exit 2) if `create_missing_contacts` is `true`**, rather than silently not
+  honoring it.
+- **Aborts (exit 2) if an `excluded_owners` name doesn't resolve** to an owner ID, since
+  an unresolved name quietly makes that rep's contacts eligible.
+- **No lead silently dropped:** one output row per input row, malformed rows included
+  (`decision = ERROR`).
+- Config is **parsed** from `config/pre-send-defaults.md`, not restated, so the two
+  cannot drift.
 
-**Two of the nine gates read properties that do not exist yet** (`outbound_suppressed`,
-`outbound_status`, `outbound_recycle_after`). Until the properties are created, those
-gates no-op silently — which looks identical to "everyone passed". Either create the
-properties first, or have the filter **fail loudly** when a gated property is missing
-from the HubSpot response rather than treating absent as passing.
+**Dating a reply — resolved, no new property needed.** `outbound_status = replied` gives
+the fact; HubSpot's native activity timestamps give the date, because a logged reply is
+an email activity and bumps `notes_last_contacted`. That holds because per-campaign
+activity logging is mandatory. `replied` with no timestamp therefore means the reply was
+never logged — a signal that a campaign's logging toggle is off — so the contact is
+skipped as `replied (date unknown)` and the run flags the count.
 
-Generation is then just `--contacts eligible.csv`, and the two steps stay independently
-runnable and independently testable.
-
-**Optional belt-and-braces:** a guard in `load_contacts` that hard-skips any row whose
-`decision` is not `ELIGIBLE`. Only meaningful for a list that carries the column, so it
-catches "ran generation on the raw list by mistake", not "never ran the filter at all".
-Cheap, and worth it once the filter exists.
+### Still open on this
+- **Optional belt-and-braces:** a guard in `load_contacts` that hard-skips any row whose
+  `decision` is not `ELIGIBLE`. Catches "ran generation on the raw list by mistake", not
+  "never ran the filter at all". Cheap, still not done.
+- **Not yet run on a real sales-provided list** — only on a sample drawn from HubSpot.
 
 ---
 
