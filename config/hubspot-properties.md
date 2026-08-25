@@ -5,9 +5,12 @@ and writes. Claude Code should treat the internal names here as stable and write
 these exact keys. All properties live in a dedicated property group named
 **"Outbound Engine"** on the **Contact** object.
 
-Design rule: HubSpot is the CRM-visible *summary* only. The full ID mapping
-(HubSpot contact ⇄ Smartlead lead ⇄ campaign ⇄ message version ⇄ processed reply)
-lives in local SQLite, not here. Do not replicate that mapping into HubSpot.
+Design rule: HubSpot holds the CRM-visible state the sales team needs, not a mirror of
+Smartlead. There is **no local database** to hold the rest, so where each piece of state
+lives is set out in `CLAUDE.md` ("Architecture & sources of truth"): email is the join
+key between HubSpot and Smartlead, `outbound_last_campaign_id` ties a contact to its
+campaign, and the Reply Review Queue Sheet records which replies have been handled.
+Do not add properties that duplicate what Smartlead already holds.
 
 ---
 
@@ -20,6 +23,7 @@ lives in local SQLite, not here. Do not replicate that mapping into HubSpot.
 | Outbound Suppressed | `outbound_suppressed` | Single checkbox | true = suppress (do not send) | Written by the unsubscribe-sync job (row 59), the reply handler on opt-out, and manually. The do-not-send gate — opt-out is one reason among manual/other holds. **NOT the only suppression key:** the eligibility gate must suppress on this OR native `hs_email_optout` — reading only one under-suppresses. See "Suppression key" below. |
 | Opt-Out Date | `outbound_opt_out_date` | Date picker | — | Unsubscribe-sync job. Compliance record. |
 | Recycle After | `outbound_recycle_after` | Date picker | — | Reply handler, on `not_now` / `not_interested`. Earliest date the contact may re-enter a campaign. `not_now`: the date named in the reply if any, else reply date + 90d. `not_interested`: reply date + 180d. The SOFT eligibility tier skips a contact whose `outbound_recycle_after` is in the future. |
+| Last Campaign (Smartlead) | `outbound_last_campaign_id` | Single-line text | Smartlead campaign ID/name | Engine, at enrollment (`instructions/campaign-creation.md` step 8). **Essential as of 2026-08-25:** with no local database, this is the ONLY link from a HubSpot contact to the campaign that mailed it. Nothing native captures it. Was "recommended" while a local mapping store was assumed. |
 
 Meetings booked are tracked in v1 via the `meeting_booked` value on `outbound_status`
 (no dedicated date property — see "Deferred to v2" below).
@@ -103,8 +107,10 @@ and leaves them blank, so "suppressed with opt-out metadata" reads as a true opt
 
 | Label | Internal name | Type | Options / values | Who sets it |
 |---|---|---|---|---|
-| Opt-Out Source | `outbound_opt_out_source` | Dropdown select | `smartlead`, `manual`, `backfill_artisan` | Unsubscribe-sync job. Needed because opt-outs arrive from more than one origin (live Smartlead unsubs + the historical Artisan backfill). |
-| Last Campaign (Smartlead) | `outbound_last_campaign_id` | Single-line text | Smartlead campaign ID/name | Engine, at enrollment. Lets a human trace a HubSpot contact back to its Smartlead campaign. Nothing native captures this. |
+| Opt-Out Source | `outbound_opt_out_source` | Dropdown select | `smartlead`, `manual`, `backfill_artisan` | **Dropped 2026-08-24, not built.** The opt-out date plus `outbound_status` is the compliance record; nothing writes a source. Revisit only if the Artisan backfill needs separating from live Smartlead unsubs. |
+
+`outbound_last_campaign_id` moved to **Essential** on 2026-08-25 — see that table. It
+stopped being an optional nicety when the local mapping store went away.
 
 ---
 

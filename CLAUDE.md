@@ -26,8 +26,10 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 1. **Never launch or send anything without explicit human approval.** In v1, no
    campaign goes live without a recorded approval in Slack. No reply is auto-sent
    outside the categories explicitly allowed in `instructions/reply-handling.md`.
-2. **Smartlead and HubSpot are the sources of truth. Never treat a CSV as the
-   database.** CSVs and Google Sheets are *review surfaces for humans only*.
+2. **Smartlead and HubSpot are the sources of truth. Never treat a CSV as
+   authoritative.** CSVs and Google Sheets are *review surfaces for humans*. The one
+   exception is narrow and explicit: the Reply Review Queue Sheet is also the record of
+   which replies have been queued, because there is no local store to keep it in.
 3. **Respect stop / unsubscribe / opt-out immediately.** If a prospect asks to
    stop, they are suppressed everywhere and never contacted again. Follow-ups stop
    the moment a prospect replies.
@@ -86,12 +88,31 @@ else in campaign creation is API-driven.
 |---|---|---|
 | Email sending, warmup, mailboxes, deliverability | **Smartlead** | Source of truth for email/campaign activity and replies |
 | CRM: contacts, companies, sales status | **HubSpot** | Source of truth for CRM data |
-| Local working state | **SQLite** (`data/outbound.db`, optional) | Claude's own bookkeeping: ID mappings, message versions, approvals, processed reply IDs, last-check timestamps |
-| Human review | **Google Sheet / CSV** in `reviews/` | Review surface only, never authoritative |
+| Engine bookkeeping | **HubSpot `outbound_*` properties** + **Google Sheets** | Where the engine records its own state — see below |
+| Human review | **Google Sheet / CSV** in `reviews/` | Review surface, and the queue's own record of what has been queued |
 | Bulk copy generation | **Claude Haiku via Amazon Bedrock** | Writes personalized messages at volume |
 
-**ID mapping (store in SQLite):** HubSpot contact ⇄ Smartlead lead ⇄ campaign ⇄
-generated-message version ⇄ approval ⇄ processed reply.
+**There is no local database.** No SQLite, no local state file, no working DB. The engine
+keeps no private store: everything it needs to remember lives in a system a human can
+open and read — HubSpot, Smartlead, or a Sheet. This is a deliberate constraint, not a
+gap waiting to be filled. It costs some convenience and buys two things: no state can
+silently disagree with the systems of record, and nothing important is lost when a
+laptop is.
+
+**So where does each piece of state live?**
+
+| What needs remembering | Where it lives |
+|---|---|
+| Contact ⇄ campaign | `outbound_last_campaign_id` on the HubSpot contact |
+| Contact ⇄ Smartlead lead | **Email is the join key.** Both systems key on it; no mapping table needed |
+| Reply outcome / lifecycle | `outbound_status`, `outbound_reply_intent` on the contact |
+| Suppression, recycle date | `outbound_suppressed`, `outbound_recycle_after` on the contact |
+| Which replies are already handled | `smartlead_message_id` in the Reply Review Queue Sheet (`config/review-surfaces.md`) |
+| Generated message versions | The review CSV in `reviews/`, plus what is live in the Smartlead campaign |
+| Approval | The Slack thread where it was given, plus the Smartlead campaign it produced |
+
+**Email is the join key throughout.** It is what the lead lists, HubSpot, and Smartlead
+all carry, which is why the pre-send check matches on it too.
 
 ---
 
@@ -132,7 +153,7 @@ scripts/                   ← Python (stdlib + anthropic only)
   review_queue.py          ← appends replies needing a human decision to the review
                              Sheet. Never writes the decision/notes columns
   assemble.py / repair.py / validate.py  ← sign-off assembly, repairs, copy checks
-data/                      ← local SQLite + working state (git-ignored)
+data/                      ← input lead lists / working CSVs (git-ignored)
 reviews/                   ← exported review CSV/Sheet links (git-ignored)
 ```
 
@@ -160,7 +181,8 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
    `instructions/message-generation.md`. Do not just fix individual emails.
    Regenerate a sample. Repeat until the copy consistently meets the bar.
 7. On explicit approval, create the Smartlead campaign. See
-   `instructions/campaign-creation.md`. Save the campaign ID in SQLite.
+   `instructions/campaign-creation.md`. Record the campaign on each enrolled contact
+   (`outbound_last_campaign_id`) so a HubSpot record traces back to its campaign.
 8. Launch gradually, starting with a small batch across warmed mailboxes.
 
 ### B. Reply handling (scheduled, polling)
@@ -175,7 +197,9 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
    `outbound_reply_intent`, and move `outbound_status` to `replied`,
    `meeting_booked`, or `opted_out`. **Never write native sales fields in v1.**
    Exception: an `out_of_office` intent must not move `outbound_status`.
-7. Record the processed reply ID + the successful-run timestamp in SQLite.
+7. Record the reply as handled: its `smartlead_message_id` in the Reply Review Queue
+   Sheet, which is what step 2 dedupes against. There is no local store — see
+   "Architecture & sources of truth".
 
 ---
 

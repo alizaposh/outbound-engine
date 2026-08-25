@@ -31,4 +31,5 @@ google-api-python-client
 # gspread deliberately not used: the raw Sheets API is needed for data validation
 # (the decision dropdown) and deleteDimension, which gspread wraps only partially.
 
-# SQLite needs no package — it's built into Python via the `sqlite3` module.
+# No database dependency: this project has no local DB by design. State lives in
+# HubSpot, Smartlead, and Google Sheets. See CLAUDE.md.

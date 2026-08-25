@@ -149,10 +149,10 @@ def _explain_http_error(e, sheet_id: str, client_email: str) -> RuntimeError:
 class ProcessedIdStore:
     """Where 'have we already handled this Smartlead message?' is answered.
 
-    The project's processed-ID store is an OPEN decision (moving away from a local DB),
-    so this is deliberately an interface with a working default rather than a hardcoded
-    SQLite table. Point get_processed_id_store() at the real store once decided; nothing
-    else in this module needs to change.
+    This project has NO local database by design (see CLAUDE.md, "Architecture &
+    sources of truth"), so the record of what has been handled lives in a system a human
+    can open: the queue Sheet itself. This stays an interface so that record can move --
+    to a second tab, or to a HubSpot property -- without touching anything else here.
     """
 
     def is_processed(self, message_id: str) -> bool:
@@ -169,9 +169,10 @@ class SheetProcessedIds(ProcessedIdStore):
     cannot drift from the sheet a human is looking at.
 
     SCOPE LIMIT, deliberately narrow: this answers "is it already IN THE QUEUE", not
-    "was it processed anywhere by the reply loop". Once the real processed-ID store
-    exists, prefer it -- a reply auto-handled without ever being queued is invisible
-    here. mark_processed is a no-op because a successful append IS the record.
+    "was it handled at all". A reply auto-sent under the allowlist, or dropped as
+    out_of_office / automated_reply, is never queued and so is invisible here. Harmless
+    while the allowlist is empty; the fix when it isn't is a Handled tab on this sheet,
+    swapped in below. mark_processed is a no-op because a successful append IS the record.
     """
 
     def __init__(self, service, sheet_id: str, tab: str):
@@ -210,7 +211,8 @@ class MemoryProcessedIds(ProcessedIdStore):
 
 
 def get_processed_id_store(service, sheet_id: str, tab: str) -> ProcessedIdStore:
-    """THE SEAM. Replace this body when the processed-ID store is decided."""
+    """THE SEAM. Swap this body to move the handled-reply record elsewhere (a Handled
+    tab, a HubSpot property) -- no local DB, so it stays somewhere a human can open."""
     return SheetProcessedIds(service, sheet_id, tab)
 
 

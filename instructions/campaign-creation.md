@@ -5,7 +5,8 @@ API. **Never run this without a recorded approval.** Read
 `config/smartlead-defaults.md` for the default settings.
 
 ## Preconditions (all required)
-- Explicit approval recorded (Slack + noted in SQLite).
+- Explicit approval recorded in Slack. The Slack thread **is** the record — there is no
+  local approvals store.
 - Mailboxes are warmed and healthy in Smartlead.
 - Each prospect has message_1..3 in the approved dataset.
 - Suppression list checked: no opted-out / hard-bounced / stop-requested contacts.
@@ -34,7 +35,9 @@ API. **Never run this without a recorded approval.** Read
 6. **Stop-on-reply:** ensure follow-ups halt automatically when a prospect replies.
 7. **Verify settings** before activating. Re-read them back and confirm with the
    human if anything looks off.
-8. **Save the Smartlead campaign ID** to SQLite, mapped to the campaign/approval.
+8. **Record the campaign on each enrolled contact** — `outbound_last_campaign_id` in
+   HubSpot, so a contact traces back to the campaign that mailed it. Smartlead holds the
+   campaign itself; email is the join key. No local mapping store.
 
 ## Launch
 - Start with a **small batch** (per your plan, ~100 contacts) across multiple warmed

@@ -121,10 +121,8 @@ passed. Branch distribution unchanged across every run: 25 `gmv`, 9 `competitor`
   unsubscribe token** remain deliberate send-blockers. Both clear during Smartlead
   setup, still pending finance approval. (The booking-link placeholder is resolved:
   `https://meetings.hubspot.com/zach-hickman`, verified reachable 2026-08-21.)
-- **None of the `outbound_*` HubSpot properties exist yet.** `config/hubspot-properties.md`
-  specifies them; the portal has none. Every status/intent/recycle write documented in
-  `instructions/reply-handling.md` fails until they are created. See the new section
-  below.
+- All six `outbound_*` properties now exist in the portal (five on 2026-08-24,
+  `outbound_last_campaign_id` on 2026-08-25). Nothing on the property side is blocking.
 - **Mailbox-assignment timing.** Assembly needs the sender name during generation, but
   mailbox assignment currently happens at campaign creation. Documented in
   `config/senders.md`; not implemented.
@@ -177,13 +175,22 @@ row lands without its dropdown. The append uses OVERWRITE (the default), which w
 into the next existing empty row and keeps the validation. Safe because the queue is
 append-only.
 
-### Open: where processed IDs live
-Dedup currently reads the queue sheet's own `smartlead_message_id` column, behind a
-single seam — `get_processed_id_store()` in `review_queue.py`. That is durable and needs
-no schema decision, but it answers "is it already **in the queue**", not "was it
-processed anywhere by the reply loop": a reply auto-handled without being queued is
-invisible to it. Point that one function at the real processed-ID store once the
-no-local-DB decision lands. Nothing else in the module needs to change.
+### Where processed IDs live — decided 2026-08-25
+**No local database**, so the queue Sheet's own `smartlead_message_id` column is the
+record, read behind one seam: `get_processed_id_store()` in `review_queue.py`.
+
+**The known hole:** it answers "is this reply already **in the queue**", not "was it
+handled at all". A reply the engine handled *without* queuing it is invisible, and there
+are two such cases:
+- one auto-sent under the auto-send allowlist, and
+- `out_of_office` / `automated_reply`, which are deliberately never queued — so every
+  poll reclassifies them and re-resumes the sequence.
+
+Neither is harmful today: the allowlist starts empty, and resuming an already-resumed
+sequence is a no-op. It becomes real the moment anything is auto-sent. The fix when that
+day comes, in preference order: a second **Handled** tab on the same sheet (one row per
+reply seen, queued or not), or a HubSpot property. Both keep the no-local-DB rule and
+need only that one function changed.
 
 ---
 
@@ -326,14 +333,20 @@ against the spec value-by-value:
 | `outbound_suppressed` | Single checkbox | Correct as created |
 | `outbound_opt_out_date` | Date | Correct as created |
 | `outbound_recycle_after` | Date | Correct as created |
+| `outbound_last_campaign_id` | Single-line text | Created 2026-08-25 (see below) |
 
 Both dropdowns had zero data, confirmed by `HAS_PROPERTY` search, so delete + recreate
 was safe; archived internal names proved reusable (probed on a disposable property
 first). Old definitions were backed up before deletion.
 
-**Not built, deliberately:** `outbound_opt_out_source` (dropped 2026-08-24 — the opt-out
-date plus status is the compliance record) and `outbound_last_campaign_id` (recommended
-tier, nothing depends on it; the SQLite mapping already ties contact to campaign).
+**Not built, deliberately:** `outbound_opt_out_source` — dropped 2026-08-24, the opt-out
+date plus status is the compliance record.
+
+**`outbound_last_campaign_id` — created 2026-08-25** (single-line text, "Outbound
+Engine" group). It had been skipped as "recommended tier, nothing depends on it", which
+assumed a local mapping store. With no local database, this property **is** the
+contact-to-campaign link, so it moved from optional to required. The engine writes it at
+enrollment (`instructions/campaign-creation.md` step 8).
 
 **Still true and worth keeping in the filter's design:** *absent ≠ false*. A property
 that goes missing reads as empty, so any gate depending on it silently passes everybody

@@ -15,4 +15,4 @@ message_1..3 only, with no qualification columns.
 
 ## [FILL IN when revisiting]
 - The concrete qualification criteria for your ICP.
-- Where qualified/reason get stored (SQLite + HubSpot property).
+- Where qualified/reason get stored (a HubSpot property — there is no local store).

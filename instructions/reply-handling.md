@@ -4,10 +4,13 @@
 no webhooks**, and follow-ups are **autonomous but review-gated**.
 
 ## Retrieval (scheduled)
-1. Pull replies from Smartlead since the last successful check timestamp (in SQLite).
+1. Pull replies from Smartlead since the last successful check. Smartlead is the source
+   of truth for replies; there is no local store of them.
 2. Dedupe by **Smartlead message ID**; skip anything already processed.
 3. For each new reply, retrieve the **full conversation** before acting.
-4. After processing, store the message ID and update the last-check timestamp.
+4. After processing, record the message ID as handled — for a queued reply that is the
+   `smartlead_message_id` written to the Reply Review Queue Sheet
+   (`scripts/review_queue.py`). See the dedup note below.
 
 ## Classification
 Read the whole thread, then classify the reply as exactly one `outbound_reply_intent`

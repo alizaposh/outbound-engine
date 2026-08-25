@@ -12,9 +12,10 @@ HubSpot sees *all* activity — reps' calls, emails, meetings, and logged notes
 engine has done. So it's the right place to confirm no one is already working a
 contact and that they aren't an existing customer.
 
-This step replaces the previously scoped local dedup DB. It is a filter, not a
-database: it reads HubSpot, decides ELIGIBLE vs EXCLUDED per contact, and passes
-an annotated list forward. It does not store state.
+This step replaces the previously scoped local dedup store. It is a filter and nothing
+more: it reads HubSpot, decides ELIGIBLE vs EXCLUDED per contact, and passes an
+annotated list forward. **It stores no state** — every gate is answered from HubSpot at
+run time, so there is nothing to keep in sync.
 
 ## Where this runs in the flow
 

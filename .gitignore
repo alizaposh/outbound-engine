@@ -10,14 +10,11 @@ credentials.json
 *-*[0-9a-f][0-9a-f][0-9a-f][0-9a-f]*.json
 *.iam.gserviceaccount.com.json
 
-# ── Local working state (Smartlead + HubSpot are the real sources of truth) ──
+# ── Local working files (Smartlead + HubSpot are the sources of truth; no local DB) ──
 data/*
 !data/.gitkeep
-*.db
-*.sqlite
-*.sqlite3
 
-# ── Human review exports (Sheets/CSVs are review surfaces, not the database) ──
+# ── Human review exports (Sheets/CSVs are review surfaces, not sources of truth) ──
 reviews/*
 !reviews/.gitkeep
 

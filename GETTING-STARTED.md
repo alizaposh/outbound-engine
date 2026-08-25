@@ -139,7 +139,8 @@ Good first thing to type once you're in:
 - ✅ **Row 6, Write CLAUDE.md:** done (`CLAUDE.md` in this scaffold; edit to taste).
 - ✅ **"Connect Claude Code to the repo":** step 6.
 - ⏭ **Phase 0 go/no-go:** still gates Smartlead + domain spend. Do that in parallel.
-- ⏭ **Phase 3, data layer / SQLite:** Claude Code will build this in `scripts/` and
-  `data/` when you get there.
+- ❌ **Phase 3, data layer:** dropped. There is **no local database** — state lives in
+  HubSpot, Smartlead, and Google Sheets. See "Architecture & sources of truth" in
+  `CLAUDE.md` for where each piece goes. `data/` now holds input lead lists only.
 - ⏭ **Phase 4, generation:** fill in `config/` + `instructions/message-generation.md`
   first, then have Claude Code write the bulk-generation script.

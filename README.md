@@ -18,7 +18,8 @@ in version-controlled instruction and config files, not in one-off prompts.
   deferred).
 - `config/`: company-specific facts (positioning, personas, Smartlead defaults).
 - `scripts/`: Python that Claude Code writes to call the Smartlead / HubSpot / LLM APIs.
-- `data/`: local SQLite working state (git-ignored).
+- `data/`: input lead lists and working CSVs (git-ignored). **No local database** —
+  the engine keeps no private store; see `CLAUDE.md`.
 - `reviews/`: exported human-review sheets (git-ignored).
 
 ## v1 principles
