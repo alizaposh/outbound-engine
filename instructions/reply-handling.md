@@ -140,6 +140,12 @@ engagement. Every other intent correctly leaves the sequence stopped.
 - Unusual, sensitive, high-value, or ambiguous conversations → **always human**. This
   flag — not an enum value — is where genuinely ambiguous replies go, now that
   `needs_qualification` is retired.
+- **The review surface is the Reply Review Queue Sheet.** Anything needing a human goes
+  there via `append_reply()` in `scripts/review_queue.py` (sheet + columns in
+  `config/review-surfaces.md`). The engine fills every column except `decision` and
+  `notes`, which are the human's, so a queued row never arrives pre-decided.
+  `out_of_office` and `automated_reply` are never queued — they are not real replies and
+  must not consume human attention any more than they may advance a lead.
 - **Meetings — persona-fronted, owner-booked.** Never hardcode the meeting owner or
   booking link; both come from `config/meeting-routing.md`. The **sending persona stays
   the correspondent** and shares the meeting owner's booking link, so the meeting lands

@@ -119,6 +119,7 @@ config/                    ← company-specific facts Claude relies on
   positioning.md           ← what we sell, value props, proof, PROHIBITED claims
   personas.md              ← per-persona angles and messaging guidance
   meeting-routing.md       ← meeting owner + booking link; never hardcode a name
+  review-surfaces.md       ← review Sheet IDs + columns (Reply Review Queue)
   senders.md               ← mailbox → sign-off name (PLACEHOLDER data today)
   banned-phrases.md        ← phrasing the generator must never produce
   generation-failure-fallback.md  ← what to do when generation fails a prospect
@@ -128,6 +129,8 @@ scripts/                   ← Python (stdlib + anthropic only)
   eligibility.py           ← THE PRE-SEND FILTER. Run before generation. Read-only
                              unless --create-missing
   run_generation.py        ← draft-only generation: CSV in, reviewed CSV out
+  review_queue.py          ← appends replies needing a human decision to the review
+                             Sheet. Never writes the decision/notes columns
   assemble.py / repair.py / validate.py  ← sign-off assembly, repairs, copy checks
 data/                      ← local SQLite + working state (git-ignored)
 reviews/                   ← exported review CSV/Sheet links (git-ignored)

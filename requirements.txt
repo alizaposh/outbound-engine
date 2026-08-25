@@ -22,8 +22,13 @@ pandas               # build/read the human-review CSVs
 # Pinned: the bearer-token auth path was verified against this exact version.
 anthropic==0.122.0
 
-# ── Google Sheets review surface (optional) ──
-# gspread
-# google-auth
+# ── Google Sheets review surface ──
+# Used by scripts/review_queue.py (Reply Review Queue). Credentials come from
+# GOOGLE_SERVICE_ACCOUNT_JSON and are passed in explicitly -- these libraries would
+# otherwise auto-read GOOGLE_APPLICATION_CREDENTIALS, which this project does not set.
+google-auth
+google-api-python-client
+# gspread deliberately not used: the raw Sheets API is needed for data validation
+# (the decision dropdown) and deleteDimension, which gspread wraps only partially.
 
 # SQLite needs no package — it's built into Python via the `sqlite3` module.

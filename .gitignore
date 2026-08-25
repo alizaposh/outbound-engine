@@ -3,6 +3,12 @@
 *.key
 *service-account*.json
 credentials.json
+# GCP downloads a service-account key as <project>-<hash>.json, which matches none of
+# the patterns above. Ignore every JSON at the repo root instead: no tracked JSON lives
+# there, and a key sitting untracked-but-unignored is one `git add -A` from publication.
+/*.json
+*-*[0-9a-f][0-9a-f][0-9a-f][0-9a-f]*.json
+*.iam.gserviceaccount.com.json
 
 # ── Local working state (Smartlead + HubSpot are the real sources of truth) ──
 data/*

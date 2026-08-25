@@ -138,12 +138,52 @@ passed. Branch distribution unchanged across every run: 25 `gmv`, 9 `competitor`
 ## Google Sheets review surface
 **Trigger:** after copy testing is validated.
 
-Set up a GCP service account and enable the Sheets API, put the key path in
-`GOOGLE_SERVICE_ACCOUNT_JSON`, share the target sheet with the service-account email,
-then build an "export review dataset to Google Sheet" step. The sheet is the artifact:
-share its link in Slack for review, which fits the planned Slack review/approval flow.
+**Auth is DONE (2026-08-25).** Service account `outbound-sheets-bot@
+email-outbound-engine.iam.gserviceaccount.com`, key path in
+`GOOGLE_SERVICE_ACCOUNT_JSON`, Sheets access proven end to end. Credentials are loaded
+from that variable explicitly — the Google libraries default to
+`GOOGLE_APPLICATION_CREDENTIALS`, which this project does not set. Reusable for any
+sheet: share it with that address as Editor and add its ID to
+`config/review-surfaces.md`.
 
-**Until then:** generation writes to a local CSV.
+**Reply Review Queue: BUILT (2026-08-25).** `scripts/review_queue.py`, see below.
+
+**Still to build:** the *generation* review surface — "export review dataset to Google
+Sheet" for campaign copy, whose link goes in Slack for approval. Until then generation
+writes to a local CSV in `reviews/`.
+
+---
+
+## Reply Review Queue — BUILT 2026-08-25
+`scripts/review_queue.py`. Sheet ID and the 15-column contract live in
+`config/review-surfaces.md`, not in code.
+
+`append_reply(reply)` is the one function the reply loop calls. It fills 13 columns and
+leaves `decision` and `notes` empty — code never writes the human's columns, so a queued
+row cannot arrive pre-decided. `decision` carries a strict dropdown (Approve / Edit &
+send / Suppress / Do not send / Reclassify) on rows 2+, never the header.
+
+Skips `out_of_office` and `automated_reply` (not real replies), and any reply with no
+`smartlead_message_id`, since that is the dedup key. `review_reason` is `"suppress?"`
+for `not_interested`, otherwise a short per-intent reason.
+
+**Verified:** auth, header contract, all four failure messages (they distinguish
+key-missing from sheet-not-shared), offline logic for skip/dedup/row-shape, then a live
+append → read-back → dropdown check → dedup refusal → delete. Sheet left header-only.
+
+**Gotcha worth remembering:** appending with `insertDataOption=INSERT_ROWS` creates a
+brand-new row that does **not** inherit the decision column's data validation, so the
+row lands without its dropdown. The append uses OVERWRITE (the default), which writes
+into the next existing empty row and keeps the validation. Safe because the queue is
+append-only.
+
+### Open: where processed IDs live
+Dedup currently reads the queue sheet's own `smartlead_message_id` column, behind a
+single seam — `get_processed_id_store()` in `review_queue.py`. That is durable and needs
+no schema decision, but it answers "is it already **in the queue**", not "was it
+processed anywhere by the reply loop": a reply auto-handled without being queued is
+invisible to it. Point that one function at the real processed-ID store once the
+no-local-DB decision lands. Nothing else in the module needs to change.
 
 ---
 
