@@ -148,8 +148,10 @@ config/                    ← company-specific facts Claude relies on
 
 scripts/                   ← Python (stdlib + anthropic only)
   eligibility.py           ← THE PRE-SEND FILTER. Run before generation. Read-only
-                             unless --create-missing
-  run_generation.py        ← draft-only generation: CSV in, reviewed CSV out
+  enrich_callbacks.py      ← optional: reads HubSpot timelines, adds callback_* columns
+                             for §9 warm opens. Read-only. Runs between the two below
+  run_generation.py        ← draft-only generation: CSV in, reviewed CSV out.
+                             HubSpot-free by design; callbacks arrive on the CSV
   review_queue.py          ← appends replies needing a human decision to the review
                              Sheet. Never writes the decision/notes columns
   assemble.py / repair.py / validate.py  ← sign-off assembly, repairs, copy checks
@@ -170,7 +172,11 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
    This step absorbs the old dedupe-and-create pass: email is the match key, and a lead
    with no HubSpot record is eligible and gets created there (that file's Step 4).
 3. Research each prospect using available company + contact data. See
-   `instructions/research.md`.
+   `instructions/research.md`. **Optionally** run `scripts/enrich_callbacks.py` on the
+   ELIGIBLE list first: it reads each contact's HubSpot timeline and adds
+   `callback_tier` / `callback_detail` columns, so email 1 can open on a real prior
+   interaction (`instructions/message-generation.md` §9). A prior *send* with no reply
+   is not an interaction; uncertain always means no callback.
 4. Generate the 3-email sequence per prospect with the cheap LLM. See
    `instructions/message-generation.md`. Later emails must read correctly even if
    earlier ones got no reply.

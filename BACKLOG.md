@@ -275,6 +275,71 @@ Rewrite the stages accordingly:
 
 ---
 
+## Prior-interaction callbacks — BUILT 2026-08-25, NOT YET RUN AGAINST HUBSPOT
+`scripts/enrich_callbacks.py`. Reads a contact's HubSpot timeline and emits a callback
+for email 1 (`instructions/message-generation.md` §9, which holds the wording rules).
+Sits between eligibility and generation:
+
+    eligibility.py -> eligible.csv -> enrich_callbacks.py -> eligible-enriched.csv
+                   -> run_generation.py --contacts eligible-enriched.csv
+
+Kept separate from `eligibility.py` on purpose: that filter is a tight read-only
+decision step with no LLM calls, and this needs the cheap LLM. `run_generation.py`
+stays HubSpot-free; the callback rides the CSV seam and is recomputed each run, so no
+store and nothing to go stale. Reuses eligibility's read-only client, so auth, retry,
+and pacing are not duplicated.
+
+**Classification guardrails (19 offline cases, all passing).** The whole value is in
+what it refuses to call an interaction:
+- **A prior send is not a prior conversation.** `hs_email_direction == INCOMING_EMAIL`
+  is the crux; `EMAIL` and `FORWARDED_EMAIL` are outbound and count for nothing.
+- **A voicemail is not a chat.** Only the Connected call disposition qualifies. A
+  `COMPLETED` call with no disposition logged is treated as uncertain, so `none`.
+- **A meeting that did not happen** (`no show`, `canceled`) is not an interaction.
+- **A note is context, never itself an interaction**, though a note is searched for the
+  detail once a real interaction exists, since reps log substance there.
+- **Uncertain returns `none`** at every branch, and the LLM returning no detail
+  downgrades `specific` to `soft` rather than inventing one.
+
+Property names and enums were confirmed against HubSpot's live docs rather than assumed
+(`hs_email_direction`, `hs_call_disposition` GUIDs, `hs_meeting_outcome`, `hs_call_status`).
+
+### Blocked on two things before it can run for real
+1. **HubSpot daily API limit was already exhausted on 2026-08-25** (every call, even a
+   property read, returned 429 `DAILY`). Nothing in this project consumed that: the
+   whole session used well under a hundred calls, so another integration in the portal
+   is eating the quota. Worth finding out which, since it will block the eligibility
+   filter on live-run day too.
+2. ~~Engagement reads need scopes the token does not have.~~ **RESOLVED 2026-08-25:
+   `sales-email-read` added, 10 scopes now.** It mattered more than it sounds: inbound
+   email is *the* signal for "the contact replied", so without it the highest-value tier
+   was unreachable and every email-only history would have read as cold.
+   `enrich_callbacks.py` raises a scope-naming error rather than treating a 403 as "no
+   history", which would have turned every contact cold invisibly.
+
+### NEXT SESSION: run the dry-run (2026-08-26 or later)
+The only thing standing between this and a real campaign. The daily quota was still
+exhausted at the end of 2026-08-25, so **nothing here has touched a real HubSpot
+timeline yet.** Do not wire the enriched CSV into a campaign until it has.
+
+- The **10-contact `--dry-run`** on contacts with known history: some with meetings plus
+  good notes, some with a meeting or call but no notes, some with only ignored outbound.
+  Confirm the tiers land `specific` / `soft` / `none` and that **every `specific` detail
+  is faithful to its source note**. Only then wire the enriched CSV into a real campaign.
+- Cost check at campaign scale: association reads plus one cheap-LLM call per contact
+  that has a real interaction. It runs on the ELIGIBLE set only.
+
+**Verified without HubSpot:** 19 classification cases; extraction faithfulness against
+the live model (voicemail text and vague admin notes both correctly yield no detail);
+the CSV seam (`OUT_COLUMNS` = `ELIGIBLE_COLUMNS` + 4) parsed by
+`run_generation.load_contacts`; an un-enriched `eligible.csv` still runs and produces
+cold opens; and a 3-contact draft run where the `specific` contact opened "When we last
+connected, you were running about one event a month on Eventbrite...", the `soft`
+contact opened "Good to reconnect.", the `none` contact opened cold, and no email 2 or 3
+carried a callback.
+
+---
+
 ## Pre-send eligibility filter — BUILT 2026-08-24
 `scripts/eligibility.py`. Stdlib only, so it runs on the existing venv with no
 `pip install`. Separate step before generation, as designed — `run_generation.py`

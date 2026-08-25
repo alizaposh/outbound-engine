@@ -118,6 +118,13 @@ engagements. A faithful callback to a real past interaction is the strongest
 signal this isn't a cold blast, but a *fabricated* one is worse than none, so
 this runs on strict tiers.
 
+**The tier is computed upstream, not here.** `scripts/enrich_callbacks.py` reads the
+timeline and writes `callback_tier` (`specific` / `soft` / `none`) plus
+`callback_detail` and `callback_last_date` onto the contact CSV; generation receives
+them in the research note under `callback` and words them per the tiers below.
+Generation never reads HubSpot itself. If the columns are absent the tier defaults to
+`none` and email 1 opens cold, so an un-enriched run is safe.
+
 **First, decide whether a real interaction even happened:**
 - **Counts as a prior interaction:** a logged meeting, a connected call, or an email that got a genuine reply from the contact. These are two-way.
 - **Does NOT count:** outbound emails we sent with no reply. A prior *send* is not a prior *conversation*. Several of these leads are old HubSpot contacts with ignored past outreach (per the project brief), and opening "great to reconnect" on a one-way send reads as false. Treat these as cold.

@@ -157,6 +157,15 @@ class HubSpot:
                     return json.loads(raw) if raw else {}
             except urllib.error.HTTPError as e:
                 detail = (e.read() or b"").decode()[:300]
+                # A DAILY 429 is not a burst: backing off cannot clear it, and retrying
+                # burns three sleeps before reporting a limit that resets tomorrow.
+                # Fail immediately and say so, rather than looking like a flaky network.
+                if e.code == 429 and '"DAILY"' in detail:
+                    raise RuntimeError(
+                        f"{method} {path} -> 429 DAILY API LIMIT REACHED for this HubSpot "
+                        f"portal. Retrying will not help; the quota resets on HubSpot's "
+                        f"daily cycle. Check Settings > Integrations > Private Apps for "
+                        f"which app is consuming it.\n  {detail}") from None
                 if e.code in (429, 500, 502, 503, 504) and attempt < tries - 1:
                     time.sleep(2 ** attempt)      # 1s, 2s, 4s
                     continue

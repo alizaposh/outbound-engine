@@ -68,6 +68,12 @@ class Contact:
     current_competitor: str | None = None
     estimated_gmv_usd: int | None = None
     vertical: str | None = None
+    # Prior-interaction callback, computed by scripts/enrich_callbacks.py and carried
+    # on the CSV. This file stays HubSpot-free: it never fetches a timeline itself.
+    callback_tier: str = "none"          # specific | soft | none
+    callback_detail: str = ""
+    callback_source_id: str = ""
+    callback_last_date: str = ""
 
     @property
     def display(self) -> str:
@@ -202,6 +208,36 @@ def load_failure_fallback() -> dict:
     return data
 
 
+def callback_note(c: Contact) -> dict | None:
+    """The prior-interaction callback for the model, or None for a cold open.
+
+    Shape mirrors the tiers in instructions/message-generation.md §9, which holds the
+    wording rules. A tier of "none", or a "specific" tier with no detail, both mean
+    cold: a callback is only ever offered when there is something real behind it.
+    """
+    tier = (c.callback_tier or "none").lower()
+    if tier not in ("specific", "soft"):
+        return None
+    if tier == "specific" and not c.callback_detail:
+        tier = "soft"
+    return {
+        "tier": tier,
+        "detail": c.callback_detail if tier == "specific" else None,
+        "last_interaction_date": c.callback_last_date or None,
+        "guidance": (
+            "A real prior interaction exists AND a concrete detail was logged. Open "
+            "email 1 with a faithful callback to that detail, per §9 'Specific "
+            "callback'. Paraphrase only what the detail says; never inflate it."
+            if tier == "specific" else
+            "A real prior interaction exists but NO reusable detail was logged. Open "
+            "email 1 by acknowledging the reconnection only, per §9 'Soft callback'. "
+            "Assert nothing specific about what was discussed."),
+        "rules": ("Email 1 only, never emails 2 or 3. If the date is long ago, "
+                  "acknowledge the gap rather than implying it was recent. If in any "
+                  "doubt, drop the callback and use the cold open."),
+    }
+
+
 def research_note(c: Contact, persona, basis, platform_known) -> dict:
     """estimated_gmv_usd is deliberately absent: it routes upstream and stops."""
     note = {
@@ -215,6 +251,7 @@ def research_note(c: Contact, persona, basis, platform_known) -> dict:
         "persona": persona, "persona_basis": basis,
         "platform_known": platform_known,
         "needs_human_review": basis.startswith("flag"),
+        "callback": callback_note(c),
         "guidance": (
             "The current platform is UNKNOWN. Use the no-platform fallback: ask the "
             "generic setup question and name NO platform anywhere. Never guess one."
@@ -378,7 +415,13 @@ def load_contacts(path: pathlib.Path) -> list[Contact]:
                 company=clean(row.get("company")),
                 current_competitor=clean(row.get("current_competitor")),
                 estimated_gmv_usd=int(float(gmv)) if gmv else None,
-                vertical=clean(row.get("vertical"))))
+                vertical=clean(row.get("vertical")),
+                # Default to "none" when the column is absent: an un-enriched
+                # eligible.csv must still run and simply produce cold opens.
+                callback_tier=(clean(row.get("callback_tier")) or "none").lower(),
+                callback_detail=clean(row.get("callback_detail")) or "",
+                callback_source_id=clean(row.get("callback_source_id")) or "",
+                callback_last_date=clean(row.get("callback_last_date")) or ""))
     return out
 
 
