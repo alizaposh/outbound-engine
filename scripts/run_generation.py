@@ -158,8 +158,8 @@ def build_system_prompt() -> tuple[str, str]:
         for p in RULEBOOK_FILES)
     contract = (
         '{"message_1": {"subject": "...", "body": "..."},\n'
-        ' "message_2": {"subject": "...", "body": "..."},\n'
-        ' "message_3": {"subject": "...", "body": "..."}}')
+        ' "message_2": {"body": "..."},\n'
+        ' "message_3": {"body": "..."}}')
     instruction = f"""You are the message-generation step of Posh's outbound engine.
 
 The documents above are your complete rulebook. Follow them exactly.
@@ -167,6 +167,9 @@ The documents above are your complete rulebook. Follow them exactly.
 You will be given one prospect's research note. Return ONLY a JSON object, no prose:
 
 {contract}
+
+Only message_1 has a subject. Messages 2 and 3 are threaded replies, so do not
+include a subject field for them.
 
 Each body is the message text ONLY: greeting through to the CTA. Do not write a
 sign-off, footer, company name, address, or unsubscribe token. Code appends those.
@@ -191,9 +194,11 @@ def load_failure_fallback() -> dict:
         raise RuntimeError(f"no json block found in {FALLBACK_FILE}")
     data = json.loads(m.group(1))
     for k in ("message_1", "message_2", "message_3"):
-        if not isinstance(data.get(k), dict) or "subject" not in data[k] \
-                or "body" not in data[k]:
+        if not isinstance(data.get(k), dict) or "body" not in data[k]:
             raise RuntimeError(f"{FALLBACK_FILE} is missing or malformed {k}")
+    # Same threading rule as live copy: subject on message_1 only.
+    if "subject" not in data["message_1"]:
+        raise RuntimeError(f"{FALLBACK_FILE} is missing subject on message_1")
     return data
 
 
@@ -231,9 +236,11 @@ def _parse(raw: str) -> dict:
             raw = raw[4:]
     data = json.loads(raw.strip())
     for k in ("message_1", "message_2", "message_3"):
-        if not isinstance(data.get(k), dict) or "subject" not in data[k] \
-                or "body" not in data[k]:
+        if not isinstance(data.get(k), dict) or "body" not in data[k]:
             raise ValueError(f"missing or malformed {k}")
+    # Only email 1 carries a subject: 2 and 3 are threaded replies that inherit it.
+    if "subject" not in data["message_1"]:
+        raise ValueError("missing subject on message_1")
     return data
 
 
@@ -291,7 +298,7 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
             m = failure_fallback[f"message_{position}"]
             body_final = assemble.assemble(m["body"], mailbox, identity=identity,
                                            sender_map=sender_map)
-            res.messages.append(MessageResult(position, m["subject"], m["body"],
+            res.messages.append(MessageResult(position, m.get("subject", ""), m["body"],
                                               body_final))
         assert len(res.messages) == len(POSITIONS), "fallback must fill all three"
         return res
@@ -303,11 +310,11 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
         body_final = assemble.assemble(body_repaired, mailbox,
                                        identity=identity, sender_map=sender_map)
         v = validate.validate_email(
-            m["subject"], body_final, position=position, footer=footer, token=token,
+            m.get("subject", ""), body_final, position=position, footer=footer, token=token,
             literals=literals, regexes=regexes, raw_body=m["body"],
             competitor_known=platform_known,
             label=f"{c.display} message_{position}")
-        res.messages.append(MessageResult(position, m["subject"], m["body"],
+        res.messages.append(MessageResult(position, m.get("subject", ""), m["body"],
                                           body_final, records, v))
 
     assert len(res.messages) == len(POSITIONS), "all three positions must be validated"

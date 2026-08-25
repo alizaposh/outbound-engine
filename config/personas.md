@@ -49,17 +49,19 @@ different stages. Both must **already be selling tickets**.
   below.
 - **Likely on now:** Eventbrite, Instagram, Plots, RA.
 - **What they care about:** a platform that matches their premium aesthetic; less
-  manual work (text blasts, follow-up campaigns); fast RSVPs, guest approval, simple
-  payouts; growth data; responsive support.
+  manual work (text blasts); fast RSVPs, guest approval, simple payouts; growth data;
+  responsive support.
 - **Lead with:** the operational headache + brand mismatch of their current tool.
-  Posh automates the manual marketing (text blasts, follow-ups) and matches a premium
-  brand, with the marketplace bringing new attendees. The stats land well here, but
+  Posh automates the manual marketing (text blasts) and matches a premium
+  brand, with the marketplace bringing new attendees. **Never claim native email
+  follow-ups:** Posh has no native email follow-up, that needs a third-party tool
+  (_AE feedback: Dogwood Arts_). Text blasting is native and safe to feature. The stats land well here, but
   use at most one across the whole sequence (see message-generation.md).
 - **Avoid:** heavy enterprise / "scale to thousands" language. They're lean, so
   don't overwhelm them.
-- **Preferred CTA:** a concrete offer that invites a reply. Example: "Any
-  opportunity to compare what Posh could put together for your next one? Let me know
-  if you're open to connecting." Keep the opener reply-based, with no booking link
+- **Preferred CTA:** a concrete offer as a plain question. Example: "Happy to put
+  together a quick comparison for your next one, want me to?" Keep the opener
+  reply-based, with no booking link
   yet. Offer a specific time or scheduling link only once they show interest.
 
 ## Persona: Pro organizer
@@ -76,10 +78,12 @@ different stages. Both must **already be selling tickets**.
   custom-proposal ask lands well. Use at most one stat across the whole sequence.
 - **Avoid:** "easy, lightweight tool" framing. Too basic, and it undersells the
   platform.
-- **Preferred CTA:** a concrete offer, which lands especially well since they're
-  already comparing. Example: "Any opportunity to compare what Posh could put together
-  in a custom proposal for your next run of events? Happy to pull together a tailored
-  comparison." Reply-based first; scheduling link once interested.
+- **Preferred CTA:** a concrete offer as a plain question, which lands especially well
+  since they're already comparing. Example: "Happy to pull together a tailored
+  comparison for your next run of events, want me to?" Reply-based first; scheduling
+  link once interested. The old "any opportunity to compare what Posh could put
+  together in a custom proposal" wording is **banned** (_AE feedback: Ashley, reads as
+  AI and like inbox spam_); see `config/banned-phrases.md`.
 
 ## Not a cold-outbound target: Free tier
 - Free-tier organizers (RSVP-only, $0 tickets, 1 to 50 attendees, often new to event

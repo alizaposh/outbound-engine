@@ -19,14 +19,14 @@ BANNED = ROOT / "config" / "banned-phrases.md"
 
 FAIL, WARN = "FAIL", "WARN"
 
-# Approved stat wordings, from config/positioning.md. Any sentence containing 13% or
-# 40% must match one of these. Restatements and hedges are what this catches.
-APPROVED_STAT_PATTERNS = [
-    re.compile(r"13%\s+of\s+(its|their)\s+tickets\s+through\s+the\s+posh\s+marketplace", re.I),
-    re.compile(r"40%\s+better\s+than\s+other\s+platforms", re.I),
-]
-STAT_MENTION = re.compile(r"\b(13|40)\s*%")
-HEDGES = re.compile(r"\b(about|around|roughly|approximately|up\s+to|nearly|over|~)\s*$", re.I)
+# NO numeric performance stat is approved (retired 2026-08-25: the figures were
+# inaccurate and the reps did not use them). The list stays as the seam a future
+# approved wording would go into; empty means every stat mention fails.
+APPROVED_STAT_PATTERNS: list = []
+# Deliberately ANY percentage, not just the two retired figures. The rule is "no numeric
+# stats", so a future invented "converts 30% better" must fail too: matching only 13|40
+# would let anything else through because nothing would be looking for it.
+STAT_MENTION = re.compile(r"\b\d+\s*%")
 
 # Cleared customers, from config/positioning.md.
 CLEARED_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here", "NARC Run Club", "NARC"]
@@ -34,8 +34,13 @@ CLEARED_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here", "NARC Run Cl
 NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
 
 # Length is a target, never a gate: check_length only ever emits WARN.
-# Positional: messages 1 and 2 carry the package pitch; message 3 is a breakup.
-LENGTH_TARGETS = {1: (80, 110), 2: (80, 110), 3: (40, 70)}
+# Positional: messages 1 and 2 carry one angle each; message 3 is a breakup.
+# Recalibrated 2026-08-25 from {1,2: (80,110), 3: (40,70)} to match the sales-team rule
+# "short throughout, roughly half the length of a bloated draft" and "email 3 is the
+# shortest" (instructions/message-generation.md §3). The old floors were pushing copy
+# toward the length the AEs down-scored: "too long" appeared in most scored rows, and
+# the team's own gold-standard sequence failed the old targets (m2 at 70, m3 at 37).
+LENGTH_TARGETS = {1: (45, 90), 2: (45, 90), 3: (20, 50)}
 
 # Subject word count. Widened from 2-5 to 2-6 to 2-7 as the warmer SDR voice settled:
 # it pulls subjects toward short natural phrases rather than clipped fragments.
@@ -165,31 +170,56 @@ def check_no_dashes(subject: str, body: str) -> list[Finding]:
 
 
 def check_approved_stats(subject: str, body: str) -> list[Finding]:
+    """No numeric performance stat is approved, so any percentage is a FAIL.
+
+    The hedge check that used to live here is gone with the approved wordings: when
+    nothing may be quoted, there is no such thing as quoting it loosely.
+    """
     out = []
     for sent in _sentences(f"{subject}\n{body}"):
         if not STAT_MENTION.search(sent):
             continue
-        if not any(p.search(sent) for p in APPROVED_STAT_PATTERNS):
-            out.append(Finding("approved_stats", FAIL,
-                f"13%/40% stat not in approved wording: {sent!r}"))
-            continue
-        for m in STAT_MENTION.finditer(sent):
-            if HEDGES.search(sent[:m.start()]):
-                out.append(Finding("approved_stats", FAIL,
-                    f"hedged stat (stats are platform averages, quoted exactly): {sent!r}"))
+        if any(p.search(sent) for p in APPROVED_STAT_PATTERNS):
+            continue                      # empty today; the seam for a future approval
+        out.append(Finding("approved_stats", FAIL,
+            f"no numeric performance stats are approved; describe advantages "
+            f"qualitatively: {sent!r}"))
     return out
 
 
-def check_subject_shape(subject: str, body: str) -> list[Finding]:
+def check_subject_shape(subject: str, body: str, *, position: int = 1) -> list[Finding]:
+    """Shape-check the subject. Emails 2 and 3 are threaded replies and inherit the
+    thread subject, so an EMPTY subject is correct for them and skips the check.
+
+    Two things this deliberately still catches: an empty subject on email 1 (FAIL, a
+    threaded sequence still needs its opener subject), and a NON-empty subject on 2 or 3
+    (shape-checked as normal, so a stray invented subject does not slip through).
+
+    Casing (revised 2026-08-25): lowercase is the house style, with three carve-outs.
+    CANONICAL_ACRONYMS keep their casing, and a normal capitalized proper noun
+    ("Philadeep") is allowed, because company and venue names appear in real subjects
+    and lowercasing them looked broken. Still FAIL: ALL CAPS words, mixed-case oddities
+    like "eventBrite", and a Title Cased subject, which is the marketing-headline
+    register the rule exists to prevent.
+    """
     out = []
     words = subject.split()
+    if not words and position in (2, 3):
+        return out
     lo, hi = SUBJECT_WORDS
     if not lo <= len(words) <= hi:
         out.append(Finding("subject_shape", FAIL,
             f"subject is {len(words)} words, rule is {lo} to {hi}: {subject!r}"))
     bad = []
+    capitalized = []          # words starting uppercase, for the Title Case check below
+    alpha_words = []
     for w in words:
         stripped = w.strip(".,!?:;'\"()")
+        if not stripped or not any(c.isalpha() for c in stripped):
+            continue
+        alpha_words.append(stripped)
+        if stripped[0].isupper():
+            capitalized.append(stripped)
         if not any(c.isupper() for c in stripped):
             continue
         # Canonical acronyms keep their casing, including a plural "s" (DMs).
@@ -197,11 +227,30 @@ def check_subject_shape(subject: str, body: str) -> list[Finding]:
             continue
         if stripped.endswith("s") and stripped[:-1].upper() in CANONICAL_ACRONYMS:
             continue
-        bad.append(stripped)
+        # ALL CAPS is shouting, or an acronym nobody approved. Single letters are
+        # exempt: "I" and initials are not what this rule is for.
+        letters = [c for c in stripped if c.isalpha()]
+        if len(letters) > 1 and all(c.isupper() for c in letters):
+            bad.append(stripped)
+            continue
+        # A normal capitalized proper noun is allowed: company, venue, and person names
+        # are real words in a subject, and forcing "philadeep" lowercase looked broken.
+        # Shape required is strict: one leading capital, everything after it lowercase.
+        if stripped[0].isupper() and stripped[1:] == stripped[1:].lower():
+            continue
+        bad.append(stripped)        # anything else, e.g. "eventBrite", "MailChimp"
     if bad:
         out.append(Finding("subject_shape", FAIL,
-            f"subject must be lowercase except canonical acronyms; offending "
-            f"word(s) {bad}: {subject!r}"))
+            f"subject must be lowercase except canonical acronyms and proper nouns; "
+            f"offending word(s) {bad}: {subject!r}"))
+    # Title Case is the thing the lowercase rule exists to stop: a subject where every
+    # word is capitalized reads like a marketing headline, not like a person typing.
+    # Proper nouns are allowed individually, so this aggregate check is what still
+    # catches "Compare Your Ticketing Setup Today".
+    if len(alpha_words) >= 2 and len(capitalized) == len(alpha_words):
+        out.append(Finding("subject_shape", FAIL,
+            f"subject is Title Cased (every word capitalized); write it as a person "
+            f"would type it: {subject!r}"))
     return out
 
 
@@ -346,7 +395,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res = EmailResult(label=label or f"message_{position}")
     res.findings += check_no_dashes(subject, body)
     res.findings += check_approved_stats(subject, body)
-    res.findings += check_subject_shape(subject, body)
+    res.findings += check_subject_shape(subject, body, position=position)
     res.findings += check_footer(subject, body, footer=footer, token=token)
     res.findings += check_no_real_optout_url(subject, body)
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
@@ -363,11 +412,12 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
 
 
 def check_stat_budget(messages: list[tuple[int, str, str]]) -> list[Finding]:
-    """Sequence-level: at most one approved stat across all three messages.
+    """Sequence-level: counts stat mentions across all three messages.
 
-    Not a per-message check, so it cannot live in validate_email: reuse is only
-    visible with the whole sequence in hand. WARN rather than FAIL, because this is a
-    quality guideline about reading corporate, not a compliance rule.
+    Kept as a backstop only. Since 2026-08-25 no numeric stat is approved, so every
+    mention already FAILs check_approved_stats per message and this WARN is redundant
+    in practice. It stays because it is the only check that sees the whole sequence at
+    once, so it would be the seam if a single stat were ever re-approved.
     """
     hits: list[tuple[int, str]] = []
     for position, subject, body in messages:
@@ -451,3 +501,63 @@ def report(results: list[EmailResult]) -> str:
         "  - whether a competitor reference is phrased so a wrong guess still lands",
     ]
     return "\n".join(lines)
+
+
+# ---- self-test ----------------------------------------------------------------
+# No test framework in this repo, so the shape rules verify themselves: run
+#   ./.venv/bin/python scripts/validate.py
+# Exits non-zero on any failure, so it works as a pre-commit check.
+
+SUBJECT_SHAPE_CASES = [
+    # (subject, position, expect_fail, why)
+    ("still using RA for Philadeep events?", 1, False,
+     "canonical acronym + capitalized proper noun, rest lowercase"),
+    ("Compare Your Ticketing Setup Today", 1, True,
+     "Title Cased: every word capitalized"),
+    ("still running events through RA?", 1, False, "canonical acronym"),
+    ("eventeny working out for dogwood arts?", 1, False, "all lowercase"),
+    ("your ticketing setup", 1, False, "all lowercase"),
+    ("running events at the berry farm?", 1, False, "all lowercase"),
+    ("BIG SALE on tickets", 1, True, "ALL CAPS word is shouting"),
+    ("still using eventBrite?", 1, True, "mixed-case oddity, not a proper-noun shape"),
+    ("quick question about Dogwood Arts", 1, False,
+     "two proper nouns, but the subject is not wholly capitalized"),
+    ("Philadeep events", 1, False,
+     "proper noun + lowercase word: not Title Case, this is the shape we want"),
+    ("Philadeep Events", 1, True,
+     "both words capitalized: Title Case even at two words"),
+    ("", 1, True, "empty subject on email 1 still fails"),
+    ("", 2, False, "empty subject on a threaded reply is correct"),
+    ("", 3, False, "empty subject on a threaded reply is correct"),
+    ("This Is A Stray Invented Subject", 2, True,
+     "a stray subject on email 2 is still shape-checked"),
+    ("way too many words in this particular subject line here", 1, True,
+     "over the word ceiling"),
+]
+
+
+def _self_test() -> int:
+    failures = 0
+    for subject, position, expect_fail, why in SUBJECT_SHAPE_CASES:
+        findings = check_subject_shape(subject, "body text", position=position)
+        got_fail = any(f.severity == FAIL for f in findings)
+        ok = got_fail == expect_fail
+        failures += not ok
+        print(f"  {'ok  ' if ok else 'FAIL'} {subject!r:52} pos={position} "
+              f"{'FAIL' if got_fail else 'PASS'} (expected {'FAIL' if expect_fail else 'PASS'})"
+              f"  {why}")
+        if not ok:
+            for f in findings:
+                print(f"         {f.severity} {f.detail}")
+    print(f"\n{len(SUBJECT_SHAPE_CASES) - failures}/{len(SUBJECT_SHAPE_CASES)} subject-shape cases passed")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    literals, regexes = load_banned()
+    print(f"banned-phrases.md: {len(literals)} literals, {len(regexes)} regexes")
+    print(f"LENGTH_TARGETS: {LENGTH_TARGETS}")
+    print(f"APPROVED_STAT_PATTERNS: {APPROVED_STAT_PATTERNS} "
+          f"(empty = no numeric stat is approved)\n")
+    print("subject-shape cases:")
+    raise SystemExit(_self_test())

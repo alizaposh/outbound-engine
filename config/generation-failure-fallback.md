@@ -21,9 +21,12 @@ so a failed contact produces something usable instead of an empty row.
   none: a guess proves the sender did not look. See `config/personas.md` (Branch 2)
   and the "When the current platform is unknown" pattern in
   `instructions/message-generation.md`, which this copy is derived from.
-- **It must pass the validator on its own terms**: no dashes, subjects 2 to 7 words
-  lowercase, no banned CTA family, no quantified commercial terms, at most one stat
-  across the sequence (this copy uses none), and it ends at the CTA so
+- **Subject on message_1 only.** Messages 2 and 3 are threaded replies that inherit
+  the thread subject, so they carry no `subject` field. A failed contact must thread
+  exactly like a normal one.
+- **It must pass the validator on its own terms**: no dashes, a 2 to 7 word lowercase
+  subject on message_1, no banned CTA family, no quantified commercial terms, at most
+  one stat across the sequence (this copy uses none), and it ends at the CTA so
   `scripts/assemble.py` can append the sign-off and footer.
 - **A row using this copy is never a success.** The runner marks it
   `GENERATION_FAILED_FALLBACK` and keeps `generation_error` populated. Do not let it
@@ -31,23 +34,38 @@ so a failed contact produces something usable instead of an empty row.
 
 ## The copy
 
-Message 1 asks the generic setup question. Message 2 develops dedicated account
-support, one concrete capability. Message 3 is the breakup and carries distribution as
-the remaining facet. Same structure the generated sequences follow.
+Rewritten 2026-08-25 against the sales-team rules. Message 1 asks the generic setup
+question and names the offer without quantifying it. Message 2 uses the approved
+**"here's the simple version" outcome list** shape (§4 of
+`instructions/message-generation.md`), which is the sanctioned exception to one idea per
+email: outcomes, not features, kept scannable. Message 3 is a short breakup that offers
+to close the thread rather than pitching again.
+
+What the rewrite fixed, so it does not creep back:
+- The old message 1 opened with "whether there's an opportunity to compare what Posh
+  could put together in a custom proposal" — the stiff-pitch CTA AEs flagged as reading
+  like AI and inbox spam. It escaped the banned literal only by saying "there's" instead
+  of "any".
+- The old message 2 said "firefighting through it", the exact phrase §5 names as an AI
+  tell (_West Coast Makers flagged it_).
+- The old message 3 asked to see "what a custom proposal would look like", the same
+  banned construction.
+
+Known WARN: message 2 runs 101 words against the 45 to 90 target, because the
+five-outcome list is long. Length is a target and never a gate, and this shape is
+deliberately a list. Drop a bullet or two if you want it inside the target.
 
 ```json
 {
   "message_1": {
     "subject": "your ticketing setup",
-    "body": "Hey there,\n\nHope this finds you well. Reaching out to see if you're locked in on your current ticketing setup, or whether there's an opportunity to compare what Posh could put together in a custom proposal.\n\nWe've been putting together very competitive offers this year, all focused on helping organizers drive better reach, earlier conversions, and generating extra revenue with dedicated account support, financial incentives, marketing push and more.\n\nWould love to hear about your plans this year and see what we can bring to the table. Open to connecting?"
+    "body": "Hey there,\n\nHope this finds you well! Reaching out to see if you're locked in on your current ticketing setup, or open to seeing what else is out there?\n\nWe've been putting together very competitive offers this year, all focused on helping organizers drive better reach, earlier conversions, and generating extra revenue with dedicated account support, financial incentives, marketing push and more.\n\nLet me know if you're open to connecting, would love to hear more about your plans this year and see what we can bring to the table!"
   },
   "message_2": {
-    "subject": "dedicated support on posh"
-  , "body": "Hey there,\n\nDedicated account support is the part of Posh that organizers tend to notice first. Every organizer works with a real person rather than a support queue: someone who knows your calendar, helps get a launch in front of the right attendees, and makes sure payouts and guest lists behave on event day.\n\nFor a lean team that is the difference between running the night and firefighting through it, and it means one person to call when something changes late.\n\nHappy to walk through what that looks like for your events. Want me to put something together?"
+    "body": "Hey there,\n\nI know you may still be figuring out whether Posh is relevant for what you're building, so here's the simple version. Organizers usually come to us when they want to:\n\n- Sell more tickets\n- Reach more of the right people\n- Own their attendee community\n- Make check-in, payouts, promo, and event setup easier\n- Build a more repeatable event business\n\nIf any of those are priorities, it'd probably be worth pulling together a quick comparison. Happy to show you what other organizers are doing on Posh and where it may or may not fit, want me to?"
   },
   "message_3": {
-    "subject": "last note from me",
-    "body": "Hey there,\n\nLast note from me. The other piece is distribution: the Posh marketplace puts your events in front of attendees who are already looking for something to go to, on top of the promotion you are already doing.\n\nIf you ever want to see what a custom proposal would look like, just say the word. Either way, good luck with the season."
+    "body": "Hey there,\n\nShould I close this out for now, or would it still be helpful to grab 15 minutes and see where Posh could support? Totally fine either way, just didn't want to lose the thread."
   }
 }
 ```

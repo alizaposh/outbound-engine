@@ -25,9 +25,15 @@ understanding what it prevented.
 - `most ticketing platforms`
   Disparagement opener. Any sentence starting this way is characterizing competitors
   rather than winning on Posh's strengths.
+- `any opportunity to compare what posh could put together`
+  The stiff-pitch CTA. AE-flagged as reading like AI and like inbox spam (_Ashley_).
+  Banned as this specific construction only: `positioning.md` explicitly approves
+  *offering* a "custom / competitive offer" as vague commercial language, so banning
+  "custom proposal" or "competitive offer" on their own would fail approved copy. The
+  vague "worth a ..." family is already covered by the regex below.
 - `organic discovery alone`
-  Restates the approved 13% marketplace stat in unapproved wording. The stat must
-  appear only as written in `positioning.md`.
+  Restates a retired marketplace stat. No numeric or quantified marketplace claim is
+  approved (see `config/positioning.md`); the marketplace is described qualitatively.
 
 - `one thing that stands out`
   Formulaic message-2 opener the voice rules forbid.

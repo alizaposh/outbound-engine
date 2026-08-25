@@ -11,6 +11,211 @@ Always read `config/positioning.md` and `config/personas.md` before generating.
 decides who we are allowed to enroll at all; never generate from a list that has not
 been through it.
 
+> ## ⚠️ PRECEDENCE: the sales-team rules below win
+>
+> **"Sales-team messaging rules (2026-08-25)" is authoritative.** It came from the AE
+> team's own scoring of real drafts, and each rule cites the reviewer it came from.
+> Where it conflicts with anything later in this file, in `config/personas.md`, or in
+> `config/positioning.md`, **it wins** — the older text was written before that
+> feedback existed.
+>
+> Four conflicts are real and still live in **code**, so the rules below are not yet
+> fully enforced. They are listed in "Conflicts with code" at the end of that section.
+> Read them before trusting a generated batch.
+
+---
+
+# Sales-team messaging rules (2026-08-25)
+
+*Source: the sales team's scoring of real drafts. Every rule traces back to named AE
+feedback or a confirmed decision, noted in italics. Read the reason before changing a
+rule.*
+
+## 1. Sequence structure
+
+- **Three emails, threaded.** Emails 2 and 3 are replies on the same thread as email 1.
+- **Only email 1 has a subject line.** Emails 2 and 3 inherit the thread subject (they send as "Re: ...") and must **not** invent a new subject. _Decision: sends are threaded in Smartlead, so a fresh subject would break the thread._
+- **Open follow-ups as continuations, not fresh intros.** Email 2 starts like a bump ("Quick follow-up,"), not "Hi [name], I'm ...".
+- **No re-greeting on email 2.** The earlier message sits right below it. (Email 3 may use a short "Hey [name]," because it's brief enough to read as a friendly nudge.)
+
+## 2. One idea per email
+
+- **Each email carries exactly one feature, outcome, or angle. Never a feature dump.** _Feedback: Vince (4/5) liked that each email focused on one thing; Dogwood, Olivia, Lawrence, 90stildawn all penalized feature-dump emails, and email 2 was the repeat offender._
+- If you're tempted to list three benefits, pick the strongest one and cut the rest.
+
+## 3. Length
+
+- **Short throughout: roughly half the length of a bloated draft.** _Feedback: "too long" appears in the majority of scored rows._
+- **Email 3 is the shortest.** A few lines at most. _Feedback: reviewers explicitly want the closer kept "super short."_
+
+## 4. Email-by-email spec
+
+### Email 1
+**Write this one fresh for each lead. Do not follow a fixed template.** _Decision: a fixed opener formula made every email 1 read identically with only the competitor name swapped, which is the clearest "machine-generated" tell at volume._
+
+- **Before writing, check for a warm open (§9).** If the contact has a genuine prior interaction on the HubSpot timeline, open with a callback per §9. Otherwise, write a cold open as below.
+- **Vary the opening across leads.** Do not default every email to "Are you still running [competitor], or open to seeing what else is out there?" Open differently depending on what's actually notable about the lead: their vertical, the kind of events they run, their role, their competitor. Two leads in a row should not start the same way.
+- Must still include: the sender's self-introduction (name + one-line role, see §7), one problem or angle tied to the lead, and a soft reply-based CTA (a plain question).
+- **The hard guardrails still apply. Freedom is in the wording, not the rules.** Short (§3), one idea only (§2), human voice with no AI tells (§5), and only real claims (§6). "Write freely" does not mean longer, does not mean feature-dump, and does not mean fluff. Those are exactly what got down-scored.
+
+### Email 2
+**Vary the shape lead to lead. Don't run the same structure every time.** _Decision: a fixed single-feature "Quick follow-up," template makes every email 2 read alike, the same problem email 1 had._
+
+- **Don't default every email to "Quick follow-up."** Open differently depending on the lead and the angle.
+- **Pick one of a few approved shapes** (rotate; none should become the default):
+  - **Single feature/outcome:** one real capability told as a short narrative (e.g. text blasts to your own crowd, guest-list + payouts in one place).
+  - **"Here's the simple version" outcome list:** best for colder/unsure leads. A one-line framing, then a short scannable list of *outcomes* (not features), then a soft CTA. Outcomes to draw from: sell more tickets, reach more of the right people, own their attendee community, make check-in/payouts/promo/setup easier, build a more repeatable event business. Tailor the framing line to the lead and trim the list to fit them. Intentional exception to "one idea per email" (§2) because it's a summary, not a feature dump, so keep it short and don't pile on.
+  - **One approved proof point:** see §6. At most one, only when it fits the angle.
+- Continuation opener, no greeting-then-restart; one core message; soft CTA.
+
+### Email 3
+- A plain reply-based close: name that it's the last touch, ask one low-pressure question, exit graciously. No feature, no recap. _Decision: reworded from an earlier "one line only" rule. The ban is on bloat, not on line count._
+- **NO booking link and no scheduler URL anywhere in the cold sequence.** _Decision (deliverability): the scheduling link belongs to the reply stage, after interest is shown. When a reply classifies as `interested` or `question`, the handler shares the meeting owner's link and the meeting books onto Zach's calendar whichever persona sent (`instructions/reply-handling.md`, `config/meeting-routing.md`). The link lives there, not here._
+- Carry the meeting intent as a question instead. Example close: "Should I close this out for now, or would it help to grab 15 minutes?"
+- Graceful close, e.g. "Otherwise, all the best this year!"
+
+## 5. Voice
+
+- Casual and human. Write like a real person typing a quick note.
+- **Banned phrasing:** "any opportunity to compare what Posh could put together in a custom proposal" and similar stiff, passive CTAs. _Feedback: Ashley, "CTAs are way too AI ... too fluffed up ... like the spam I get."_
+- **Watch for AI tells:** vivid-but-hollow phrases like "firefighting through it." _Feedback: West Coast Makers flagged that exact phrase._
+- CTAs are plain questions that offer to do one thing: "want me to show you?", "happy to put together a quick comparison, want me to?". Never a mini-pitch. Note the "worth a look / chat / conversation" family is itself banned (`config/banned-phrases.md`): it is a vague ask, not an offer.
+
+## 6. Claims & proof points (accuracy guardrails)
+
+- **Do NOT claim native email follow-ups.** Posh does not do this natively; it requires a third-party tool. _Feedback: Dogwood Arts._
+- **SMS / text blasting IS native and approved.** Safe to feature.
+- **Do NOT use the "13% of tickets via the marketplace" stat.** Flagged internally as overstating reality. _Feedback: Lawrence and 90stildawn both rejected it._
+- **Approved proof points** (use sparingly): $37M Series B; 60K organizers; 10M users in 5 years; newer features like waitlist, free SMS blasting, enhanced dispute protection. _Source: the sales team's own live email 2._
+- **At most one stat per 3-email sequence**, and never two different stats across the sequence. _This is already enforced by validation (it flags e.g. m1:13% + m3:40%)._
+
+## 7. Senders
+
+Sequences send from **3 identities across 4 domains** (12 mailboxes total). Every
+meeting books with Zach regardless of sender.
+
+| Sender | Email-1 intro line |
+|---|---|
+| Carl Newmark | "I'm Carl, I run partnerships at Posh." |
+| Brooke Carrobis | "I'm Brooke, I run partnerships at Posh." |
+| Zach Hickman | "I'm Zach, I help organizers get set up on Posh." |
+
+- **No booking link in this rulebook.** The cold sequence carries none, so there is no
+  handoff wording to specify here. Zach's link belongs to the reply stage and lives in
+  `config/meeting-routing.md`; duplicating it here is how it leaks back into cold copy.
+- **Sending domains:** vibeposhvip.com, coreposhvip.com, poshvippulse.com, poshviphub.com
+- One intro line per sender, used across all campaigns for now.
+
+## 8. Personalization & fallbacks
+
+- Tailor email 1 to the lead's **current competitor** (Resident Advisor, Eventbrite, Eventeny, DICE, Eventnoire) and **vertical** (Party, Live Performance, Other Social Communities).
+- **Missing first name:** many leads are role addresses (e.g. `info@`, `tickets@`) with no first name. Never output a broken "Hey ,". Use a name-less opener instead ("Hey there," / "Hey team,").
+
+## 9. Prior-interaction callbacks (warm opens)
+
+Before generating email 1, check the contact's **HubSpot timeline** for prior
+engagements. A faithful callback to a real past interaction is the strongest
+signal this isn't a cold blast, but a *fabricated* one is worse than none, so
+this runs on strict tiers.
+
+**First, decide whether a real interaction even happened:**
+- **Counts as a prior interaction:** a logged meeting, a connected call, or an email that got a genuine reply from the contact. These are two-way.
+- **Does NOT count:** outbound emails we sent with no reply. A prior *send* is not a prior *conversation*. Several of these leads are old HubSpot contacts with ignored past outreach (per the project brief), and opening "great to reconnect" on a one-way send reads as false. Treat these as cold.
+
+**Then pick the callback tier:**
+- **Specific callback:** only when a concrete detail is actually written in the engagement (call/meeting notes, replied-email content). Paraphrase it faithfully; never inflate a vague note into a specific memory.
+  - e.g. "Last time we spoke you mentioned you were on Eventbrite and happy with it. Still the case, or want me to show you what's changed?"
+  - e.g. "When we connected you were running about one event a month. Have you scaled that, or is that where you'd want support?"
+  - e.g. "Loved having you at Posh Blueprint earlier this year. How have you been feeling about your events since?"
+- **Soft callback:** a real prior interaction exists but no reusable detail was logged. Acknowledge the reconnection only; assert nothing specific.
+  - e.g. "Good to reconnect," / "It's been a while since we last connected,"
+- **No callback:** no genuine prior interaction (or only ignored outbound). Use the normal cold open (§4, Email 1).
+
+**Rules for the callback:**
+- Callback goes in **email 1 only.** Don't repeat it in emails 2 and 3.
+- **When in doubt, drop it and send the cold open.** A missing callback costs nothing; a wrong one costs the lead.
+- Faithful paraphrase only. No embellishment, no upgrading "left a voicemail" into "we chatted."
+- If the interaction was long ago, acknowledge the gap ("it's been a while") rather than implying it was recent.
+
+_Limitation: the specific tier is only as good as the reps' logged notes. A call with no notes yields a soft callback at most. Sparse specific callbacks = a CRM note-taking gap, not a rules gap._
+
+## 10. Reference: gold-standard sequence
+
+Rewritten from the Dogwood Arts row after applying every rule above. Use as a
+style anchor.
+
+**Email 1**, _Subject: eventeny working out for Dogwood Arts?_
+> Hi there,
+>
+> Are you still running events on Eventeny, or open to a look at something else?
+>
+> We work with a lot of community organizers, and the thing we hear most is how much lives *outside* the ticketing tool: guest approvals in one place, payouts in another, RSVPs scattered across email. Posh pulls that into one spot so the admin stops eating your week.
+>
+> Happy to put together a quick comparison for your next run of events, want me to?
+>
+> I'm Brooke, I run partnerships at Posh.
+
+**Email 2** _(reply on same thread)_
+> Quick follow-up. For recurring community events, most of your turnout is people who've already come once, but reaching them usually means exporting lists and hopping between tools.
+>
+> On Posh, your guest list and text blasts live in the same place as ticketing, so a reminder to past attendees goes out in a couple minutes instead of an afternoon.
+>
+> Want me to walk you through how that'd look for your calendar?
+
+**Email 3** _(reply on same thread)_
+> Last note from me on this, then I'll stop reaching out.
+>
+> Should I close this out for now, or would it help to grab 15 minutes and talk through how Posh could fit what you're running?
+>
+> Otherwise, all the best this year!
+
+## Open items (fill in before go-live)
+
+1. **Per-persona email-2 angle.** Should email 2 always anchor on a set feature per persona (e.g. Party/RA → text blasts; Community/Eventeny → repeat-attendee reach)? Currently the generator picks; a rule here would make it consistent.
+2. **Series B link.** Decide whether the generator inserts the Series B announcement link (and whether that long tracking URL is templatized) or leaves it out.
+3. **Intro variation.** Confirm one intro line per sender is fine across all verticals, or whether it should shift by persona.
+
+## Conflicts with code: NOT yet enforced
+
+Four rules above contradict what the pipeline currently does. Until these are fixed in
+code, a generated batch will not match this rulebook.
+
+1. **The 13% stat is banned here, but the code forces it.** `repair.py.snap_stats()`
+   rewrites any 13% mention into the approved sentence, `CANON_13` is a constant there,
+   `validate.py.APPROVED_STAT_PATTERNS` accepts it, and `repair.py.verify_canon()`
+   asserts at startup that `config/positioning.md` still contains that exact wording.
+   Deleting the stat from positioning.md without touching the code **breaks startup**.
+   Needs: remove the 13% path from `repair.py` and `validate.py`, then from
+   `config/positioning.md`. The 40% conversion stat is untouched by this feedback.
+2. ~~**Subject lines for emails 2 and 3.**~~ **RESOLVED 2026-08-25.** `check_subject_shape`
+   now skips an empty subject at positions 2 and 3, still FAILs an empty one at
+   position 1, and still shape-checks a stray non-empty subject on 2 or 3. The
+   generation contract asks for a subject on `message_1` only. Casing was relaxed in the
+   same pass to allow proper nouns, while ALL CAPS and Title Case still FAIL.
+3. **The banned CTA is still the documented default.** §5 bans "any opportunity to
+   compare what Posh could put together in a custom proposal", which is exactly the
+   default CTA in "CTA rules" below and the **preferred CTA for both personas** in
+   `config/personas.md`. Those need rewriting to the plain-question style, and the
+   phrase belongs in `config/banned-phrases.md`.
+4. **Email 2 continuation vs. stand-alone.** §1 says email 2 opens as a bump on a
+   thread. "Structure of the 3-email sequence" below says the opposite: email 2 must
+   read as if email 1 never happened, with "no 'just circling back'". Threading makes
+   §1 correct; that older rule needs replacing, and `banned-phrases.md` should be
+   checked for a follow-up-phrase ban that would now fire on correct copy.
+
+Also worth reconciling: §6 bans claiming native email follow-ups, but
+`config/personas.md` currently tells the generator to lead with "Posh automates the
+manual marketing (text blasts, follow-ups)" for Premium. Text blasts are native and
+fine; email follow-ups are not.
+
+---
+
+# Older rules (pre-2026-08-25)
+
+Everything below predates the sales-team feedback above. Where the two disagree, the
+section above wins. Kept because most of it — the voice anchor, the dash rule, the
+compliance and output-format sections — is still the operative detail.
+
 ## Using the research signals
 The research note (see `instructions/research.md`) carries the persona call and the
 signals behind it. Three inputs matter most.
@@ -44,12 +249,15 @@ drop the competitor reference and personalize on something you do know.
   the prospect's problems. Peer-to-peer and direct, like someone who understands the
   events world. No jargon, specific over generic. See **Voice anchor** above, which is
   the authoritative register.
-- **Length:** messages 1 and 2 are roughly **80 to 110 words**, calibrated to the
-  voice anchor, which is itself about 100 words: the warmth and the package pitch need
-  the room. Message 3 is a breakup and is shorter, roughly **40 to 70 words**. These
-  are **targets, not caps**. The validator reports drift as a WARN and never fails an
-  email on length, because a good email slightly outside is better than a gutted one
-  exactly on target. Stay skimmable on a phone.
+- **Length (recalibrated 2026-08-25):** messages 1 and 2 are roughly **45 to 90
+  words**; message 3 is a breakup and shorter, roughly **20 to 50 words**. Previously
+  80 to 110 and 40 to 70, which pushed copy toward exactly the length the AEs
+  down-scored ("too long" in most scored rows) and which the team's own gold-standard
+  sequence failed. See §3 of the sales-team rules: short throughout, email 3 shortest.
+  These are **targets, not caps**. The validator reports drift as a WARN and never
+  fails an email on length, because a good email slightly outside is better than a
+  gutted one exactly on target. Stay skimmable on a phone.
+  (Authoritative values: `LENGTH_TARGETS` in `scripts/validate.py`.)
 - **Subject lines:** conversational, and avoid spam-trigger words and punctuation
   (free, guarantee, !!!, $$$). Word count and casing are in **Hard constraints** below.
 - **Sign-off:** appended by code, not written here. End the body at the CTA.
@@ -68,107 +276,101 @@ generation prompt**, next to the output contract, by `scripts/repair.py`
 ### The register to match
 
 This is a real SDR email. Match its **register**: warm, direct, genuinely excited to
-help. Not a consultant diagnosing the prospect's problems.
+help. Not a consultant diagnosing the prospect's problems, and not a stiff corporate
+pitch.
 
-> Hey [first name]'s team,
+> Hey [first name],
 >
-> Hope this finds you well! Reaching out to see if you're locked in on your current
-> ticketing setup with [competitor]? Any opportunity to compare what Posh could put
-> together in a custom proposal?
+> Are you still running tickets through [competitor], or open to seeing what else is
+> out there? Fair thing to sit on, since most organizers only go looking when
+> something starts to pinch.
 >
-> We've been putting together very competitive offers this year, all focused on
-> helping organizers drive better reach, earlier conversions, and generating extra
-> revenue with dedicated account support, financial incentives, marketing push and
-> more — with a huge and active community in New York.
+> For a lot of the people we work with, the pinch is that the actual run of the event
+> lives across three different tools. [competitor] covers one piece, and the guest
+> list, approvals, and payouts end up somewhere else. Posh pulls all of that into one
+> place, so the admin stops eating your week.
 >
-> Let me know if you're open to connecting, would love to hear more about your plans
-> this year and see what we can bring to the table!
+> Happy to put together a quick comparison for your next one, want me to?
 >
-> Thanks,
+> I'm [sender name], I run partnerships at Posh.
 
 ### This is a tone target, not a template
 
 - **The bracketed specifics are illustrative.** Never hardcode a literal from the
-  example: no "TicketWeb", no "Lucinda", no platform or person name carried over.
-  Use the actual prospect's details from the research note.
-- **Do not reference New York, or any city.** Prospecting is national. Match the
-  warmth and the benefit-bundling of that closing clause, but never claim a local
-  community anywhere. Where the anchor leans on a local community, use Posh's
-  national reach and the marketplace instead: organic demand the organizer did not
-  have to source.
-- **Do not reuse the greeting.** "Hope this finds you well" and "...'s team" are
-  illustrative, not required. Vary the opening line across prospects. Thirty emails
+  example: no platform or person name carried over. Use the actual prospect's details
+  from the research note, and the real sender's name and role.
+- **Do not reference New York, or any city.** Prospecting is national. Never claim a
+  local community anywhere.
+- **Do not reuse the greeting.** Vary the opening line across prospects. Thirty emails
   opening identically reads more templated than any single phrase ever could.
-- **Never reuse an opening sentence verbatim across prospects.** This is about the
-  exact words, not the shape. Recurring opener *structures* are fine and expected: "One
-  thing that..." is a good move and should stay. What must not happen is the identical
-  sentence landing in two prospects' inboxes. In one real batch "One thing that tends
-  to surprise organizers" went out three times and "One thing that comes up a lot"
-  twice, across unrelated contacts. Byte-identical sentences are what make a batch look
-  machine-written, and repeated strings across many recipients are exactly what spam
-  heuristics are built to notice. Keep the structure, change the words: what surprises
-  *this* organizer, in *their* vertical, is different every time.
-- **The anchor contains an em dash. Do not reproduce it.** Hard constraint 1 still
-  governs everything you write. The anchor is quoted as written for register only.
+- **Never reuse an opening sentence verbatim across prospects.** Recurring opener
+  *structures* are fine; the identical sentence landing in two inboxes is not. Keep the
+  structure, change the words: what pinches *this* organizer, in *their* vertical, is
+  different every time.
+- **This anchor uses no dashes, on purpose.** Hard constraint 1 forbids em and en
+  dashes in everything you write. Keep it that way: a period, comma, colon, or
+  parentheses instead.
 
 ### Tone rules
 
-- **Open warm, then ask about their current setup.** "Are you locked in on
-  [competitor]?" Do **not** open with a diagnosis of what is wrong with their tool.
-  Never open with "Managing events on [platform] works, but...".
-- **The CTA is a concrete offer**, not a vague ask. "Compare what Posh could put
-  together in a custom proposal." "A tailored comparison, want me to?" Never "worth a
-  quick conversation."
-- **Sell the bundled package with enthusiasm:** dedicated account support, financial
-  incentives, marketing push. That bundle is the pitch.
-- **At most one stat per 3-email sequence, not one per email.** Lead with the package
-  and the offer, not a number. A stat in every opener reads corporate.
-- **One idea per email, developed fully. This is the main lever on length.** Email 1
-  carries the warm question plus **one** facet of the package, not the whole bundle.
-  The other facets (financial incentives, marketing push, dedicated support) belong in
-  emails 2 and 3. If an opener is running long, move a facet later in the sequence
-  rather than compressing the voice. Concrete nouns over abstract benefit language.
-  Short sentences. No rule-of-three cadence. Do not open message 2 with "One thing
-  that stands out..."
+- **Open warm, then ask about their current setup.** "Are you still running tickets
+  through [competitor]?" Do **not** open with a diagnosis of what is wrong with their
+  tool. Never open with "Managing events on [platform] works, but...".
+- **The CTA is a plain, concrete question.** Offer to *do* one specific thing and ask
+  if they want it. Use this family: "happy to put together a quick comparison, want me
+  to?", "want me to show you how that'd look?", "open to seeing what we'd put together
+  for your next one?".
+  - **Do NOT use** "any opportunity to compare what Posh could put together in a custom
+    proposal", or its "custom proposal" / "competitive offer" variants. _AE feedback
+    (Ashley): reads as AI and like inbox spam._
+  - **Do NOT use** the "worth a quick conversation / chat / call / comparison / look"
+    family. It is a hard FAIL in `config/banned-phrases.md`: a vague ask, not an
+    offer. The fix is to name the thing you will do, not to soften the ask.
+- **One idea per email, developed fully.** Email 1 carries the warm question plus
+  **one** facet of the package, not the whole bundle. The other facets belong in emails
+  2 and 3. Concrete nouns over abstract benefit language. Short sentences.
+- **Sell with warmth, not fluff.** The bundle (dedicated account support, financial
+  incentives, marketing push) is real, but naming all of it in one breath is the
+  feature dump the AEs down-scored. Pick the single facet that fits this persona.
+- **At most one stat per 3-email sequence.** Lead with the package and the offer, not a
+  number. A stat in every opener reads corporate.
 
 ### When the current platform is unknown
 
 If the research note has no usable `current_competitor`, **never guess one.** Do not
-infer a platform from the vertical, the company name, the email domain, or anything
-else. A wrong platform named confidently is the single most expensive mistake in a
-cold email: it proves the sender did not actually look. Ask the generic question
-instead, and name no platform anywhere in the sequence.
+infer a platform from the vertical, the company name, or the email domain. A wrong
+platform named confidently is the most expensive mistake in a cold email: it proves the
+sender did not look. Ask the generic question and name no platform anywhere.
 
-Use this pattern. Same voice rules, same greeting-variation caveat: do not stamp
-"Hope this finds you well" or "...'s team" on every email in the batch.
+> Hey [first name],
+>
+> Are you locked in on your current ticketing setup, or open to seeing what else is out
+> there? Most organizers only go looking when something starts to pinch.
+>
+> For a lot of the people we work with, the pinch is that the run of the event lives
+> across a few different tools: guest list in one place, approvals in another, payouts
+> somewhere else again. Posh pulls all of that into one place, so the admin stops
+> eating your week.
+>
+> Happy to put together a quick comparison for your next one, want me to?
+>
+> I'm [sender name], I run partnerships at Posh.
 
-> Hey [first name]'s team,
->
-> Hope this finds you well! Reaching out to see if you're locked in on your current
-> ticketing setup? Any opportunity to compare what Posh could put together in a
-> custom proposal?
->
-> We've been putting together very competitive offers this year, all focused on
-> helping organizers drive better reach, earlier conversions, and generating extra
-> revenue with dedicated account support, financial incentives, marketing push and
-> more.
->
-> Let me know if you're open to connecting, would love to hear more about your plans
-> this year and see what we can bring to the table!
->
-> Thanks,
-
-Note this is the same email as the main anchor with the platform reference and the
-local-community clause removed. Everything else about the register is unchanged.
+Same register, same greeting-variation caveat. This is the main example with the
+platform reference removed.
 
 ### This, not that
 
-**NOT** (cold diagnosis, then a vague ask):
+**NOT** (cold diagnosis, then a vague ask, so both halves fail):
 > Managing events on Resident Advisor works, but it's built for discovery, not for
-> running the show... Worth a quick conversation about how it could simplify your
-> next event?
+> running the show. Worth a quick conversation about how it could simplify your next
+> event?
 
-**THIS:** the warm question plus custom-proposal pattern from the anchor above.
+**NOT** (stiff, AI-sounding pitch, the phrasing AEs flagged as spam):
+> Any opportunity to compare what Posh could put together in a custom proposal for your
+> next run of events?
+
+**THIS** (warm question, one concrete idea, plain offer): the register example above.
 <!-- VOICE-ANCHOR:END -->
 
 ## Hard constraints
@@ -186,15 +388,17 @@ were violated in most emails.
 1. **No dashes.** Never use em dashes or en dashes. Rephrase so the sentence does not
    need one: use a period, comma, or colon, split into two sentences, or use
    parentheses for an aside that already contains commas. Do not swap in a hyphen.
-2. **The two approved stats appear only as these exact sentences:**
-   - "The average event sells 13% of its tickets through the Posh marketplace."
-   - "Posh events convert 40% better than other platforms."
-   No hedging ("on average", "roughly", "about", "up to"), no rewording, no
-   substituting a different noun for "the Posh marketplace".
-3. **Subject lines are 2 to 7 words, lowercase.** Canonical acronyms and initialisms
-   keep their standard casing: RA, NYC, DJ, RSVP, VIP, EDM, LA, SF, DM. Every other
-   word is lowercase, including the first. (The authoritative list the validator
-   checks is `CANONICAL_ACRONYMS` in `scripts/validate.py`.)
+2. **No numeric performance stats.** Do not cite a percentage or figure for
+   marketplace share, conversion, or any performance claim. Describe advantages
+   qualitatively.
+3. **Subject lines are 2 to 7 words, lowercase**, with two exceptions. Canonical
+   acronyms and initialisms keep their standard casing: RA, NYC, DJ, RSVP, VIP, EDM,
+   LA, SF, DM. A proper noun (a company, venue, or person name) keeps its single
+   leading capital: "still using RA for Philadeep events?" is correct. Every other word
+   is lowercase, including the first. Never ALL CAPS, and never Title Case every word:
+   "Compare Your Ticketing Setup Today" reads like a marketing headline, not like a
+   person typing. (The authoritative acronym list is `CANONICAL_ACRONYMS` in
+   `scripts/validate.py`.)
 <!-- HARD-CONSTRAINTS:END -->
 
 Rules 1 and 2 are additionally repaired in code by `scripts/repair.py` before
@@ -224,10 +428,13 @@ it stays caught rather than prevented.
      vertical at their scale. Concrete nouns over benefit language. The substance is the
      whole point of this email: naming an angle and moving straight to the ask is not
      doing this email's job.
-  3. **It must read correctly if Email 1 got no reply**, which is the normal case. No
-     "just circling back", no "following up on my last note", no "as I mentioned". Do
-     not reference the earlier email at all. Reference the topic and open on the angle
-     itself, as if this were the first time you raised it.
+  3. **It must read correctly if Email 1 got no reply**, which is the normal case, and
+     it is a **threaded reply**, so a light continuation opener is correct ("quick
+     follow-up," then straight into the angle). See §1 of the sales-team rules. What is
+     still forbidden is *depending* on Email 1 having been read: no "as I mentioned", no
+     recap, and nothing that only makes sense to someone who replied. Open on the angle
+     itself and let it stand alone. **No re-greeting** either, since the earlier message
+     sits directly below it.
   4. **Close on a concrete-offer CTA, in the anchor's register.** Offer to *do*
      something: "happy to put together a tailored comparison, want me to?", "any
      opportunity to compare what we could put together for your next one?". This email
@@ -253,10 +460,17 @@ it stays caught rather than prevented.
 
 ## CTA rules
 - **Goal: booked meetings.** Every sequence drives toward a conversation.
-- **Default CTA:** a concrete offer that invites a reply, e.g. "Any opportunity to
-  compare what Posh could put together in a custom proposal?" or "Happy to put
-  together a tailored comparison, want me to?" Never a vague "worth a quick
-  conversation." Persona-specific wording lives in `config/personas.md`.
+- **Default CTA:** a concrete offer phrased as a plain question, e.g. "happy to put
+  together a quick comparison for your next one, want me to?", "want me to show you how
+  that'd look?", or "open to seeing what we'd put together for your next one?" Name the
+  one thing you will do, then ask.
+  - **Banned:** "any opportunity to compare what Posh could put together in a custom
+    proposal" and its custom-proposal / competitive-offer variants (_AE feedback:
+    Ashley, reads as AI and like inbox spam_), and the vague "worth a quick
+    conversation / chat / call / comparison / look" family. Both are hard FAILs; the
+    authoritative list is `config/banned-phrases.md`. The fix for a weak ask is to name
+    the thing you will do, never to soften it further.
+  - Persona-specific wording lives in `config/personas.md`.
 - **One clear CTA per email. No stacked asks.**
 - **Keep the opener link-light.** A booking link in a cold first email can hurt
   deliverability and reads as presumptuous. Introduce a scheduling link or a specific

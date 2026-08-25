@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Deterministic repairs applied to generated copy before assembly and validation.
 
-Two classes of defect are mechanical rather than editorial, so code fixes them
-instead of asking the model again:
+One class of defect is mechanical rather than editorial, so code fixes it instead of
+asking the model again:
 
   normalize_dashes()  punctuation only, no meaning changes
-  snap_stats()        replaces a reworded approved stat with its exact wording
+
+There is no stat repair. No numeric performance stat is approved any more (retired
+2026-08-25: the figures were inaccurate and the reps did not use them), so there is
+nothing to snap copy to. A percentage in generated copy is now a validator FAIL rather
+than something code silently rewrites. See config/positioning.md.
 
 Every rewrite returns a RepairRecord. Nothing is changed silently: the caller is
 expected to surface the records, and validate.py still runs the same checks
@@ -26,18 +30,6 @@ HARD_CONSTRAINTS_END = "<!-- HARD-CONSTRAINTS:END -->"
 VOICE_ANCHOR_BEGIN = "<!-- VOICE-ANCHOR:BEGIN -->"
 VOICE_ANCHOR_END = "<!-- VOICE-ANCHOR:END -->"
 
-# The only approved wordings, from config/positioning.md. verify_canon() asserts
-# these still match the file, so a positioning edit cannot leave repair snapping
-# copy to a stale claim.
-CANON_13 = "The average event sells 13% of its tickets through the Posh marketplace"
-CANON_40 = "Posh events convert 40% better than other platforms"
-
-# A clause is only snapped when it is actually making the approved claim. Guards
-# against unrelated uses of the same numbers, e.g. "a 13% discount".
-TOPIC_13 = re.compile(r"ticket|marketplace|sell|sales|discover", re.I)
-TOPIC_40 = re.compile(r"convert|conversion|better|perform", re.I)
-
-STAT_RE = re.compile(r"\b(13|40)\s*%")
 CLAUSE_SPLIT = re.compile(r"(,\s+(?:which|and|so|but|because)\b|:\s+)")
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?])(\s+)")
 
@@ -65,21 +57,10 @@ class RepairRecord:
     note: str = ""
 
 
-# ---- canonical-source verification -------------------------------------------
-
-def verify_canon(path: pathlib.Path = POSITIONING) -> None:
-    """Fail if positioning.md no longer contains the wordings we snap to."""
-    text = re.sub(r"[*_`]", "", path.read_text(encoding="utf-8"))
-    text = re.sub(r"\s+", " ", text)
-    for needle in ("13% of its tickets through the Posh marketplace",
-                   "Posh events convert 40% better"):
-        if needle.lower() not in text.lower():
-            raise RepairError(
-                f"{path.name} no longer contains {needle!r}. repair.py would snap copy "
-                f"to wording positioning.md does not approve. Update CANON_* together "
-                f"with positioning.md."
-            )
-
+# ---- rulebook block loaders --------------------------------------------------
+# verify_canon() lived here and is gone (2026-08-25). It asserted positioning.md still
+# contained the approved stat wordings, which mattered only because snap_stats() rewrote
+# copy to them. With no approved stats, there is nothing to keep in sync.
 
 def _extract_block(path: pathlib.Path, begin: str, end: str, what: str) -> str:
     text = path.read_text(encoding="utf-8")
@@ -204,62 +185,16 @@ def strip_signoff(text: str) -> tuple[str, list[RepairRecord]]:
     return "\n".join(lines).rstrip(), records
 
 
-# ---- stats --------------------------------------------------------------------
-
-def snap_stats(text: str) -> tuple[str, list[RepairRecord]]:
-    """Replace the clause making a 13%/40% claim with the exact approved wording,
-    preserving the clauses around it."""
-    records: list[RepairRecord] = []
-    parts = SENTENCE_SPLIT.split(text)
-
-    for si, sent in enumerate(parts):
-        if not STAT_RE.search(sent):
-            continue
-        clauses = CLAUSE_SPLIT.split(sent)
-        changed = False
-        for ci, clause in enumerate(clauses):
-            found = STAT_RE.search(clause)
-            if not found:
-                continue
-            is13 = found.group(1) == "13"
-            if not (TOPIC_13 if is13 else TOPIC_40).search(clause):
-                records.append(RepairRecord(
-                    "stat", clause.strip(), clause.strip(),
-                    note="skipped: number is not making the approved claim"))
-                continue
-
-            canon = CANON_13 if is13 else CANON_40
-            lead_ws = clause[:len(clause) - len(clause.lstrip())]
-            trailing = "." if clause.rstrip().endswith((".", "!", "?")) else ""
-            new = canon + trailing
-            # Only ever uppercase at a sentence start. Never lowercase: the canonical
-            # wording begins with a proper noun in the 40% case.
-            at_sentence_start = ci == 0 or clauses[ci - 1].strip().endswith((".", "!", "?"))
-            if at_sentence_start:
-                new = new[0].upper() + new[1:]
-            new = lead_ws + new
-
-            if clause.strip() != new.strip():
-                records.append(RepairRecord("stat", clause.strip(), new.strip()))
-                clauses[ci] = new
-                changed = True
-        if changed:
-            parts[si] = "".join(clauses)
-
-    return "".join(parts), records
-
-
 # ---- driver -------------------------------------------------------------------
 
 def repair(body: str) -> tuple[str, list[RepairRecord]]:
-    """Sign-off first, then dashes, then stats. Sign-off removal changes what the last
-    line is, dash repair can split a stat sentence, and the stat snapper needs clean
-    sentence boundaries to find the right clause."""
-    verify_canon()
+    """Sign-off first, then dashes: sign-off removal changes what the last line is, so
+    it must run before punctuation repair. Stat snapping used to run last and is gone,
+    since no numeric stat is approved: a percentage is now a validator FAIL, never a
+    silent rewrite."""
     body, r0 = strip_signoff(body)
     body, r1 = normalize_dashes(body)
-    body, r2 = snap_stats(body)
-    return body, r0 + r1 + r2
+    return body, r0 + r1
 
 
 def format_records(records: list[RepairRecord], indent: str = "    ") -> str:
@@ -275,7 +210,5 @@ def format_records(records: list[RepairRecord], indent: str = "    ") -> str:
 
 
 if __name__ == "__main__":
-    verify_canon()
-    print("canonical wordings verified against positioning.md")
-    print(f"\nhard-constraints block ({MESSAGE_GEN.name}):\n")
+    print(f"hard-constraints block ({MESSAGE_GEN.name}):\n")
     print(load_hard_constraints())

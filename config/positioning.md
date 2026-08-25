@@ -27,10 +27,16 @@ Primary problems we solve:
 - Lack of growth data and repeat-attendee insight.
 
 ## Value propositions (approved for external use)
-- **Marketplace distribution:** the average event sells **13% of its tickets through
-  the Posh marketplace**, which is organic demand the organizer didn't have to
-  source.
-- **Higher conversion:** **Posh events convert 40% better** than other platforms.
+
+> **No numeric performance stats (retired 2026-08-25).** The 13% marketplace share and
+> the 40% conversion figures were removed: the sales team confirmed they were inaccurate
+> and the reps did not use them. There is no approved percentage or figure for
+> marketplace share, conversion, or any other performance claim. Describe the advantages
+> qualitatively. Customer case studies below are a separate approved category.
+
+- **Marketplace distribution:** events reach attendees already browsing the Posh
+  marketplace, which is organic demand the organizer didn't have to source. **No share
+  or volume figure** attaches to this.
 - **A better deal than their current tool:** Posh can put together a more competitive
   offer than an organizer's current ticketing solution: dedicated account support,
   financial incentives, a marketing push, and more. **Bundled and unquantified, exactly
@@ -133,9 +139,10 @@ one.
   attaching a number to either one means inventing it.
 - **Never use a case study that doesn't fit the prospect, and never more than one per
   email.** See "Using a case study" above.
-- Use the 13% / 40% stats **only as written**. Never inflate, round up, or restate
-  them as guarantees ("you *will* convert 40% better"). They're platform averages,
-  not promises.
+- **No numeric performance stats in copy:** no percentage or figure for marketplace
+  share, conversion, or any other performance claim. Describe advantages qualitatively.
+  The validator FAILs any percentage in a body (`check_approved_stats` in
+  `scripts/validate.py`).
 - No competitor disparagement. Win on Posh's strengths, don't trash Eventbrite/Dice/etc.
 - No guarantees of revenue, attendance, or outcomes.
 - [FILL IN any regulated or brand claims Legal wants excluded]
