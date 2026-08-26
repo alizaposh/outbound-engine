@@ -29,19 +29,35 @@ API. **Never run this without a recorded approval.** Read
    cannot complete this step: ask a human to enable it and confirm they have, before
    any sends start. Full rule + verification gate in the "HubSpot activity logging"
    section of `config/smartlead-defaults.md`.
-4. **Add prospects** and attach each prospect's message_1..3 as the campaign's
+4. **Unsubscribe settings — MANUAL UI, and compliance-critical.** The body already
+   carries Smartlead's real tag, `%unsubscribe-text%` (`UNSUBSCRIBE_TOKEN` in
+   `scripts/assemble.py`), but two per-campaign toggles decide whether it renders, and
+   neither is visible to code:
+   - **"Add unsubscribe message in all emails" ON.** This also enables the one-click
+     **Unsubscribe Header Tag**, which Google requires of bulk senders.
+   - **"Optimize Email Delivery" OFF.** It disables HTML content and takes the
+     unsubscribe link with it, silently.
+
+   A working opt-out is a legal requirement, not a nicety (see the compliance rules in
+   `CLAUDE.md`), so this is a hard gate: do not launch without it. **A test send cannot
+   verify it** — Smartlead deliberately renders the link non-clickable in test emails, so
+   it will look present and dead. Only the first real send proves it.
+5. **Add prospects** and attach each prospect's message_1..3 as the campaign's
    per-lead custom fields / personalized content.
-5. **Configure the 3-email sequence** using those personalized fields.
-6. **Stop-on-reply:** ensure follow-ups halt automatically when a prospect replies.
-7. **Verify settings** before activating. Re-read them back and confirm with the
+6. **Configure the 3-email sequence** using those personalized fields.
+7. **Stop-on-reply:** ensure follow-ups halt automatically when a prospect replies.
+8. **Verify settings** before activating. Re-read them back and confirm with the
    human if anything looks off.
-8. **Record the campaign on each enrolled contact** — `outbound_last_campaign_id` in
+9. **Record the campaign on each enrolled contact** — `outbound_last_campaign_id` in
    HubSpot, so a contact traces back to the campaign that mailed it. Smartlead holds the
    campaign itself; email is the join key. No local mapping store.
 
 ## Launch
 - Start with a **small batch** (per your plan, ~100 contacts) across multiple warmed
   mailboxes. Watch deliverability + reply quality, then ramp gradually.
+- **Confirm the unsubscribe link rendered** on the very first real send, before any
+  further sends. Open the delivered email and click it. If it is missing, check the two
+  toggles in step 4: "Optimize Email Delivery" being on is the usual cause.
 - **Gate the full lead set behind the activity-logging check** in
   `config/smartlead-defaults.md`: after the first send, confirm on a test contact that
   it lands as an EMAIL activity and moved native "Last Contacted", not just "Last

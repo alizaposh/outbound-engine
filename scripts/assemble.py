@@ -18,11 +18,22 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 POSITIONING = ROOT / "config" / "positioning.md"
 SENDERS = ROOT / "config" / "senders.md"
 
-# The Smartlead unsubscribe merge tag. Still a placeholder: the real tag is the
-# [FILL IN] in instructions/message-generation.md and must be confirmed in the
-# Smartlead account. Defined once here so swapping it is a one-line change.
-UNSUBSCRIBE_TOKEN = "{{UNSUBSCRIBE_TOKEN}}"
-TOKEN_IS_PLACEHOLDER = True
+# The Smartlead unsubscribe merge tag, confirmed against Smartlead's help centre
+# 2026-08-26. Percent-delimited, NOT curly braces: Smartlead substitutes this exact
+# string wherever it appears in the body. Defined once here so it is never retyped.
+UNSUBSCRIBE_TOKEN = "%unsubscribe-text%"
+TOKEN_IS_PLACEHOLDER = False
+
+# Having the right tag in the body is necessary and not sufficient. Two per-campaign UI
+# settings decide whether it renders at all, and neither is visible to this code:
+#   - "Add unsubscribe message in all emails" ON, which also enables the one-click
+#     Unsubscribe Header Tag that Google requires of bulk senders.
+#   - "Optimize Email Delivery" OFF. It disables HTML content and takes the unsubscribe
+#     link with it, silently.
+# So the send gate below does not clear on the tag alone: it is a campaign-creation
+# check, in instructions/campaign-creation.md next to the activity-logging gate.
+# Note a TEST send renders the link deliberately non-clickable, so a test cannot prove
+# it works. Only a real first send can.
 
 # Sentinel marking unreplaced rows in config/senders.md.
 PLACEHOLDER_PREFIX = "PLACEHOLDER_NAME"
@@ -167,6 +178,15 @@ def send_readiness_blockers(sender_map: dict[str, str] | None = None) -> list[st
             f"The unsubscribe token is still the placeholder {UNSUBSCRIBE_TOKEN}. "
             f"Confirm the real Smartlead merge tag before sending."
         )
+    # Not a code condition: nothing here can see a campaign's UI settings. Surfaced on
+    # every run so it cannot be forgotten between now and the first launch.
+    blockers.append(
+        f"Unsubscribe rendering is UNVERIFIED in a live campaign. The tag "
+        f"{UNSUBSCRIBE_TOKEN} is correct, but per campaign a human must set "
+        f"'Add unsubscribe message in all emails' ON and 'Optimize Email Delivery' OFF, "
+        f"then confirm on the first real send that the link renders. See "
+        f"instructions/campaign-creation.md."
+    )
     return blockers
 
 

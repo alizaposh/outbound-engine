@@ -28,6 +28,28 @@ Lock these once the Smartlead account exists (Phase 1).
 - Keep warmup running on new mailboxes before launch and continue some after launch.
 - Pause any mailbox that develops deliverability problems.
 
+## Unsubscribe (MANDATORY per campaign — MANUAL UI, compliance-critical)
+
+The merge tag is **`%unsubscribe-text%`** (percent-delimited, not curly braces),
+confirmed against Smartlead's help centre 2026-08-26. It lives once in code, as
+`UNSUBSCRIBE_TOKEN` in `scripts/assemble.py`, and is appended to every assembled body.
+
+The tag alone does not give you a working opt-out. Two per-campaign UI settings decide
+whether it renders, and neither is reachable by API:
+
+- **"Add unsubscribe message in all emails" ON.** Also enables the one-click
+  **Unsubscribe Header Tag**, which Google requires of bulk senders.
+- **"Optimize Email Delivery" OFF.** It disables HTML content, and the unsubscribe link
+  goes with it. This is the usual cause of a missing link.
+
+**A test send cannot verify this.** Smartlead deliberately renders the link
+non-clickable in test emails, so it looks present and dead. Only the first real send
+proves it, so confirm on that send before releasing the rest of the leads.
+
+Why this is a hard gate and not a nicety: a working opt-out is a legal requirement for
+outbound email (CAN-SPAM), and the suppression rules in `config/hubspot-properties.md`
+assume prospects have a way to opt out in the first place.
+
 ## HubSpot activity logging (MANDATORY per campaign — MANUAL UI STEP, no API)
 
 Smartlead's HubSpot activity logging is what makes native "Last Contacted" /

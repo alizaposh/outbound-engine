@@ -122,9 +122,21 @@ passed. Branch distribution unchanged across every run: 25 `gmv`, 9 `competitor`
   own `from_name` values. All 12 read `warmup: ACTIVE`, up from `None` on 2026-08-20.
   Drafts now sign with a real identity, so generated copy is finally reviewable as
   final copy.
-- **The unsubscribe token is now the LAST send-blocker.** Still the literal
-  `{{UNSUBSCRIBE_TOKEN}}` placeholder; needs the real Smartlead merge tag confirmed in
-  the account before any send. (The booking-link placeholder was resolved 2026-08-21:
+- **Unsubscribe tag: RESOLVED 2026-08-26.** It is `%unsubscribe-text%`
+  (percent-delimited, not curly braces), confirmed against Smartlead's help centre and
+  now in `scripts/assemble.py`. Drafts no longer end in a fake footer, which matters for
+  a copy review: reviewers see what prospects will see.
+- **What remains is not a code blocker but a campaign-creation gate.** Two per-campaign
+  UI toggles decide whether the tag renders, and neither is reachable by API: "Add
+  unsubscribe message in all emails" ON (which also enables the one-click header tag
+  Google requires) and "Optimize Email Delivery" OFF (it disables HTML and takes the
+  link with it). **A test send cannot verify this** — Smartlead renders the link
+  non-clickable in test emails by design, so it looks present and dead. Only the first
+  real send proves it. Recorded as step 4 of `instructions/campaign-creation.md`, beside
+  the activity-logging gate, and surfaced by `assemble.py` on every run so it cannot be
+  forgotten. That makes **three** manual UI toggles on the first campaign: activity
+  logging, unsubscribe message, and Optimize Email Delivery off.
+  (The booking-link placeholder was resolved 2026-08-21:
   `https://meetings.hubspot.com/zach-hickman`, verified reachable.)
 - All six `outbound_*` properties now exist in the portal (five on 2026-08-24,
   `outbound_last_campaign_id` on 2026-08-25). Nothing on the property side is blocking.

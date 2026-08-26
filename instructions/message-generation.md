@@ -536,10 +536,14 @@ What the copy itself must still do:
   list. The real opt-out is Smartlead's unsubscribe token, emitted by the assembly
   step, which is what keeps one-click opt-outs wired into Smartlead's own tracking,
   which the suppression list and `instructions/reply-handling.md` depend on.
-  - The token lives in one place, `UNSUBSCRIBE_TOKEN` in `scripts/assemble.py`. It is
-    currently the placeholder `{{UNSUBSCRIBE_TOKEN}}`, pending
-    `[FILL IN: confirm the exact merge tag in the Smartlead account; do not guess the
-    string]`. While it is a placeholder, campaigns are **not send-ready**.
+  - The token lives in one place, `UNSUBSCRIBE_TOKEN` in `scripts/assemble.py`, and is
+    **`%unsubscribe-text%`** as of 2026-08-26 (percent-delimited, not curly braces;
+    confirmed against Smartlead's help centre). Never retype it into copy: assembly
+    appends it, and the generator must not write it.
+  - **The tag being right does not make a campaign send-ready.** Two per-campaign UI
+    toggles decide whether it renders at all: "Add unsubscribe message in all emails"
+    ON and "Optimize Email Delivery" OFF. See `config/smartlead-defaults.md` and step 4
+    of `instructions/campaign-creation.md`.
 - The body must not contradict the footer, and must never suggest the opt-out is
   unavailable, conditional, or slower than one click.
 - Never obscure that this is outbound from Posh.
