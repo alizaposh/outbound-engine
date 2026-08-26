@@ -239,10 +239,11 @@ Email 3 may use a short greeting because it is brief enough to read as a friendl
   a second sentence in the middle paragraph, never the question.
 - **One CTA. One.** Two asks ("let me know if you're open to connecting" plus "free for
   a 15 min chat?") is the pattern to avoid, however natural it feels when typing.
-- **An exemplar's phrasing propagates, so nothing in one may sit next to a banned
-  family.** Shape 1D once read "Worth knowing what else is out there" and three emails
-  generalised it into "worth a quick call", which is a hard FAIL. If a phrase is one word
-  away from something banned, it does not belong in an exemplar.
+- **An exemplar's phrasing propagates, so watch what sits next to it.** Shape 1D once
+  read "Worth knowing what else is out there" and three emails generalised it into "worth
+  a quick call". That is no longer a FAIL (the CTA bans were lifted 2026-08-26) but it is
+  still the weaker CTA, and the mechanism is the point: whatever an exemplar is one word
+  away from, the model will eventually write.
 - **Use the opening variant you were handed** (`shapes.opening` in the research note),
   filled with this contact's details. Code picks one of the shape's variants per contact,
   because asking the model to "vary the first sentence" did nothing: within a shape, 13 of

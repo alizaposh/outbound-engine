@@ -216,6 +216,27 @@ blunt patterns measure 0.
 
 Run state: 30 WARN, 4 FAIL, 0 sender mismatches, email 1 median 62.5 words.
 
+### Both CTA bans removed 2026-08-26 (tab `Test9`, 1 FAIL of 34)
+
+`config/banned-phrases.md` no longer contains any CTA entry. Both went by explicit
+decision from the person running outbound: `any opportunity to compare what posh could put
+together` (it appears in the sales team's own live email) and the vague-ask
+`worth a (quick) conversation / chat / call / comparison / look` family. Both had been
+banned on AE feedback from Ashley, so the reversals are dated in that file rather than
+deleted, in case the AEs raise them again.
+
+**The CTA is now the only part of the copy with no machine guardrail.** The file still
+catches invented features, competitor disparagement, retired stats, local-community
+claims, guarantees, and outcome promises, all verified after the removal. Six places that
+called the CTA families a hard FAIL were corrected, because docs claiming an enforcement
+that does not exist are worse than no docs. The guidance survives as judgement: a concrete
+offer ("happy to put a comparison together, want me to?") reads better than a vague ask
+("worth a look?"), and if a weak pattern returns at volume nothing will flag it. CTA
+quality now depends on the review step rather than the pipeline.
+
+Run after removal: 33 WARN, **1 FAIL** (a 9-word subject, not a CTA), 22 repairs, email 1
+median 60.5 words, "worth a ..." used 3 times and passing.
+
 ### Still open on the copy
 
 - **Email 1 length: median 62.5, inside target, but 15 of 34 still over the 65 ceiling.**
@@ -232,8 +253,9 @@ Run state: 30 WARN, 4 FAIL, 0 sender mismatches, email 1 median 62.5 words.
 - **The rep's live email also carries TWO CTAs** ("let me know if you're open to
   connecting" plus "free for a 15 min chat?"). The one-CTA rule still stands and was not
   relaxed alongside the phrase un-ban. Worth confirming that is intended.
-- **Three of the four remaining FAILs are the "worth a ..." family**, now the only banned
-  CTA construction. Shape 1D's blunt register keeps reaching for it.
+- **CTA quality is unguarded now.** Nothing checks it, so a weak pattern at volume will
+  only surface when someone reads the review Sheet. Worth watching in the first AE scoring
+  round after this change.
 
 ### Superseded: email 1 is uniform, and the voice anchor is why
 

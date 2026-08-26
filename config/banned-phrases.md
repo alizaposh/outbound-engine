@@ -12,12 +12,24 @@ Add to this list whenever a review catches a phrasing the rules already forbid b
 model produced anyway. Each entry should note why, so nobody removes it later without
 understanding what it prevented.
 
-**Removed 2026-08-26: `any opportunity to compare what posh could put together`.** It was
-banned on AE feedback (Ashley: "reads like the spam I get") and has been un-banned by an
-explicit call from the person running outbound: the phrasing is acceptable and appears in
-the sales team's own live email. Recorded rather than quietly dropped, so the reversal is
-visible if the AEs raise it again. **The vague "worth a ..." family stays banned** and is
-a separate rule: that one is a non-offer, not a stiff offer.
+**Removed 2026-08-26, both CTA entries, by explicit decision from the person running
+outbound.** Recorded rather than quietly dropped, so the reversals are visible if the AEs
+raise them again.
+
+- `any opportunity to compare what posh could put together` — banned on AE feedback
+  (Ashley: "reads like the spam I get"), un-banned because it appears in the sales team's
+  own live email.
+- `worth a (quick) conversation / chat / call / comparison / look` — the vague-ask family.
+  Banned after "worth a quick comparison" and "worth a conversation about whether that
+  pencils out" shipped in real runs.
+
+**Consequence worth stating plainly: no CTA phrasing is machine-checked any more.** This
+file still catches invented features, competitor disparagement, retired stats, local-
+community claims, and outcome promises, but the CTA is now judged by humans in review
+only. The "name the thing you will do rather than softening the ask" guidance in
+`instructions/message-generation.md` is therefore advice, not an enforced rule, and the
+places that called it a hard FAIL have been corrected so the docs do not claim an
+enforcement that no longer exists.
 
 ## Literal
 
@@ -55,13 +67,6 @@ a separate rule: that one is a non-offer, not a stiff offer.
   The cold-diagnosis opener named in the Voice anchor's this-not-that pair.
 - `(huge|large|active)\s+(and\s+\w+\s+)?community\s+in\s+[A-Z]`
   Any local-community claim. National prospecting, no city-specific claim approved.
-- `worth\s+a\s+(quick\s+|short\s+)?(conversation|chat|call|comparison|look)\b`
-  The vague-ask CTA family. Was a literal for "worth a quick conversation", which
-  missed siblings: "worth a quick comparison" and "worth a conversation about whether
-  that pencils out" both shipped in real runs. The CTA must be a concrete offer. Note
-  this matches only the "worth a ..." framing, so "happy to put together a tailored
-  comparison, want me to?" is untouched. Hard FAIL, never auto-repaired: rewriting a
-  CTA is editorial, not mechanical.
 - `(will|guaranteed to)\s+sell\s+out`
   Outcome promise. "help sell out your next event?" as a question is approved; a
   statement that it will happen is not.

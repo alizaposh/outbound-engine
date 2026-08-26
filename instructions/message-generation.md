@@ -77,9 +77,9 @@ rule.*
 ## 5. Voice
 
 - Casual and human. Write like a real person typing a quick note.
-- **"Any opportunity to compare what Posh could put together?" is ALLOWED again** (un-banned 2026-08-26 by an explicit call: it appears in the sales team's own live email). It was banned on _Ashley's_ feedback ("CTAs are way too AI ... too fluffed up ... like the spam I get"), so the reversal is recorded rather than quietly dropped. Still avoid *stiff, passive* CTAs generally, and the vague "worth a ..." family remains a hard FAIL: that one is a non-offer rather than a stiff offer.
+- **No CTA phrasing is banned any more** (both CTA entries removed 2026-08-26 by explicit call). "Any opportunity to compare what Posh could put together?" and the "worth a quick chat / look" family are both allowed; the first appears in the sales team's own live email. They were originally banned on _Ashley's_ feedback ("CTAs are way too AI ... too fluffed up ... like the spam I get"), so the reversal is recorded rather than quietly dropped. **A concrete offer still reads better than a vague ask, but that is now guidance for the writer and for review, not a check.**
 - **Watch for AI tells:** vivid-but-hollow phrases like "firefighting through it." _Feedback: West Coast Makers flagged that exact phrase._
-- CTAs are plain questions that offer to do one thing: "want me to show you?", "happy to put together a quick comparison, want me to?". Never a mini-pitch. Note the "worth a look / chat / conversation" family is itself banned (`config/banned-phrases.md`): it is a vague ask, not an offer.
+- CTAs are plain questions that offer to do one thing: "want me to show you?", "happy to put together a quick comparison, want me to?". Never a mini-pitch. A concrete offer ("happy to put a comparison together") lands better than a vague ask ("worth a look?"), though neither is machine-checked now.
 
 ## 6. Claims & proof points (accuracy guardrails)
 
@@ -314,9 +314,10 @@ shapes file where exactly one reaches you at a time.
 - **The CTA is a plain, concrete question.** Offer to *do* one specific thing and ask if
   they want it: "happy to put together a quick comparison, want me to?", "want me to
   show you how that'd look?", "open to seeing what we'd put together for your next one?".
-  - **Do NOT use** the "worth a quick conversation / chat / call / comparison / look"
-    family. It is a hard FAIL in `config/banned-phrases.md`: a vague ask, not an offer.
-    The fix is to name the thing you will do, not to soften the ask.
+  - **Prefer a concrete offer to a vague ask.** "Happy to put a comparison together,
+    want me to?" beats "worth a quick look?". Neither is banned any more, so this is
+    judgement rather than a rule: name the thing you will do rather than softening the
+    ask.
 - **One idea per email, developed fully.** Email 1 carries the warm question plus **one**
   facet of the package, not the whole bundle. Concrete nouns over abstract benefit
   language. Short sentences.
@@ -432,9 +433,9 @@ it stays caught rather than prevented.
   4. **Close on a concrete-offer CTA, in the anchor's register.** Offer to *do*
      something: "happy to put together a tailored comparison, want me to?", "any
      opportunity to compare what we could put together for your next one?". This email
-     defaults to the vague hedge if left to itself, and the whole "worth a quick
-     chat/look/conversation" family is a hard FAIL in `config/banned-phrases.md`. The
-     fix is not to soften that ask, it is to make a real offer instead.
+     defaults to the vague hedge if left to itself. The "worth a quick chat/look/
+     conversation" family is no longer banned, but it is still the weaker choice: make a
+     real offer rather than softening the ask.
      **Vary the ask from Email 1's.** If Email 1 offered a custom proposal, offer the
      tailored comparison here, or offer to walk them through the specific angle this
      email developed. The same ask three times reads automated.
@@ -458,11 +459,11 @@ it stays caught rather than prevented.
   together a quick comparison for your next one, want me to?", "want me to show you how
   that'd look?", or "open to seeing what we'd put together for your next one?" Name the
   one thing you will do, then ask.
-  - **Banned:** the vague "worth a quick conversation / chat / call / comparison / look"
-    family. A hard FAIL; the authoritative list is `config/banned-phrases.md`. The fix
-    for a weak ask is to name the thing you will do, never to soften it further.
-    ("Any opportunity to compare what Posh could put together?" was banned on AE
-    feedback and un-banned 2026-08-26 by explicit decision.)
+  - **No CTA phrasing is banned** as of 2026-08-26: both the "worth a ..." family and
+    "any opportunity to compare what Posh could put together" were un-banned by explicit
+    decision. `config/banned-phrases.md` still catches invented features, disparagement,
+    retired stats, local-community claims, and outcome promises, but the CTA is a human
+    judgement now. The fix for a weak ask is still to name the thing you will do.
   - Persona-specific wording lives in `config/personas.md`.
 - **One clear CTA per email. No stacked asks.**
 - **Keep the opener link-light.** A booking link in a cold first email can hurt
