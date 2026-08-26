@@ -117,10 +117,15 @@ passed. Branch distribution unchanged across every run: 25 `gmv`, 9 `competitor`
 
 ### Still parked
 
-- **Placeholder sender names** in `config/senders.md` and the **unconfirmed Smartlead
-  unsubscribe token** remain deliberate send-blockers. Both clear during Smartlead
-  setup, still pending finance approval. (The booking-link placeholder is resolved:
-  `https://meetings.hubspot.com/zach-hickman`, verified reachable 2026-08-21.)
+- **Sender names: RESOLVED 2026-08-26.** `config/senders.md` now holds the real 12
+  mailboxes (Carl / Brooke / Zach across the 4 warmed domains), copied from Smartlead's
+  own `from_name` values. All 12 read `warmup: ACTIVE`, up from `None` on 2026-08-20.
+  Drafts now sign with a real identity, so generated copy is finally reviewable as
+  final copy.
+- **The unsubscribe token is now the LAST send-blocker.** Still the literal
+  `{{UNSUBSCRIBE_TOKEN}}` placeholder; needs the real Smartlead merge tag confirmed in
+  the account before any send. (The booking-link placeholder was resolved 2026-08-21:
+  `https://meetings.hubspot.com/zach-hickman`, verified reachable.)
 - All six `outbound_*` properties now exist in the portal (five on 2026-08-24,
   `outbound_last_campaign_id` on 2026-08-25). Nothing on the property side is blocking.
 - **Mailbox-assignment timing.** Assembly needs the sender name during generation, but
