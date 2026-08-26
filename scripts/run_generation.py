@@ -65,6 +65,12 @@ class Contact:
     email: str = ""
     jobtitle: str | None = None
     company: str | None = None
+    # The organizer's brand name. HubSpot's native `company` is empty for cold prospects
+    # (a Company record only exists once someone becomes a Posh organizer), so this is
+    # the name to actually use. Distinct on every lead, which makes it the strongest
+    # personalization lever available.
+    prospect_org: str | None = None
+    city: str | None = None
     current_competitor: str | None = None
     estimated_gmv_usd: int | None = None
     vertical: str | None = None
@@ -77,7 +83,8 @@ class Contact:
 
     @property
     def display(self) -> str:
-        return self.first_name or self.email or self.hs_object_id or "(unknown)"
+        return (self.first_name or self.prospect_org or self.email
+                or self.hs_object_id or "(unknown)")
 
 
 @dataclass
@@ -238,20 +245,46 @@ def callback_note(c: Contact) -> dict | None:
     }
 
 
-def research_note(c: Contact, persona, basis, platform_known) -> dict:
-    """estimated_gmv_usd is deliberately absent: it routes upstream and stops."""
+def research_note(c: Contact, persona, basis, platform_known,
+                  sender_name: str = "", sender_intro: str = "") -> dict:
+    """estimated_gmv_usd is deliberately absent: it routes upstream and stops.
+
+    sender_name / sender_intro are the ACTUAL sending identity for this run, from
+    config/senders.md. They are passed in rather than left to the model: when the three
+    intro lines sat as a table in the rulebook, a 34-contact run put the wrong name in
+    18 of 34 emails, signing "Carl" while the body said "I'm Brooke".
+    """
     note = {
         "first_name": c.first_name, "last_name": c.last_name,
-        "jobtitle": c.jobtitle, "company": c.company,
+        "jobtitle": c.jobtitle,
+        # prospect_org first: it is the name a human would actually use for them.
+        "organization": c.prospect_org or c.company,
+        "company": c.company,
         "email_domain": c.email.split("@")[-1] if "@" in c.email else None,
         "vertical": c.vertical,
         "current_competitor": (f"appears to be {c.current_competitor}"
                                if platform_known else None),
         "competitor_confidence": "high" if platform_known else "unknown",
+        "organization_guidance": (
+            "`organization` is this organizer's actual brand name. It is the most "
+            "specific thing you know about them, so let it shape what the email is "
+            "ABOUT, not just get name-dropped: what a Bachata social needs is not what "
+            "a maker's market or a warehouse party needs. Never invent or guess it."
+            if (c.prospect_org or c.company) else
+            "No organization name is known for this lead. Do not invent one, and do not "
+            "guess it from the email domain."),
         "persona": persona, "persona_basis": basis,
         "platform_known": platform_known,
         "needs_human_review": basis.startswith("flag"),
         "callback": callback_note(c),
+        "sender": {
+            "first_name": sender_name,
+            "intro_line": sender_intro,
+            "guidance": (
+                "This email is sent BY this person and signed with this name. Open "
+                "email 1 with exactly this intro line, near the top, and never name a "
+                "different sender anywhere in the sequence."),
+        },
         "guidance": (
             "The current platform is UNKNOWN. Use the no-platform fallback: ask the "
             "generic setup question and name NO platform anywhere. Never guess one."
@@ -311,7 +344,7 @@ def generate_with_retry(client, model, rulebook, instruction, note):
 
 def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                     identity, sender_map, footer, token, literals, regexes,
-                    failure_fallback):
+                    failure_fallback, sender_name, sender_intro):
     persona, basis, platform_known = route(c)
     res = ContactResult(contact=c, persona=persona, persona_basis=basis,
                         platform_known=platform_known)
@@ -321,7 +354,7 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                      "flagged for human review, not generated")
         return res
 
-    note = research_note(c, persona, basis, platform_known)
+    note = research_note(c, persona, basis, platform_known, sender_name, sender_intro)
     emails, attempts, bid, err = generate_with_retry(
         client, model, rulebook, instruction, note)
     res.attempts, res.bedrock_message_id = attempts, bid
@@ -413,6 +446,8 @@ def load_contacts(path: pathlib.Path) -> list[Contact]:
                 email=clean(row.get("email")) or "",
                 jobtitle=clean(row.get("job_title")) or clean(row.get("jobtitle")),
                 company=clean(row.get("company")),
+                prospect_org=clean(row.get("prospect_org")),
+                city=clean(row.get("city")),
                 current_competitor=clean(row.get("current_competitor")),
                 estimated_gmv_usd=int(float(gmv)) if gmv else None,
                 vertical=clean(row.get("vertical")),
@@ -441,7 +476,10 @@ def main(argv=None) -> int:
     footer = assemble.build_footer(identity)
     token = assemble.UNSUBSCRIBE_TOKEN
     literals, regexes = validate.load_banned()
-    assemble.resolve_sender_name(a.mailbox, sender_map)   # fail fast on a bad mailbox
+    # Resolve the sending identity once, up front: an unmapped mailbox or a missing
+    # intro line must stop the run before a single email is generated with the wrong name.
+    sender_name = assemble.resolve_sender_name(a.mailbox, sender_map)
+    sender_intro = assemble.resolve_sender_intro(a.mailbox)
 
     print("SEND-READINESS BLOCKERS (drafting is fine; sending is not)")
     for b in assemble.send_readiness_blockers(sender_map) or ["  (none)"]:
@@ -462,7 +500,8 @@ def main(argv=None) -> int:
                             mailbox=a.mailbox, identity=identity,
                             sender_map=sender_map, footer=footer, token=token,
                             literals=literals, regexes=regexes,
-                            failure_fallback=failure_fallback)
+                            failure_fallback=failure_fallback,
+                            sender_name=sender_name, sender_intro=sender_intro)
         results.append(r)
         # Fallback rows carry committed copy, not model output. Scoring them would
         # inflate the pass rate with emails the model never wrote.

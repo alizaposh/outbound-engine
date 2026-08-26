@@ -37,6 +37,26 @@ reproducing the string.
 mailbox added, removed, or renamed there must be changed here too. An unmapped mailbox
 aborts the batch (see Rules), which is the intended way to find out.
 
+## Email-1 intro line
+
+The self-introduction email 1 opens with, one per sender identity. **Supplied to the
+generator per run** (`research_note` in `scripts/run_generation.py` passes the sending
+mailbox's line); the model must never pick one. It used to live as a three-row table in
+the rulebook, which the model read as a menu: a 34-contact run came back with the wrong
+name in 18 of 34 emails, signing "Carl" while the body said "I'm Brooke".
+
+| first name | intro line |
+|------------|------------|
+| Carl       | I'm Carl, I run partnerships at Posh. |
+| Brooke     | I'm Brooke, I run partnerships at Posh. |
+| Zach       | I'm Zach, I help organizers get set up on Posh. |
+
+- **It belongs at the OPENING of email 1**, not the end. Placement is set by the voice
+  anchor in `instructions/message-generation.md`.
+- One line per sender, used across all campaigns for now.
+- Zach's differs on purpose: he is the SDR and meeting owner, so "I help organizers get
+  set up" fits, while Carl and Brooke are partnerships correspondents.
+
 ## Rules
 - **The sign-off name must match the mailbox's `From` name.** A signature that
   disagrees with the sending identity is a deliverability signal and a compliance

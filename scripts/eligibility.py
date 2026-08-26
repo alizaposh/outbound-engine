@@ -63,7 +63,14 @@ GATED = {
     "notes_last_contacted": "gate 9 recency",
     "hs_last_sales_activity_timestamp": "gate 9 recency",
 }
-CARRY = ["firstname", "lastname", "jobtitle", "company"]  # transparency / handoff only
+# Carried through for generation and review, not gated on.
+# prospect_org is the organizer's brand name and the single strongest personalization
+# lever available: populated on every lead and distinct on every one. HubSpot's native
+# `company` is empty for cold prospects by design -- a Company record is only created
+# once someone becomes a Posh organizer -- so reading `company` and finding it blank
+# looked like "no data to personalize with" when the name was sitting on the contact
+# the whole time. 34 emails were generated without it.
+CARRY = ["firstname", "lastname", "jobtitle", "company", "prospect_org", "city"]
 
 OUT_COLUMNS = ["email", "hubspot_contact_id", "decision", "reason", "exclusion_tier",
                "notes_last_updated", "notes_last_contacted",
@@ -71,7 +78,8 @@ OUT_COLUMNS = ["email", "hubspot_contact_id", "decision", "reason", "exclusion_t
                "owner", "outbound_status", "outbound_recycle_after"]
 # The shape run_generation.py --contacts expects.
 ELIGIBLE_COLUMNS = ["hs_object_id", "first_name", "last_name", "email", "job_title",
-                    "company", "current_competitor", "estimated_gmv_usd", "vertical"]
+                    "company", "prospect_org", "city", "current_competitor",
+                    "estimated_gmv_usd", "vertical"]
 
 
 # ---- config -------------------------------------------------------------------
@@ -429,6 +437,10 @@ def main(argv=None) -> int:
                 "email": email,
                 "job_title": lead.get("job_title") or p.get("jobtitle", ""),
                 "company": lead.get("company") or p.get("company", ""),
+                # HubSpot wins over the input CSV here: the lead list rarely carries the
+                # org name, and the contact property is populated and per-contact unique.
+                "prospect_org": p.get("prospect_org") or lead.get("prospect_org", ""),
+                "city": p.get("city") or lead.get("city", ""),
                 "current_competitor": lead.get("current_competitor", ""),
                 "estimated_gmv_usd": lead.get("estimated_gmv_usd", ""),
                 "vertical": lead.get("vertical", ""),

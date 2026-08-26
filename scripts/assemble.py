@@ -76,24 +76,45 @@ def load_sender_identity(path: pathlib.Path = POSITIONING) -> SenderIdentity:
     )
 
 
-def load_sender_map(path: pathlib.Path = SENDERS) -> dict[str, str]:
-    """Parse the mailbox -> first name table from senders.md."""
+MAILBOX_SECTION = "mailbox to sender"
+INTRO_SECTION = "email-1 intro line"
+
+
+def _tables_by_section(path: pathlib.Path) -> dict[str, list[tuple[str, str]]]:
+    """Two-column markdown rows, grouped by the `##` heading they sit under.
+
+    Section-scoped on purpose. A flat "any table row" parse read senders.md's second
+    table as more mailboxes, producing entries like 'carl' -> "I'm Carl, I run
+    partnerships at Posh." -- an intro line that could be returned as a SIGN-OFF.
+    """
     if not path.exists():
         raise AssemblyError(f"senders.md not found at {path}")
-
-    mapping: dict[str, str] = {}
+    out: dict[str, list[tuple[str, str]]] = {}
+    section = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
+        if line.startswith("## "):
+            section = line[3:].strip().lower()
+            continue
         if not line.startswith("|") or line.count("|") < 3:
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
-        if len(cells) < 2:
+        if len(cells) < 2 or not cells[0] or not cells[1]:
             continue
-        mailbox, name = cells[0], cells[1]
-        # Skip the header row and its separator.
-        if mailbox.lower() == "mailbox" or set(mailbox) <= set("-: "):
+        if set(cells[0]) <= set("-: "):            # separator row
             continue
-        if not mailbox or not name:
+        out.setdefault(section, []).append((cells[0], cells[1]))
+    return out
+
+
+def load_sender_map(path: pathlib.Path = SENDERS) -> dict[str, str]:
+    """Parse the mailbox -> first name table from senders.md."""
+    rows = _tables_by_section(path).get(MAILBOX_SECTION, [])
+    mapping: dict[str, str] = {}
+    for mailbox, name in rows:
+        if mailbox.lower() == "mailbox":            # header
+            continue
+        if "@" not in mailbox:                      # belt and braces: a mailbox has an @
             continue
         key = mailbox.lower()
         if key in mapping:
@@ -104,8 +125,38 @@ def load_sender_map(path: pathlib.Path = SENDERS) -> dict[str, str]:
         mapping[key] = name
 
     if not mapping:
-        raise AssemblyError(f"No mailbox rows parsed from {path.name}.")
+        raise AssemblyError(
+            f"No mailbox rows parsed from {path.name}. Expected a two-column table "
+            f"under a '## {MAILBOX_SECTION.title()}' heading.")
     return mapping
+
+
+def load_sender_intros(path: pathlib.Path = SENDERS) -> dict[str, str]:
+    """first name -> the email-1 self-introduction line for that sender.
+
+    Passed to the generator per run so the model never chooses. When these lived as a
+    menu in the rulebook, a 34-contact run put the wrong name in 18 of 34 emails: the
+    email signed "Carl" while the body said "I'm Brooke".
+    """
+    rows = _tables_by_section(path).get(INTRO_SECTION, [])
+    intros = {n: line for n, line in rows if n.lower() not in ("first name", "sender")}
+    if not intros:
+        raise AssemblyError(
+            f"No intro lines parsed from {path.name}. Expected a two-column table "
+            f"under a '## Email-1 intro line' heading.")
+    return intros
+
+
+def resolve_sender_intro(mailbox: str) -> str:
+    """The intro line for whoever sends from this mailbox. Hard failure if absent:
+    a missing intro is how an email ends up introducing the wrong person."""
+    name = resolve_sender_name(mailbox)
+    intros = load_sender_intros()
+    if name not in intros:
+        raise AssemblyError(
+            f"No email-1 intro line for sender {name!r} in {SENDERS.name}. "
+            f"Known: {', '.join(sorted(intros)) or '(none)'}")
+    return intros[name]
 
 
 def resolve_sender_name(mailbox: str, sender_map: dict[str, str] | None = None) -> str:

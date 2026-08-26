@@ -92,7 +92,63 @@ out truncation.
 passed. Branch distribution unchanged across every run: 25 `gmv`, 9 `competitor`,
 12 Pro, 22 Premium, one `platform_known=False`.
 
-### Next task: a 34-run on the three newest changes
+### 34-run done 2026-08-26 (logged to the review Sheet, tab `Test3`)
+
+Ran the 34 across three senders (12 Carl / 11 Brooke / 11 Zach) and exported to the
+Generation Review Sheet via the new `scripts/export_review.py`. 30 WARN, 4 FAIL, 0
+generation errors. **What it found matters more than the pass rate.**
+
+**Fixed as a result:**
+- **The sender was wrong in 18 of 34 emails.** The email signed "Carl" while the body
+  said "I'm Brooke". Cause: the three intro lines sat as a table in §7 of the rulebook
+  and the model read them as a menu, while `assemble.py` signed the real mailbox owner.
+  A misrepresented sender breaks golden rule 2 and outbound-email law, so the fix was to
+  remove the choice: intro lines moved to `config/senders.md`, and `run_generation`
+  resolves the sending mailbox's line up front and passes it as `sender.intro_line`. An
+  unmapped mailbox or missing intro aborts the run before a single email is written.
+  Re-run: **0 of 34**.
+- **The self-introduction sat at the bottom of email 1**, reading like a signature block.
+  Cause was the anchor itself: both example emails ended with it. Moved to the second
+  line in both. Re-run: intro near the top in **34 of 34**.
+- **A crash, not a finding:** `check_stat_budget` called `m.group(1)` after
+  `STAT_MENTION` was broadened to `\b\d+\s*%` and lost its capture group. It took the
+  whole first run down the moment an email contained any percentage. Earlier 2-3 contact
+  runs never produced one. Fixed, with 4 self-test cases.
+- **`load_sender_map` parsed any markdown table in senders.md.** Adding the intro table
+  produced entries like `'carl' -> "I'm Carl, I run partnerships at Posh."`, an intro
+  line that could have been returned as a **sign-off**. Parsing is now section-aware and
+  a mailbox cell must contain `@`.
+
+### OPEN: email 1 is uniform, and the voice anchor is why
+
+Measured across the 34: **34/34 share the same paragraph structure**, 34/34 use "open to
+seeing what else is out there", 34/34 end "want me to?", 29/34 "happy to put together a
+quick comparison", 28/34 "still running tickets through".
+
+**Cause: the anchor is one complete email injected verbatim into every prompt**, so the
+model fills in the blanks. The rulebook saying "this is a tone target, not a template"
+does not counteract a concrete example. Same mechanism as "Quick follow-up" opening 33
+of 34 email 2s.
+
+**`prospect_org` was added and did NOT fix it.** Worth recording precisely, because the
+first hypothesis was wrong: HubSpot's native `company` is empty on every cold prospect
+by design (a Company record only exists once someone becomes a Posh organizer), which
+looked like "no data to personalize with". The organizer's brand name was on the contact
+the whole time as **`prospect_org`, populated on 34/34 and distinct on all 34**, along
+with `city` (11 distinct), `competitor_profile_url`, `website` and `lead_score`. It is
+now fetched, carried through `ELIGIBLE_COLUMNS`, and passed to the model as
+`organization`. Emails do now say "Gotham's Den events", "Mo Mami", "for the LAB". But
+on a 6-contact check **6/6 still opened with the same sentence**: the new specificity
+lands *inside* the fixed frame. Data was not the bottleneck; the exemplar is.
+
+**Next, and it is a design decision, not a fix:** replace the single anchor with 3-4
+short exemplars in deliberately dissimilar shapes and instruct rotation; or drop the
+full example for prose register guidance, trading tone control for variety; or add
+per-vertical openers, now that `vertical` (34/34) and the org name are both available.
+Do not run another 34 before this changes: it would produce the same shape with better
+nouns and teach nobody anything.
+
+### Superseded: 34-run on the three newest changes
 
 **The CTA rule, the verbatim-reuse rule, and the batch check have only been seen on a
 5-contact sample.** None is validated at 34. Run it and read, in order:

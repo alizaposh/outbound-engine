@@ -422,7 +422,11 @@ def check_stat_budget(messages: list[tuple[int, str, str]]) -> list[Finding]:
     hits: list[tuple[int, str]] = []
     for position, subject, body in messages:
         for m in STAT_MENTION.finditer(f"{subject}\n{body}"):
-            hits.append((position, m.group(1) + "%"))
+            # group(0), not group(1): STAT_MENTION was broadened from \b(13|40)\s*% to
+            # \b\d+\s*% when the two approved stats were retired, which removed the
+            # capture group. group(1) raised IndexError and took the whole run down the
+            # first time a generated email contained any percentage at all.
+            hits.append((position, m.group(0).strip()))
     if len(hits) <= 1:
         return []
     where = ", ".join(f"m{p}:{s}" for p, s in hits)
@@ -536,8 +540,32 @@ SUBJECT_SHAPE_CASES = [
 ]
 
 
+STAT_BUDGET_CASES = [
+    # (messages, expect_findings, why)
+    ([(1, "s", "no numbers here"), (2, "", "none either"), (3, "", "clean")], False,
+     "no percentages, nothing to report"),
+    ([(1, "s", "we convert 40% better"), (2, "", "clean"), (3, "", "clean")], False,
+     "a single mention is within budget (and already FAILs per-message)"),
+    ([(1, "s", "13% of tickets"), (2, "", "converts 40% better"), (3, "", "")], True,
+     "two mentions across the sequence"),
+    ([(1, "s", "up 30% this year"), (2, "", "another 30% claim"), (3, "", "")], True,
+     "arbitrary percentages must be counted too, not just the retired 13/40"),
+]
+
+
 def _self_test() -> int:
     failures = 0
+    for messages, expect, why in STAT_BUDGET_CASES:
+        try:
+            got = bool(check_stat_budget(messages))
+        except Exception as e:                      # a crash here took down a whole run
+            print(f"  FAIL check_stat_budget raised {type(e).__name__}: {e}  ({why})")
+            failures += 1
+            continue
+        ok = got == expect
+        failures += not ok
+        print(f"  {'ok  ' if ok else 'FAIL'} stat_budget {'flags' if got else 'quiet'} "
+              f"(want {'flags' if expect else 'quiet'})  {why}")
     for subject, position, expect_fail, why in SUBJECT_SHAPE_CASES:
         findings = check_subject_shape(subject, "body text", position=position)
         got_fail = any(f.severity == FAIL for f in findings)

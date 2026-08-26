@@ -50,6 +50,31 @@ Per `instructions/reply-handling.md`, `out_of_office` and `automated_reply` are 
 replies — they must not advance the lead, and they must not consume human attention
 either. The append function drops them.
 
+## Generation Review (draft copy for the sales team)
+
+The 3-email drafts a run produced, one row per contact, for the sales team to score.
+
+```
+GENERATION_REVIEW_SHEET_ID: 1M15_NNFf8hqJcaGs5Bddiwt8aqs-U-oXydC5GWVApLc
+GENERATION_REVIEW_TAB: Test2
+```
+
+**One tab per run.** `Test1` holds the 2026-08-19 run scored by the AEs, whose feedback
+became the "Sales-team messaging rules" block in `instructions/message-generation.md`.
+Keeping each run on its own tab is what makes a before/after comparison possible, so
+point `GENERATION_REVIEW_TAB` at a new tab per run rather than appending to an old one.
+
+**26 columns, and the layout is the sheet's, not the CSV's.** It is close to
+`run_generation.COLUMNS` but not identical, so the export maps explicitly:
+- **`Seller`** (column B) is in the sheet but not the CSV. It is the sender first name
+  for the run's mailbox, from `config/senders.md`.
+- **`company`** is in the CSV but not the sheet.
+- **`Ranking (X/5)`** and **`Feedback`** (Y, Z) are the **human's**. Code never writes
+  them, exactly as with `decision`/`notes` on the reply queue: a row must not arrive
+  pre-scored.
+
+Writes append below the existing header row and never rewrite it.
+
 ## Auth
 
 Service-account JSON key, path in **`GOOGLE_SERVICE_ACCOUNT_JSON`** (`.env`,

@@ -55,7 +55,7 @@ rule.*
 
 - **Before writing, check for a warm open (§9).** If the contact has a genuine prior interaction on the HubSpot timeline, open with a callback per §9. Otherwise, write a cold open as below.
 - **Vary the opening across leads.** Do not default every email to "Are you still running [competitor], or open to seeing what else is out there?" Open differently depending on what's actually notable about the lead: their vertical, the kind of events they run, their role, their competitor. Two leads in a row should not start the same way.
-- Must still include: the sender's self-introduction (name + one-line role, see §7), one problem or angle tied to the lead, and a soft reply-based CTA (a plain question).
+- Must still include: the sender's self-introduction **near the top** (the exact `sender.intro_line` from the research note, never a name you picked; see §7), one problem or angle tied to the lead, and a soft reply-based CTA (a plain question). It used to sit at the bottom of email 1, which read like a signature block rather than an introduction.
 - **The hard guardrails still apply. Freedom is in the wording, not the rules.** Short (§3), one idea only (§2), human voice with no AI tells (§5), and only real claims (§6). "Write freely" does not mean longer, does not mean feature-dump, and does not mean fluff. Those are exactly what got down-scored.
 
 ### Email 2
@@ -94,11 +94,16 @@ rule.*
 Sequences send from **3 identities across 4 domains** (12 mailboxes total). Every
 meeting books with Zach regardless of sender.
 
-| Sender | Email-1 intro line |
-|---|---|
-| Carl Newmark | "I'm Carl, I run partnerships at Posh." |
-| Brooke Carrobis | "I'm Brooke, I run partnerships at Posh." |
-| Zach Hickman | "I'm Zach, I help organizers get set up on Posh." |
+**The sender is supplied, never chosen.** The run's sending mailbox decides who sends,
+and the research note carries that person's `sender.first_name` and `sender.intro_line`.
+Use the intro line verbatim, near the top of email 1. The lines themselves live in
+`config/senders.md`.
+
+They are deliberately **not listed here any more.** A three-row table in this file read
+as a menu: a 34-contact run put the wrong name in 18 of 34 emails, signing "Carl" while
+the body said "I'm Brooke". A misrepresented sender breaks golden rule 2 and applicable
+outbound-email law, so the fix was to remove the choice rather than add an instruction
+telling the model not to make it.
 
 - **No booking link in this rulebook.** The cold sequence carries none, so there is no
   handoff wording to specify here. Zach's link belongs to the reply stage and lives in
@@ -289,9 +294,9 @@ pitch.
 
 > Hey [first name],
 >
-> Are you still running tickets through [competitor], or open to seeing what else is
-> out there? Fair thing to sit on, since most organizers only go looking when
-> something starts to pinch.
+> I'm [sender name], I run partnerships at Posh. Are you still running tickets through
+> [competitor], or open to seeing what else is out there? Fair thing to sit on, since
+> most organizers only go looking when something starts to pinch.
 >
 > For a lot of the people we work with, the pinch is that the actual run of the event
 > lives across three different tools. [competitor] covers one piece, and the guest
@@ -299,14 +304,19 @@ pitch.
 > place, so the admin stops eating your week.
 >
 > Happy to put together a quick comparison for your next one, want me to?
->
-> I'm [sender name], I run partnerships at Posh.
 
 ### This is a tone target, not a template
 
 - **The bracketed specifics are illustrative.** Never hardcode a literal from the
   example: no platform or person name carried over. Use the actual prospect's details
   from the research note, and the real sender's name and role.
+- **The intro line goes near the TOP of email 1, not the bottom.** It is supplied in the
+  research note as `sender.intro_line` and must be used **verbatim**. Never choose a
+  sender, never invent a role, and never name a different person anywhere in the
+  sequence. A run that let the model pick put the wrong name in 18 of 34 emails: the
+  email signed "Carl" while the body said "I'm Brooke", which misrepresents the sender.
+- **Emails 2 and 3 carry no self-introduction.** They are threaded replies from the same
+  person; re-introducing yourself reads like a different sender.
 - **Do not reference New York, or any city.** Prospecting is national. Never claim a
   local community anywhere.
 - **Do not reuse the greeting.** Vary the opening line across prospects. Thirty emails
@@ -352,8 +362,9 @@ sender did not look. Ask the generic question and name no platform anywhere.
 
 > Hey [first name],
 >
-> Are you locked in on your current ticketing setup, or open to seeing what else is out
-> there? Most organizers only go looking when something starts to pinch.
+> I'm [sender name], I run partnerships at Posh. Are you locked in on your current
+> ticketing setup, or open to seeing what else is out there? Most organizers only go
+> looking when something starts to pinch.
 >
 > For a lot of the people we work with, the pinch is that the run of the event lives
 > across a few different tools: guest list in one place, approvals in another, payouts
@@ -361,8 +372,6 @@ sender did not look. Ask the generic question and name no platform anywhere.
 > eating your week.
 >
 > Happy to put together a quick comparison for your next one, want me to?
->
-> I'm [sender name], I run partnerships at Posh.
 
 Same register, same greeting-variation caveat. This is the main example with the
 platform reference removed.
