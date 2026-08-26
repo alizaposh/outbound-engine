@@ -35,12 +35,15 @@ NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
 
 # Length is a target, never a gate: check_length only ever emits WARN.
 # Positional: messages 1 and 2 carry one angle each; message 3 is a breakup.
-# Recalibrated 2026-08-25 from {1,2: (80,110), 3: (40,70)} to match the sales-team rule
-# "short throughout, roughly half the length of a bloated draft" and "email 3 is the
-# shortest" (instructions/message-generation.md §3). The old floors were pushing copy
-# toward the length the AEs down-scored: "too long" appeared in most scored rows, and
-# the team's own gold-standard sequence failed the old targets (m2 at 70, m3 at 37).
-LENGTH_TARGETS = {1: (45, 90), 2: (45, 90), 3: (20, 50)}
+# Recalibrated twice, downward both times.
+#   original      {1,2: (80,110), 3: (40,70)}
+#   2026-08-25    {1,2: (45,90),  3: (20,50)}
+#   2026-08-26    below
+# The second cut was still too generous: a 34-run came back at an 81-word median for
+# email 1 and read as marketing rather than as a rep typing a note. A real email from
+# the sales team runs about 60 words of body. These bands are set around that, so the
+# ceiling is what a rep actually sends rather than what a model will pad to.
+LENGTH_TARGETS = {1: (35, 65), 2: (30, 60), 3: (18, 42)}
 
 # Subject word count. Widened from 2-5 to 2-6 to 2-7 as the warmer SDR voice settled:
 # it pulls subjects toward short natural phrases rather than clipped fragments.
@@ -187,7 +190,23 @@ def check_approved_stats(subject: str, body: str) -> list[Finding]:
     return out
 
 
-def check_subject_shape(subject: str, body: str, *, position: int = 1) -> list[Finding]:
+def _name_tokens(names) -> set[str]:
+    """Words drawn from this contact's own proper nouns, lowercased.
+
+    An organizer's brand name is a legitimate proper noun even when it breaks the
+    casing rule: "the LAB" is all caps and "LAB's" is a possessive of it, and neither
+    is shouting. Without this the subject "quick question about the LAB's ticketing"
+    FAILs, which is correct copy failing a rule aimed at marketing-headline casing.
+    """
+    out = set()
+    for n in names or ():
+        for w in re.findall(r"[\w'&-]+", str(n)):
+            out.add(w.lower().removesuffix("'s"))
+    return out
+
+
+def check_subject_shape(subject: str, body: str, *, position: int = 1,
+                        allowed_names=()) -> list[Finding]:
     """Shape-check the subject. Emails 2 and 3 are threaded replies and inherit the
     thread subject, so an EMPTY subject is correct for them and skips the check.
 
@@ -203,6 +222,7 @@ def check_subject_shape(subject: str, body: str, *, position: int = 1) -> list[F
     register the rule exists to prevent.
     """
     out = []
+    known = _name_tokens(allowed_names)
     words = subject.split()
     if not words and position in (2, 3):
         return out
@@ -218,6 +238,12 @@ def check_subject_shape(subject: str, body: str, *, position: int = 1) -> list[F
         if not stripped or not any(c.isalpha() for c in stripped):
             continue
         alpha_words.append(stripped)
+        # A word from this contact's own name or organization is a proper noun by
+        # definition, whatever its casing. Possessives normalise: LAB's -> lab.
+        if stripped.lower().removesuffix("'s") in known:
+            if stripped[0].isupper():
+                capitalized.append(stripped)
+            continue
         if stripped[0].isupper():
             capitalized.append(stripped)
         if not any(c.isupper() for c in stripped):
@@ -391,11 +417,13 @@ def check_length(subject: str, body: str, *, position: int, footer: str) -> list
 
 def validate_email(subject: str, body: str, *, position: int, footer: str, token: str,
                    literals, regexes, raw_body: str | None = None,
-                   label: str = "", competitor_known: bool = True) -> EmailResult:
+                   label: str = "", competitor_known: bool = True,
+                   allowed_names=()) -> EmailResult:
     res = EmailResult(label=label or f"message_{position}")
     res.findings += check_no_dashes(subject, body)
     res.findings += check_approved_stats(subject, body)
-    res.findings += check_subject_shape(subject, body, position=position)
+    res.findings += check_subject_shape(subject, body, position=position,
+                                        allowed_names=allowed_names)
     res.findings += check_footer(subject, body, footer=footer, token=token)
     res.findings += check_no_real_optout_url(subject, body)
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
@@ -539,6 +567,25 @@ SUBJECT_SHAPE_CASES = [
      "over the word ceiling"),
 ]
 
+# Subjects that must PASS only because the contact's own proper nouns are supplied.
+# Real failures from the 2026-08-26 run: an all-caps org name and a possessive of one.
+SUBJECT_NAME_CASES = [
+    ("quick question about the LAB's ticketing", ["the LAB"], False,
+     "possessive of an all-caps org name is a proper noun, not shouting"),
+    ("quick question about the LAB's ticketing", [], True,
+     "without the org name there is no way to tell it from shouting"),
+    ("still using RA for Philadeep events?", ["Philadeep"], False,
+     "canonical acronym plus a supplied proper noun"),
+    ("IYKYK ticketing setup", ["If You Know You Know", "IYKYK"], False,
+     "org name that is itself an acronym"),
+    ("BIG SALE on tickets", ["the LAB"], True,
+     "shouting is still shouting when a name is supplied"),
+    ("still using DICE for Rose Gold events?", ["Rose Gold Entertainment", "DICE"], False,
+     "an all-caps COMPETITOR name is a proper noun too, not shouting"),
+    ("still running Club Underground on DICE?", ["Club Underground", "DICE"], False,
+     "org name plus all-caps platform name"),
+]
+
 
 STAT_BUDGET_CASES = [
     # (messages, expect_findings, why)
@@ -555,6 +602,14 @@ STAT_BUDGET_CASES = [
 
 def _self_test() -> int:
     failures = 0
+    for subject, names, expect_fail, why in SUBJECT_NAME_CASES:
+        f = check_subject_shape(subject, "body", position=1, allowed_names=names)
+        got = any(x.severity == FAIL for x in f)
+        ok = got == expect_fail
+        failures += not ok
+        print(f"  {'ok  ' if ok else 'FAIL'} names={len(names)} "
+              f"{'FAIL' if got else 'PASS'} (want {'FAIL' if expect_fail else 'PASS'})"
+              f"  {why}")
     for messages, expect, why in STAT_BUDGET_CASES:
         try:
             got = bool(check_stat_budget(messages))

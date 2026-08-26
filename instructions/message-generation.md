@@ -288,93 +288,73 @@ generation prompt**, next to the output contract, by `scripts/repair.py`
 <!-- VOICE-ANCHOR:BEGIN -->
 ### The register to match
 
-This is a real SDR email. Match its **register**: warm, direct, genuinely excited to
-help. Not a consultant diagnosing the prospect's problems, and not a stiff corporate
-pitch.
+Warm, direct, genuinely excited to help. A real SDR typing a quick note: not a
+consultant diagnosing the prospect's problems, and not a stiff corporate pitch.
 
-> Hey [first name],
->
-> I'm [sender name], I run partnerships at Posh. Are you still running tickets through
-> [competitor], or open to seeing what else is out there? Fair thing to sit on, since
-> most organizers only go looking when something starts to pinch.
->
-> For a lot of the people we work with, the pinch is that the actual run of the event
-> lives across three different tools. [competitor] covers one piece, and the guest
-> list, approvals, and payouts end up somewhere else. Posh pulls all of that into one
-> place, so the admin stops eating your week.
->
-> Happy to put together a quick comparison for your next one, want me to?
+**The email's shape is assigned per contact** and arrives in the research note as
+`shape.spec` (from `config/message-shapes.md`). Write that shape. This section governs
+the *voice*; the shape governs the structure.
 
-### This is a tone target, not a template
-
-- **The bracketed specifics are illustrative.** Never hardcode a literal from the
-  example: no platform or person name carried over. Use the actual prospect's details
-  from the research note, and the real sender's name and role.
-- **The intro line goes near the TOP of email 1, not the bottom.** It is supplied in the
-  research note as `sender.intro_line` and must be used **verbatim**. Never choose a
-  sender, never invent a role, and never name a different person anywhere in the
-  sequence. A run that let the model pick put the wrong name in 18 of 34 emails: the
-  email signed "Carl" while the body said "I'm Brooke", which misrepresents the sender.
-- **Emails 2 and 3 carry no self-introduction.** They are threaded replies from the same
-  person; re-introducing yourself reads like a different sender.
-- **Do not reference New York, or any city.** Prospecting is national. Never claim a
-  local community anywhere.
-- **Do not reuse the greeting.** Vary the opening line across prospects. Thirty emails
-  opening identically reads more templated than any single phrase ever could.
-- **Never reuse an opening sentence verbatim across prospects.** Recurring opener
-  *structures* are fine; the identical sentence landing in two inboxes is not. Keep the
-  structure, change the words: what pinches *this* organizer, in *their* vertical, is
-  different every time.
-- **This anchor uses no dashes, on purpose.** Hard constraint 1 forbids em and en
-  dashes in everything you write. Keep it that way: a period, comma, colon, or
-  parentheses instead.
+**No full example email lives here on purpose.** One used to, and the model treated it
+as a form to fill in: a 34-contact run reproduced its paragraph structure 34 out of 34
+times, its opening clause 34/34 and its closing question 34/34. A concrete example
+outweighs any instruction telling you not to copy it, so the examples moved to the
+shapes file where exactly one reaches you at a time.
 
 ### Tone rules
 
-- **Open warm, then ask about their current setup.** "Are you still running tickets
-  through [competitor]?" Do **not** open with a diagnosis of what is wrong with their
-  tool. Never open with "Managing events on [platform] works, but...".
-- **The CTA is a plain, concrete question.** Offer to *do* one specific thing and ask
-  if they want it. Use this family: "happy to put together a quick comparison, want me
-  to?", "want me to show you how that'd look?", "open to seeing what we'd put together
-  for your next one?".
+- **Open with a REASON FOR REACHING OUT, then ask about their current setup.** The first
+  line has to answer "why am I getting this?". "Reaching out to see if you're locked in
+  on your current ticketing setup" or "While looking at the event scene in [city], [org]
+  stood out, so I wanted to reach out" both do. An assertion about them does not:
+  "You're running [org] on [competitor] right now" reads as surveillance, and "Quick one
+  about [org]:" opens on a demand.
+- Do **not** open with a diagnosis of what is wrong with their tool. Never open with
+  "Managing events on [platform] works, but...".
+- **The CTA is a plain, concrete question.** Offer to *do* one specific thing and ask if
+  they want it: "happy to put together a quick comparison, want me to?", "want me to
+  show you how that'd look?", "open to seeing what we'd put together for your next one?".
   - **Do NOT use** "any opportunity to compare what Posh could put together in a custom
     proposal", or its "custom proposal" / "competitive offer" variants. _AE feedback
     (Ashley): reads as AI and like inbox spam._
   - **Do NOT use** the "worth a quick conversation / chat / call / comparison / look"
-    family. It is a hard FAIL in `config/banned-phrases.md`: a vague ask, not an
-    offer. The fix is to name the thing you will do, not to soften the ask.
-- **One idea per email, developed fully.** Email 1 carries the warm question plus
-  **one** facet of the package, not the whole bundle. The other facets belong in emails
-  2 and 3. Concrete nouns over abstract benefit language. Short sentences.
+    family. It is a hard FAIL in `config/banned-phrases.md`: a vague ask, not an offer.
+    The fix is to name the thing you will do, not to soften the ask.
+- **One idea per email, developed fully.** Email 1 carries the warm question plus **one**
+  facet of the package, not the whole bundle. Concrete nouns over abstract benefit
+  language. Short sentences.
 - **Sell with warmth, not fluff.** The bundle (dedicated account support, financial
-  incentives, marketing push) is real, but naming all of it in one breath is the
-  feature dump the AEs down-scored. Pick the single facet that fits this persona.
-- **At most one stat per 3-email sequence.** Lead with the package and the offer, not a
-  number. A stat in every opener reads corporate.
+  incentives, marketing push) is real, but naming all of it in one breath is the feature
+  dump the AEs down-scored. Pick the single facet that fits this persona and band.
+- **No explainer clauses.** State the thing and stop. Never add a clause telling the
+  prospect why it matters or what most tools get wrong: "which is the part most ticketing
+  tools are worst at", "that is the part that usually lives scattered across three
+  tools", "most organizers only go looking when something starts to pinch". A rep does
+  not explain the problem back to the person who has it. Punchy, direct, light hearted.
+  Not sales, not marketing.
+- **Shorter than feels finished.** Email 1 is 35 to 65 words of body. A real email from
+  the sales team is about 60. When over, cut an explainer clause or the second sentence
+  of the middle paragraph, never the question.
+- **Write to THIS organizer.** `organization`, `city`, `vertical`, `volume_angle` and the
+  competitor are all in the research note. A shape filled with generic nouns is the
+  failure the shapes exist to prevent.
+- **Never reuse an opening sentence across prospects.** Recurring structures are fine
+  because the shape is assigned; the identical sentence landing in two inboxes is not.
+- **Never claim a local footprint.** Referencing the prospect's own city is fine and
+  reads as someone who looked. Claiming Posh has a community, presence, or scene
+  anywhere is an unsupported claim. That distinction is the whole rule.
+- **No dashes anywhere.** Hard constraint 1 forbids em and en dashes. Use a period,
+  comma, colon, or parentheses.
+- **At most one stat per sequence, and no numeric performance stats at all** (hard
+  constraint 2). Lead with the package and the offer.
 
 ### When the current platform is unknown
 
 If the research note has no usable `current_competitor`, **never guess one.** Do not
-infer a platform from the vertical, the company name, or the email domain. A wrong
+infer a platform from the vertical, the organization name, or the email domain. A wrong
 platform named confidently is the most expensive mistake in a cold email: it proves the
-sender did not look. Ask the generic question and name no platform anywhere.
-
-> Hey [first name],
->
-> I'm [sender name], I run partnerships at Posh. Are you locked in on your current
-> ticketing setup, or open to seeing what else is out there? Most organizers only go
-> looking when something starts to pinch.
->
-> For a lot of the people we work with, the pinch is that the run of the event lives
-> across a few different tools: guest list in one place, approvals in another, payouts
-> somewhere else again. Posh pulls all of that into one place, so the admin stops
-> eating your week.
->
-> Happy to put together a quick comparison for your next one, want me to?
-
-Same register, same greeting-variation caveat. This is the main example with the
-platform reference removed.
+sender did not look. Ask the generic version of the assigned shape's question and name
+no platform anywhere.
 
 ### This, not that
 
@@ -387,7 +367,11 @@ platform reference removed.
 > Any opportunity to compare what Posh could put together in a custom proposal for your
 > next run of events?
 
-**THIS** (warm question, one concrete idea, plain offer): the register example above.
+**NOT** (a claim we cannot support):
+> We have a huge and active community in New York.
+
+**THIS**: the shape you were assigned, filled with this organizer's own details, in the
+register above.
 <!-- VOICE-ANCHOR:END -->
 
 ## Hard constraints

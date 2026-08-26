@@ -18,6 +18,49 @@ competitor signal**, whatever platform the prospect appears to be on.
 > $100k band routes to Pro on purpose and is wider than the real definition. Revisit
 > once volume allows and move it back toward $100,000.
 
+### Volume bands: a finer cut than the persona, for the ANGLE
+
+The Premium/Pro split above decides *which persona* writes. These bands decide *what
+the email is about*. They are deliberately a separate, finer cut: two organizers can
+both route Premium and still need different emails.
+
+| band | `estimated_gmv_usd` | what they actually care about |
+|---|---|---|
+| `emerging` | under $25,000 | Getting the same people to come back. Turnout is the whole problem, and they are doing promo by hand. |
+| `established` | $25,000 to $99,999 | The admin around a working event: guest approvals, payouts, and reaching a crowd they already have. |
+| `scaled` | $100,000 and up | Not rebuilding operations per event or per city. Reliability, and support that answers on event day. |
+| `unknown` | blank (9 of 34 on the test list) | No band. Write the persona-neutral angle and assert nothing about their size. |
+
+**NEVER state or imply the figure.** The number is an internal estimate from a lead
+scrape, it is unverifiable by the prospect, and quoting someone's revenue back at them
+in a cold email reads as surveillance. `scripts/run_generation.py` asserts the raw value
+never reaches the model; only the band label and its angle are passed. Do not write
+"organizers at your scale", "given your volume", or any phrasing that reveals we hold an
+estimate.
+
+### City
+
+`city` comes from the same lead scrape as the rest of this data and is safe to
+reference (confirmed 2026-08-26). Populated on 34/34 of the test list, 11 distinct.
+
+- **Referencing THEIR city is fine.** It is a light, human detail: it reads as someone
+  who looked, not as a claim.
+- **Claiming POSH has a presence there is not.** "our huge and active community in New
+  York" is exactly the unsupported local-community claim the voice anchor bans. The rule
+  was never about the word "city"; it was about asserting a local footprint we cannot
+  back. That distinction is the whole rule.
+- Do not assert *where* their events happen beyond the city on record, and do not
+  compare cities or imply we are bigger in one than another.
+
+### Job title: register, not content
+
+`jobtitle` (26 of 34) shapes *how* the email talks, never what it claims.
+- Founder / owner / CEO: peer to peer, direct, they decide.
+- Marketing / promo / social roles: the workflow angle, since they do the manual work.
+- Talent buyer / booker / production: event-day mechanics.
+- Blank: default to the founder register. Most of these organizations are small enough
+  that it is usually right, and it is the least presumptuous of the three.
+
 ### Competitor signal
 Used when GMV is blank, and always for the switch angle regardless of how the
 prospect was routed.

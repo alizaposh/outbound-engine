@@ -39,6 +39,25 @@ MAX_ATTEMPTS = 2          # one retry; malformed JSON has been transient in prac
 MAX_TOKENS = 2000
 
 GMV_PRO_GATE = 50_000
+# Volume bands (config/personas.md). A FINER cut than the Premium/Pro persona split:
+# these choose the angle, not the voice. The raw figure never reaches the model.
+GMV_BANDS = ((25_000, "emerging"), (100_000, "established"))   # else "scaled"
+BAND_ANGLE = {
+    "emerging": ("Getting the same people to come back. Turnout is the whole problem "
+                 "and they are doing promo by hand."),
+    "established": ("The admin around a working event: guest approvals, payouts, and "
+                    "reaching a crowd they already have."),
+    "scaled": ("Not rebuilding operations per event or per city. Reliability, and "
+               "support that answers on event day."),
+}
+ROLE_REGISTER = (
+    (("founder", "owner", "ceo", "president", "principal"),
+     "Peer to peer and direct. They decide."),
+    (("marketing", "promo", "social", "brand", "content", "growth"),
+     "Lead on the workflow: they do the manual promo work themselves."),
+    (("talent", "booker", "booking", "production", "operations", "ops", "manager"),
+     "Event-day mechanics: load-in, door, payouts."),
+)
 UNUSABLE_COMPETITOR = {"", "other", "unknown", "n/a", "none", "null"}
 PRO_COMPETITORS = {"dice", "tixr", "shotgun"}
 PREMIUM_COMPETITORS = {"eventbrite", "instagram", "plots", "resident advisor",
@@ -51,6 +70,11 @@ RULEBOOK_FILES = ("config/positioning.md", "config/personas.md",
 # Static copy for contacts whose generation failed after every retry. Deliberately not
 # in RULEBOOK_FILES: a ready-made sequence in the prompt is something the model would
 # echo. See config/generation-failure-fallback.md.
+# Email-1 shapes, one assigned per contact. Deliberately NOT in RULEBOOK_FILES for the
+# same reason as the fallback copy: showing the model all four would let it blend them or
+# settle on a favourite, which is exactly how one anchor email became a template.
+SHAPES_FILE = "config/message-shapes.md"
+
 FALLBACK_FILE = "config/generation-failure-fallback.md"
 FALLBACK_STATUS = "GENERATION_FAILED_FALLBACK"
 
@@ -109,6 +133,7 @@ class ContactResult:
     attempts: int = 0
     error: str = ""
     used_fallback: bool = False
+    shape: str = ""
 
     @property
     def status(self) -> str:
@@ -245,8 +270,114 @@ def callback_note(c: Contact) -> dict | None:
     }
 
 
+def load_shapes(path: str = SHAPES_FILE) -> dict[int, dict[str, str]]:
+    """{1: {"A": "...", ...}, 2: {...}, 3: {...}} from config/message-shapes.md.
+
+    Sections are headed "## Shape 1A:" / "### Shape 2B:" and so on: the digit is the
+    email position, the letter the variant.
+    """
+    text = (ROOT / path).read_text(encoding="utf-8")
+    out: dict[int, dict[str, str]] = {}
+    pos = key = None
+    buf: list[str] = []
+
+    def flush():
+        if pos is not None and key is not None:
+            out.setdefault(pos, {})[key] = "\n".join(buf).strip()
+
+    for line in text.splitlines():
+        m = re.match(r"^#{2,3} Shape (\d)([A-Z]):\s*(.*)$", line)
+        if m:
+            flush()
+            pos, key = int(m.group(1)), m.group(2)
+            buf = [f"Shape {m.group(1)}{m.group(2)}: {m.group(3)}"]
+            continue
+        if re.match(r"^#{2,3} ", line) or line.startswith("---"):
+            flush()
+            pos = key = None
+            buf = []
+            continue
+        if key is not None:
+            buf.append(line)
+    flush()
+    missing = [p for p in POSITIONS if not out.get(p)]
+    if missing:
+        raise RuntimeError(f"{path}: no shapes found for message position(s) {missing}")
+    return out
+
+
+# Which shape a contact's signals support. Kept as data so the mapping is readable and
+# so a new band or shape does not mean editing branching logic.
+BAND_SHAPE = {
+    "emerging":    "B",   # B's "building a real regular crowd" IS the emerging angle
+    "established": "A",   # the standard setup question, platform named
+    "scaled":      "D",   # short and blunt: a busy operator, no hand-holding
+    "unknown":     "C",   # C asks rather than asserts, which is right when we know less
+}
+# Email 2: a colder or unsized lead gets the summary shape; a sized one gets a single
+# capability developed properly.
+BAND_SHAPE_M2 = {"emerging": "B", "unknown": "C", "established": "A", "scaled": "A"}
+# Email 3 follows email 1 so the thread keeps one voice: a blunt opener must not end in
+# a warm ramble.
+M1_TO_M3 = {"A": "A", "B": "A", "C": "B", "D": "C"}
+
+
+def assign_shapes(c: Contact, shapes: dict[int, dict[str, str]],
+                  platform_known: bool = True) -> dict[int, str]:
+    """One shape key per message position, chosen from THIS contact's signals.
+
+    Signal-driven, never round-robin and never hashed: each shape asserts different
+    things, so the wrong shape does not merely read oddly, it can state something we do
+    not know. Shapes 1A and 1D NAME the platform, so a contact whose competitor is
+    unusable must never draw them. That is a correctness gate and is checked first.
+
+    Division of labour, kept deliberately separate:
+      - volume_band picks the SHAPE, because a band says what the organizer needs.
+      - jobtitle picks the REGISTER (role_register), because a title says how to talk,
+        not what to talk about. An earlier version let a senior title pick the shape as
+        well, which double-counted it: nearly every organizer here is a Founder, so 24 of
+        34 drew the short blunt shape and variety collapsed the other way.
+    """
+    def pick(pos: int, want: str, fallback: str = "") -> str:
+        have = shapes.get(pos, {})
+        if want in have:
+            return want
+        if fallback in have:
+            return fallback
+        return sorted(have)[0] if have else ""
+
+    band = volume_band(c.estimated_gmv_usd)
+    m1 = "C" if not platform_known else BAND_SHAPE.get(band, "A")
+    m1 = pick(1, m1, "A")
+    return {1: m1,
+            2: pick(2, BAND_SHAPE_M2.get(band, "A"), "A"),
+            3: pick(3, M1_TO_M3.get(m1, "A"), "A")}
+
+
+def volume_band(gmv: int | None) -> str:
+    """Band label only. Blank GMV yields "unknown" and asserts nothing about size."""
+    if gmv is None:
+        return "unknown"
+    for ceiling, label in GMV_BANDS:
+        if gmv < ceiling:
+            return label
+    return "scaled"
+
+
+def role_register(jobtitle: str | None) -> str:
+    jt = (jobtitle or "").lower()
+    for needles, guidance in ROLE_REGISTER:
+        if any(n in jt for n in needles):
+            return guidance
+    # Blank or unrecognised: founder register. These organizations are small enough that
+    # it is usually right, and it is the least presumptuous of the three.
+    return "Peer to peer and direct. They decide."
+
+
 def research_note(c: Contact, persona, basis, platform_known,
-                  sender_name: str = "", sender_intro: str = "") -> dict:
+                  sender_name: str = "", sender_intro: str = "",
+                  shape_keys: dict | None = None,
+                  shape_specs: dict | None = None) -> dict:
     """estimated_gmv_usd is deliberately absent: it routes upstream and stops.
 
     sender_name / sender_intro are the ACTUAL sending identity for this run, from
@@ -265,6 +396,32 @@ def research_note(c: Contact, persona, basis, platform_known,
         "current_competitor": (f"appears to be {c.current_competitor}"
                                if platform_known else None),
         "competitor_confidence": "high" if platform_known else "unknown",
+        "shapes": {
+            "message_1": (shape_specs or {}).get(1, ""),
+            "message_2": (shape_specs or {}).get(2, ""),
+            "message_3": (shape_specs or {}).get(3, ""),
+            "assigned": (shape_keys or {}),
+            "guidance": (
+                "Write each email in ITS OWN assigned shape: follow the structure, the "
+                "length, and where it puts the intro line. These are register and "
+                "structure targets, not templates, so fill them with this contact's own "
+                "details. Do not substitute a shape, do not merge two, and do not reuse "
+                "a shape you have seen before."),
+        },
+        "city": c.city,
+        "city_guidance": (
+            "Referencing their city is fine and reads as someone who looked. NEVER "
+            "claim Posh has a community, presence, or scene anywhere, and never compare "
+            "cities. Do not assert where their events happen beyond this city."
+            if c.city else "No city on record. Do not guess one."),
+        "volume_band": volume_band(c.estimated_gmv_usd),
+        "volume_angle": BAND_ANGLE.get(volume_band(c.estimated_gmv_usd), ""),
+        "volume_guidance": (
+            "volume_band decides WHAT THE EMAIL IS ABOUT. You are never told the "
+            "underlying figure and must never state, imply, or hint that we hold an "
+            "estimate of their revenue: no \"organizers at your scale\", no \"given "
+            "your volume\". Write the angle, not the number."),
+        "role_register": role_register(c.jobtitle),
         "organization_guidance": (
             "`organization` is this organizer's actual brand name. It is the most "
             "specific thing you know about them, so let it shape what the email is "
@@ -344,7 +501,7 @@ def generate_with_retry(client, model, rulebook, instruction, note):
 
 def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                     identity, sender_map, footer, token, literals, regexes,
-                    failure_fallback, sender_name, sender_intro):
+                    failure_fallback, sender_name, sender_intro, shapes):
     persona, basis, platform_known = route(c)
     res = ContactResult(contact=c, persona=persona, persona_basis=basis,
                         platform_known=platform_known)
@@ -354,7 +511,11 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                      "flagged for human review, not generated")
         return res
 
-    note = research_note(c, persona, basis, platform_known, sender_name, sender_intro)
+    keys = assign_shapes(c, shapes, platform_known)
+    specs = {pos: shapes[pos][k] for pos, k in keys.items() if k}
+    note = research_note(c, persona, basis, platform_known, sender_name, sender_intro,
+                         keys, specs)
+    res.shape = "/".join(f"{p}{keys[p]}" for p in POSITIONS if keys.get(p))
     emails, attempts, bid, err = generate_with_retry(
         client, model, rulebook, instruction, note)
     res.attempts, res.bedrock_message_id = attempts, bid
@@ -383,6 +544,11 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
             m.get("subject", ""), body_final, position=position, footer=footer, token=token,
             literals=literals, regexes=regexes, raw_body=m["body"],
             competitor_known=platform_known,
+            # Proper nouns legitimately present in this email: the organizer's brand,
+            # the person, their city, and the COMPETITOR. Platform names are often all
+            # caps ("DICE"), which the shouting rule flagged until they were supplied.
+            allowed_names=[c.prospect_org, c.company, c.first_name, c.last_name,
+                           c.current_competitor, c.city],
             label=f"{c.display} message_{position}")
         res.messages.append(MessageResult(position, m.get("subject", ""), m["body"],
                                           body_final, records, v))
@@ -399,9 +565,10 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
 # ---- output -------------------------------------------------------------------
 
 COLUMNS = ["hs_object_id", "first_name", "last_name", "email", "job_title", "company",
+           "prospect_org", "city",
            "persona", "persona_basis", "platform_known", "current_competitor",
            "estimated_gmv_usd", "vertical", "validation", "generation_error",
-           "attempts", "repairs_applied", "sequence_findings", "bedrock_message_id",
+           "attempts", "repairs_applied", "sequence_findings", "shape", "bedrock_message_id",
            "message_1_subject", "message_1_body",
            "message_2_subject", "message_2_body",
            "message_3_subject", "message_3_body"]
@@ -417,10 +584,12 @@ def to_row(r: ContactResult) -> dict:
         "platform_known": r.platform_known,
         "current_competitor": c.current_competitor or "",
         "estimated_gmv_usd": "" if c.estimated_gmv_usd is None else c.estimated_gmv_usd,
+        "prospect_org": c.prospect_org or "", "city": c.city or "",
         "vertical": c.vertical or "", "validation": r.status,
         "generation_error": r.error, "attempts": r.attempts,
         "repairs_applied": sum(len(m.repairs) for m in r.messages),
         "sequence_findings": "; ".join(f.detail for f in r.sequence_findings),
+        "shape": r.shape,
         "bedrock_message_id": r.bedrock_message_id,
     }
     for p in POSITIONS:
@@ -489,6 +658,9 @@ def main(argv=None) -> int:
     if a.limit:
         contacts = contacts[:a.limit]
     failure_fallback = load_failure_fallback()
+    shapes = load_shapes()
+    print("shapes: " + "; ".join(f"m{p}={','.join(sorted(shapes[p]))}"
+                                 for p in POSITIONS) + " (assigned per contact)")
     rulebook, instruction = build_system_prompt()
     client = anthropic.AnthropicBedrock(aws_region=os.environ["AWS_REGION"])
     model = os.environ["BULK_LLM_MODEL"]
@@ -501,7 +673,8 @@ def main(argv=None) -> int:
                             sender_map=sender_map, footer=footer, token=token,
                             literals=literals, regexes=regexes,
                             failure_fallback=failure_fallback,
-                            sender_name=sender_name, sender_intro=sender_intro)
+                            sender_name=sender_name, sender_intro=sender_intro,
+                            shapes=shapes)
         results.append(r)
         # Fallback rows carry committed copy, not model output. Scoring them would
         # inflate the pass rate with emails the model never wrote.

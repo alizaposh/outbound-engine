@@ -119,7 +119,88 @@ generation errors. **What it found matters more than the pass rate.**
   line that could have been returned as a **sign-off**. Parsing is now section-aware and
   a mailbox cell must contain `@`.
 
-### OPEN: email 1 is uniform, and the voice anchor is why
+### RESOLVED 2026-08-26: uniformity, personalization, length, and the opening line
+
+Uniformity was the voice anchor: one complete email injected verbatim into every prompt,
+which the model filled in rather than matched. Measured before: same paragraph structure
+34/34, "open to seeing what else is out there" 34/34, "want me to?" 34/34.
+
+**The fix is structural, not instructional.** Shapes live in `config/message-shapes.md`,
+deliberately OUTSIDE `RULEBOOK_FILES` so only the one assigned to that contact reaches
+the model. Four shapes for email 1, three each for emails 2 and 3, and the anchor no
+longer contains a positive example email at all, only counter-examples.
+
+**Selection is signal-driven, never round-robin or hashed.** `volume_band` picks the
+shape (a band says what the organizer needs); `jobtitle` picks the register (a title says
+how to talk, not what about); a correctness gate runs first, because shapes 1A and 1D
+name the platform and a contact with an unusable competitor must never draw them. An
+interim version let job title pick the shape too, which double-counted it: nearly every
+organizer here is a Founder, so 24 of 34 drew the short shape. Email 3 follows email 1 so
+the thread keeps one voice.
+
+**Personalization: the data existed all along.** HubSpot's native `company` is empty for
+cold prospects by design, which looked like "nothing to personalize with". The brand name
+was on the contact as `prospect_org`, populated and distinct on 34/34, with `city`
+(11 distinct) beside it. Both now flow through `ELIGIBLE_COLUMNS` into the note. Volume
+bands drive the angle with the raw GMV figure still walled off from the model.
+
+**Length, cut twice.** {1,2: (80,110), 3: (40,70)} to {1,2: (45,90), 3: (20,50)} to
+{1: (35,65), 2: (30,60), 3: (18,42)}, set around the ~60 words of body a real rep email
+carries. Median email 1 went 108 -> 81 -> 64.
+
+**Opening line.** Assertions about the prospect ("You're running [org] on [competitor]
+right now", "Quick one about [org]:") read as surveillance. Every shape now opens with a
+REASON FOR REACHING OUT, because a cold email has to answer "why am I getting this?" in
+the first line. All four blunt patterns measure 0 occurrences.
+
+Results across the 34: "want me to?" 34/34 -> 4/34; "Quick follow-up" in email 2 33/34 ->
+0/34; org name used 0 -> 31/34; sender mismatches 18 -> 0; FAILs 4 -> 2. Logged to the
+review Sheet, tab `Test7`.
+
+### The recurring lesson, worth keeping
+
+**An exemplar beats an instruction, every time.** Nine separate failures this session had
+the same shape, and prose rules fixed none of them:
+
+- The anchor's example email became a template. Rule saying "this is a tone target, not a
+  template" did nothing. Moving the examples out fixed it.
+- The intro line sat at the bottom of email 1 because both anchor examples ended with it.
+- The anchor's own text contained em dashes while forbidding them; the model produced
+  dashes.
+- Shape 2B opened "Quick follow-up." while the rules below it said not to; 18 of 34
+  copied it verbatim.
+- Shape 1D read "Worth knowing what else is out there" and three emails generalised it
+  into "worth a quick call", a hard FAIL.
+- Shape 1C's subject took FIVE attempts: generic example got the org appended (7 of 10
+  FAILed), an org-bearing example was ignored, an explicit no-append rule was ignored, a
+  shortened body question was copied and extended anyway. Only PRESCRIBING the literal
+  string worked.
+- Banning four explainer phrasings produced two fresh ones. A structural rule (the middle
+  paragraph is one sentence) held where the blacklist leaked.
+
+Practical rule: if the model is doing something wrong, look for the exemplar teaching it
+before writing another instruction. If an exemplar can be extended or blended, prescribe
+the string instead of illustrating it.
+
+### Still open on the copy
+
+- **Email 1 length: median 64 against a 65 ceiling, but 14 of 34 over.** Nearly all the
+  excess is a second sentence in the middle paragraph. The one-sentence rule has leaked in
+  four phrasings, so enforcing it in `validate.py` is the honest next step rather than
+  asking again in prose.
+- **Shape 1D's opener drifts** to "Saw [org] is running on [competitor]" instead of the
+  written "Reaching out since...". Softer than the assertion it replaced, but still an
+  assertion. Prescribe it if the AEs flag it.
+- **Within a shape, openers are near-identical** (13 of 16 for 2A). Variety scales with
+  the number of shapes; instructions to vary do not work. Cheap next step: 2-3 alternative
+  first sentences per shape, picked by code.
+- **The 2 to 7 word subject limit fights long organization names** ("If You Know You
+  Know" is four words). Widening to 8 would clear the last subject FAIL.
+- **The AE-facing question:** the rep's own live email contains "Any opportunity to
+  compare what Posh could put together?", which is banned on Ashley's feedback, and two
+  CTAs. Not adopted. Worth an explicit decision rather than drift.
+
+### Superseded: email 1 is uniform, and the voice anchor is why
 
 Measured across the 34: **34/34 share the same paragraph structure**, 34/34 use "open to
 seeing what else is out there", 34/34 end "want me to?", 29/34 "happy to put together a
