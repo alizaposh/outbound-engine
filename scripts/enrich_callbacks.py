@@ -35,6 +35,7 @@ import datetime as dt
 import json
 import os
 import pathlib
+import re
 import sys
 import time
 
@@ -79,9 +80,18 @@ CALL_DISPOSITION = {
 CALL_STATUS_DEAD = {"CANCELED", "FAILED", "NO_ANSWER", "BUSY", "QUEUED", "RINGING",
                     "CONNECTING", "CALLING_CRM_USER", "IN_PROGRESS"}
 
-# hs_meeting_outcome is lowercase in the API: scheduled, completed, rescheduled,
-# "no show", canceled. A meeting that did not happen is not an interaction.
-MEETING_OUTCOME_DEAD = {"no show", "canceled", "cancelled"}
+# hs_meeting_outcome real values, read off the portal's own property definition:
+# SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW, CANCELED. HubSpot's docs say lowercase
+# with a space ("no show"); the API returns UPPERCASE_UNDERSCORE. Compared normalized,
+# because matching the documented spelling would have let NO_SHOW through as a genuine
+# interaction, which is precisely the false "good to reconnect" this exists to prevent.
+MEETING_OUTCOME_DEAD = {"NO_SHOW", "CANCELED", "CANCELLED", "RESCHEDULED"}
+
+# In this portal SCHEDULED is the default and nobody updates it (77 of the 100 most
+# recent meetings; COMPLETED appears zero times). So "outcome == COMPLETED" cannot be
+# the test for whether a meeting happened. The timestamp is: a meeting dated in the
+# future has definitionally not happened yet, whatever its outcome says.
+FUTURE_GRACE = dt.timedelta(hours=12)   # a meeting today is not yet a memory
 
 OUT_COLUMNS = ELIGIBLE_COLUMNS + ["callback_tier", "callback_detail",
                                   "callback_source_id", "callback_last_date"]
@@ -90,7 +100,10 @@ REVIEW_COLUMNS = ["email", "hs_object_id", "callback_tier", "callback_detail",
                   "evidence", "skipped_reason"]
 
 MODEL_ENV = "BULK_LLM_MODEL"
-MAX_DETAIL_CHARS = 4000     # trim engagement bodies before sending to the model
+# Gong call transcripts land in notes and run 20k+ chars, opening with small talk
+# ("Rep: beep... had to do the groceries"). A 4000-char cap cut the substance off
+# entirely, so the model saw only chit-chat and returned nothing.
+MAX_DETAIL_CHARS = 16000
 
 
 # ---- fetching -----------------------------------------------------------------
@@ -150,11 +163,21 @@ def _ts(v) -> dt.datetime | None:
         return None
 
 
-def is_two_way(eng: dict) -> tuple[bool, str]:
+def _norm_outcome(v) -> str:
+    return (v or "").strip().upper().replace(" ", "_")
+
+
+def is_two_way(eng: dict, now: dt.datetime | None = None) -> tuple[bool, str]:
     """Did a real two-way interaction happen? Returns (yes, human-readable reason)."""
+    now = now or dt.datetime.now(dt.timezone.utc)
     t = eng["_type"]
+    when = _ts(eng.get("hs_timestamp"))
+    # Nothing in the future is a memory. Applies to every type: a booked-but-unheld
+    # meeting is the common case, and it must never produce "good to reconnect".
+    if when and when > now - FUTURE_GRACE:
+        return False, f"{t[:-1]} is not in the past ({when.date()})"
     if t == "meetings":
-        outcome = (eng.get("hs_meeting_outcome") or "").strip().lower()
+        outcome = _norm_outcome(eng.get("hs_meeting_outcome"))
         if outcome in MEETING_OUTCOME_DEAD:
             return False, f"meeting {outcome}"
         return True, f"meeting ({outcome or 'no outcome set'})"
@@ -177,43 +200,116 @@ def is_two_way(eng: dict) -> tuple[bool, str]:
     return False, "note only"      # a note is context, never itself an interaction
 
 
-def pick_detail_source(engagements: list[dict], notes: list[dict]) -> tuple[dict | None, str]:
-    """The most recent two-way engagement that actually carries written detail.
+# Meeting bodies in this portal are the booking tool's own description, not rep notes:
+# "Quick 15-min demo to get you set up as a Posh Organizer. Looking forward!" plus a
+# join link and form answers. Left unfiltered, that yields a "specific" callback built
+# from our own calendar copy, and "get you set up as a Posh Organizer" would imply the
+# prospect is already a customer. These lines are stripped before anything is extracted.
+BOILERPLATE = re.compile(
+    r"(join link[^\n]*|https?://\S+|meet\.google\.com\S*|zoom\.us/\S+|"
+    r"looking forward!?|quick \d+.?min demo[^.]*\.|"
+    r"to get you set up as a posh organizer)", re.I)
+HTML_TAG = re.compile(r"<[^>]+>")
 
-    Notes attached to the contact are searched too, since reps often log the substance
-    as a note rather than in the call body.
+# Trust order for a detail source. Rep-written and prospect-written text first; the
+# calendar description last, because it is the one nobody typed for this conversation.
+SOURCE_TRUST = {"notes": 0, "calls": 1, "emails": 2, "meetings": 3}
+
+
+def clean_body(raw: str) -> str:
+    """Strip HTML, links, and calendar boilerplate. What remains is what a human
+    actually wrote about this contact, which is the only thing safe to paraphrase."""
+    txt = HTML_TAG.sub(" ", raw or "")
+    txt = txt.replace("&nbsp;", " ").replace("&amp;", "&")
+    txt = BOILERPLATE.sub(" ", txt)
+    return re.sub(r"\s+", " ", txt).strip()
+
+
+MAX_SOURCES_TRIED = 4       # cap the cheap-LLM calls per contact
+
+
+def detail_sources(engagements: list[dict], notes: list[dict]) -> list[tuple[dict, str]]:
+    """Candidate detail sources, best first.
+
+    Returns a LIST, not one pick: ranking by trust alone meant a single unhelpful
+    top-ranked source (a transcript full of small talk) blocked richer text further
+    down, and the contact silently fell back to soft. The caller tries these in order
+    until one yields a usable detail.
     """
     def text_of(e) -> str:
-        for k in ("hs_meeting_body", "hs_call_body", "hs_email_text", "hs_note_body"):
+        for k in ("hs_note_body", "hs_call_body", "hs_email_text", "hs_meeting_body"):
             v = (e.get(k) or "").strip()
             if v:
-                return v
+                return clean_body(v)
         return ""
 
-    candidates = [(e, text_of(e)) for e in engagements]
-    candidates += [(n, text_of(n)) for n in notes]
-    with_text = [(e, txt) for e, txt in candidates if len(txt) >= 25]
-    if not with_text:
-        return None, ""
-    with_text.sort(key=lambda pair: _ts(pair[0].get("hs_timestamp")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc),
-                   reverse=True)
-    return with_text[0][0], with_text[0][1][:MAX_DETAIL_CHARS]
+    candidates = [(e, text_of(e)) for e in engagements] + [(n, text_of(n)) for n in notes]
+    with_text = [(e, txt[:MAX_DETAIL_CHARS]) for e, txt in candidates if len(txt) >= 25]
+    with_text.sort(key=lambda pair: (
+        SOURCE_TRUST.get(pair[0].get("_type", ""), 9),
+        -(_ts(pair[0].get("hs_timestamp")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)).timestamp()))
+    return with_text[:MAX_SOURCES_TRIED]
 
 
-EXTRACT_PROMPT = """You are extracting a factual detail from a CRM engagement record so
-a salesperson can reference it in an email opener.
+# Screens the model's output. Added after a live dry-run returned 12/12 "specific",
+# almost all of it scheduling chatter ("confirmed call for tomorrow at 10:00 am EST")
+# or facts about OUR team ("Abby left Posh, Will Heyman is now the contact"). Both are
+# specific and faithful, and both are unusable: the first is stale the day after it was
+# logged, the second would leak our staffing to a prospect. Specific is not the same as
+# reusable, and the prompt alone did not hold that line.
+# Matched CONTEXTUALLY, not on bare keywords. A first pass rejected on the word
+# "confirmed" alone and threw away a genuinely good detail ("13 confirmed 2025 events").
+# What makes a detail unusable is a time/day reference or a scheduling ACTION, not a
+# word that also has an ordinary adjectival use.
+DETAIL_REJECT = re.compile(
+    r"("
+    # a specific day or clock time: stale the moment the log is a week old
+    r"\b(tomorrow|today|yesterday|next week|this week)\b|"
+    # Day names only after a scheduling preposition: bare day names appear in brand
+    # names, and "Sunday cleaning YouTube series" is a real prospect detail, not a date.
+    r"\b(on|for|this|next|last|by)\s+(monday|tuesday|wednesday|thursday|friday|"
+    # ...and not a recurring cadence: "on Sunday nights" and "on Sundays" describe how
+    # they run events, which is exactly the kind of fact worth referencing.
+    r"saturday|sunday)\b(?!s)(?!\s+(nights?|mornings?|afternoons?|evenings?))|"
+    r"\b\d{1,2}\s*(:\d{2})?\s*(a\.?m\.?|p\.?m\.?)\b|"
+    r"\b(est|edt|pst|pdt|cst|cdt|utc|gmt)\b|"
+    # a scheduling action, i.e. logistics rather than a fact about their business
+    r"\b(confirmed|scheduled|rescheduled|reschedul\w+|booked|accepted|agreed)\s+"
+    r"(a\s+|the\s+|to\s+|for\s+|meeting|call|demo|time|chat)|"
+    r"\b(call|meeting|demo)\s+(for|at|on)\s|"
+    r"\b(looping in|added to the call|invited to the call|calendar invite)\b|"
+    # facts about US, never to be echoed to a prospect
+    r"\bleft posh\b|\bpoint of contact\b|\bhanded? off\b|"
+    r"\bperformance review\b|\bpartnership document\b"
+    r")", re.I)
+
+EXTRACT_PROMPT = """You are extracting a REUSABLE FACT ABOUT THE PROSPECT'S BUSINESS from
+a CRM record, so a salesperson can reference it months later in an email opener.
 
 Return ONLY a JSON object:
 {"detail": "<short faithful paraphrase, or empty string>"}
 
-Rules, in order of importance:
+ACCEPT only facts about the prospect and their events that stay true over time:
+  - what platform they use and how they feel about it
+  - their event volume, cadence, venues, verticals, audience
+  - a constraint or priority they described (exclusivity, payouts, growth)
+
+REJECT (return an empty string) anything that is:
+  - SCHEDULING or LOGISTICS. "confirmed for tomorrow at 10am", "rescheduled", "looping
+    in a colleague", "call booked". This is stale the day after it is logged and reads
+    unhinged in an email months later.
+  - ABOUT OUR OWN TEAM OR PROCESS. Who owns the account, who left, internal reviews,
+    partnership docs, handoffs. Never echo our staffing back to a prospect.
+  - VAGUE ADMIN. "logged a call", "sent info", "follow up next week".
+  - A CALENDAR DESCRIPTION we wrote ourselves, e.g. a demo invite blurb.
+
+Other rules:
 1. FAITHFUL ONLY. Paraphrase what is written. Never add, infer, upgrade, or embellish.
    "Left a voicemail" must never become "we chatted".
-2. If the record holds no reusable, concrete detail about the contact's situation,
-   return an empty string. Vague admin text ("logged a call", "sent info", "follow up
-   next week") is NOT a reusable detail.
-3. One clause, under 20 words. No greeting, no pitch, no CTA.
-4. Do not name a competitor or a figure unless the record names it.
+2. One clause, under 20 words. No greeting, no pitch, no CTA.
+3. Do not name a competitor or a figure unless the record names it.
+4. When the record holds nothing that fits ACCEPT, return an empty string. That is the
+   expected outcome for most records and costs nothing.
 
 Record type: {kind}
 Record text:
@@ -235,12 +331,19 @@ def extract_detail(client, model: str, kind: str, text: str) -> str:
             if raw.lower().startswith("json"):
                 raw = raw[4:]
         detail = (json.loads(raw.strip()).get("detail") or "").strip()
-        return detail if 0 < len(detail) <= 200 else ""
+        if not (0 < len(detail) <= 200):
+            return ""
+        # Belt and braces over the prompt: a scheduling or internal-team detail is
+        # specific but not reusable, so it must not become a callback.
+        if DETAIL_REJECT.search(detail):
+            return ""
+        return detail
     except Exception:
         return ""
 
 
-def classify(timeline: dict[str, list[dict]], client=None, model: str = "") -> dict:
+def classify(timeline: dict[str, list[dict]], client=None, model: str = "",
+             now: dt.datetime | None = None) -> dict:
     """-> {tier, detail, source_id, last_date, interaction_kind, evidence, skipped_reason}"""
     blank = {"callback_tier": "none", "callback_detail": "", "callback_source_id": "",
              "callback_last_date": "", "interaction_kind": "", "evidence": "",
@@ -251,9 +354,10 @@ def classify(timeline: dict[str, list[dict]], client=None, model: str = "") -> d
     if not engagements and not notes:
         return {**blank, "skipped_reason": "no engagements on the timeline"}
 
+    now = now or dt.datetime.now(dt.timezone.utc)
     two_way, rejected = [], []
     for e in engagements:
-        ok, why = is_two_way(e)
+        ok, why = is_two_way(e, now)
         (two_way if ok else rejected).append((e, why))
 
     if not two_way:
@@ -269,24 +373,27 @@ def classify(timeline: dict[str, list[dict]], client=None, model: str = "") -> d
             "interaction_kind": kind,
             "evidence": f"{len(two_way)} two-way engagement(s); newest {kind}"}
 
-    src, text = pick_detail_source([e for e, _ in two_way], notes)
-    if src is None:
+    sources = detail_sources([e for e, _ in two_way], notes)
+    if not sources:
         return {**base, "callback_tier": "soft",
                 "callback_source_id": str(newest.get("_id", "")),
                 "skipped_reason": "real interaction, no reusable detail logged"}
 
     if client is None:
         return {**base, "callback_tier": "soft",
-                "callback_source_id": str(src.get("_id", "")),
+                "callback_source_id": str(sources[0][0].get("_id", "")),
                 "skipped_reason": "detail present but no LLM client (soft only)"}
 
-    detail = extract_detail(client, model, src.get("_type", "record"), text)
-    if not detail:
-        return {**base, "callback_tier": "soft",
-                "callback_source_id": str(src.get("_id", "")),
-                "skipped_reason": "model found no reusable detail"}
-    return {**base, "callback_tier": "specific", "callback_detail": detail,
-            "callback_source_id": str(src.get("_id", ""))}
+    # Try sources best-first; the first usable detail wins. Most records yield nothing,
+    # which is the expected outcome and costs only a soft callback.
+    for src, text in sources:
+        detail = extract_detail(client, model, src.get("_type", "record"), text)
+        if detail:
+            return {**base, "callback_tier": "specific", "callback_detail": detail,
+                    "callback_source_id": str(src.get("_id", ""))}
+    return {**base, "callback_tier": "soft",
+            "callback_source_id": str(sources[0][0].get("_id", "")),
+            "skipped_reason": f"no reusable detail in {len(sources)} candidate source(s)"}
 
 
 # ---- run ----------------------------------------------------------------------
@@ -377,5 +484,58 @@ def main(argv=None) -> int:
     return 0
 
 
+
+
+# ---- self-test ----------------------------------------------------------------
+# Every case below is a REAL detail the model produced during the 2026-08-26 live
+# dry-run. 10 of 12 were unusable, which is why the code screen exists at all.
+#   ./.venv/bin/python scripts/enrich_callbacks.py --self-test
+
+DETAIL_SCREEN_CASES = [
+    # (detail, expect_rejected, why)
+    ("DJ Mike's content focuses on nostalgic nineties R&B and hip-hop, targeting "
+     "mid-to-late twenties audience; started Sunday cleaning YouTube series three years "
+     "ago that grew to 1M+ views.", False,
+     "real prospect fact; 'Sunday cleaning' is a brand name, not a date"),
+    ("Fun & Flirty has 13 confirmed 2025 events; some venues require exclusive ticketing "
+     "platforms, but they plan 12 additional shows with full control over Posh ticketing.",
+     False, "real prospect fact; 'confirmed' here is an adjective, not a scheduling act"),
+    ("Abby left Posh and Will Heyman is now the primary point of contact; a call was "
+     "scheduled for 1:30 p.m. the next day.", True, "our staffing, never echo to a prospect"),
+    ("Meeting confirmed for tomorrow 10:00 am EST; Cyrus requested Pouya be invited to "
+     "the call.", True, "scheduling logistics, stale immediately"),
+    ("Cyrus confirmed tomorrow 10:00 am works for the call; also looping in Pouya.", True,
+     "scheduling logistics"),
+    ("Agreed to call tomorrow at 10:00 am EST", True, "scheduling logistics"),
+    ("Confirmed meeting for tomorrow at 10:00 am EST after rescheduling from original "
+     "time.", True, "scheduling logistics"),
+    ("H2 2024 performance review scheduled for January 15, 2025", True, "our internal process"),
+    ("Added suggestions to Posh x HQ2 2026 Partnership document", True, "our internal doc"),
+    ("Accepted meeting with Themba Daniels scheduled for Tuesday, August 26, 2025 at "
+     "3pm EDT", True, "scheduling logistics plus an internal name"),
+    ("They run about one event a month and are on Eventbrite, happy with it but curious "
+     "about payouts.", False, "the ideal case"),
+    ("Runs a monthly warehouse series on Sunday nights with roughly 300 attendees.",
+     False, "'Sunday nights' is their cadence, not an appointment"),
+]
+
+
+def _self_test() -> int:
+    failures = 0
+    for detail, expect_rejected, why in DETAIL_SCREEN_CASES:
+        rejected = bool(DETAIL_REJECT.search(detail))
+        ok = rejected == expect_rejected
+        failures += not ok
+        print(f"  {'ok  ' if ok else 'FAIL'} {'REJECT' if rejected else 'KEEP  '} "
+              f"(want {'REJECT' if expect_rejected else 'KEEP  '})  {why}")
+        if not ok:
+            print(f"         {detail[:100]}")
+    print(f"\n{len(DETAIL_SCREEN_CASES) - failures}/{len(DETAIL_SCREEN_CASES)} "
+          f"detail-screen cases passed")
+    return 1 if failures else 0
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        raise SystemExit(_self_test())
     raise SystemExit(main())

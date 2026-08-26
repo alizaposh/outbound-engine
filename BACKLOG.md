@@ -275,7 +275,7 @@ Rewrite the stages accordingly:
 
 ---
 
-## Prior-interaction callbacks — BUILT 2026-08-25, NOT YET RUN AGAINST HUBSPOT
+## Prior-interaction callbacks — BUILT 2026-08-25, DRY-RUN PASSED 2026-08-26
 `scripts/enrich_callbacks.py`. Reads a contact's HubSpot timeline and emits a callback
 for email 1 (`instructions/message-generation.md` §9, which holds the wording rules).
 Sits between eligibility and generation:
@@ -317,17 +317,67 @@ Property names and enums were confirmed against HubSpot's live docs rather than 
    `enrich_callbacks.py` raises a scope-naming error rather than treating a 403 as "no
    history", which would have turned every contact cold invisibly.
 
-### NEXT SESSION: run the dry-run (2026-08-26 or later)
-The only thing standing between this and a real campaign. The daily quota was still
-exhausted at the end of 2026-08-25, so **nothing here has touched a real HubSpot
-timeline yet.** Do not wire the enriched CSV into a campaign until it has.
+### Dry-run done 2026-08-26. It found five real bugs, all fixed.
+The quota reset, the endpoints and the `sales-email-read` scope both work, and the full
+chain now runs: enrichment feeds generation, `specific` opens with the faithful callback,
+`soft` opens with an acknowledgement only, and no email 2 or 3 carries a callback.
 
-- The **10-contact `--dry-run`** on contacts with known history: some with meetings plus
-  good notes, some with a meeting or call but no notes, some with only ignored outbound.
-  Confirm the tiers land `specific` / `soft` / `none` and that **every `specific` detail
-  is faithful to its source note**. Only then wire the enriched CSV into a real campaign.
-- Cost check at campaign scale: association reads plus one cheap-LLM call per contact
-  that has a real interaction. It runs on the ELIGIBLE set only.
+**Every one of these was invisible to offline tests, which is the argument for the
+dry-run gate:**
+
+1. **`hs_meeting_outcome` is `UPPERCASE_UNDERSCORE`, not the documented lowercase.** The
+   docs say `"no show"`; the API returns `NO_SHOW`. The dead-outcome set was written from
+   the docs, so **a no-show meeting counted as a genuine interaction** and would have
+   produced "good to reconnect" for someone who never showed up. Now normalized, and
+   `RESCHEDULED` is treated as dead too (the original never happened).
+2. **`SCHEDULED` is the de facto default; `COMPLETED` is never set.** 77 of the 100 most
+   recent meetings in the portal are `SCHEDULED` and `COMPLETED` appears zero times, so
+   "outcome == COMPLETED" cannot be the test for whether a meeting happened. The
+   timestamp is: anything dated in the future is not a memory, whatever the outcome says.
+3. **Meeting bodies are the booking tool's own copy, not rep notes.** They read "Quick
+   15-min demo to get you set up as a Posh Organizer. Looking forward!" plus a Google
+   Meet link. Unfiltered that yields a callback built from our own calendar blurb, and
+   "get you set up as a Posh Organizer" would imply the prospect is already a customer.
+   Now HTML-stripped and boilerplate-stripped, and meeting bodies rank last as a source.
+4. **The first live run returned 12/12 `specific`, and 10 of them were unusable.** They
+   were scheduling logistics ("Confirmed call for tomorrow at 10:00 am EST") or facts
+   about *our* team ("Abby left Posh and Will Heyman is now the primary point of
+   contact"). Both are specific and faithful, and both are useless: the first is stale
+   the day after it is logged, the second leaks our staffing to a prospect. **Specific is
+   not the same as reusable**, and the prompt alone did not hold that line, so there is
+   now a `DETAIL_REJECT` code screen as well. It is matched contextually after a first
+   version rejected a good detail for containing the word "confirmed" ("13 confirmed 2025
+   events") and another for containing a brand name that looks like a date ("Sunday
+   cleaning YouTube series"). 12 regression cases, all real model output, in
+   `--self-test`.
+5. **One weak source blocked better ones.** Gong call transcripts arrive as notes, run
+   20k+ chars, and open with small talk ("Rep: beep... had to do the groceries"), so the
+   4k window saw only chit-chat. Ranking now yields a *list* and extraction tries up to
+   4 sources best-first; the window is 16k. That alone moved the sample from 0 usable
+   details to 11 of 12.
+
+### Caveats on the dry-run sample
+- **The sample was mostly internal `@posh.vip` staff and demo records**, which have far
+  richer notes than real cold prospects, and several share the same engagements (hence
+  the identical Coca-Cola detail across eight contacts). **The 11/12 `specific` rate is
+  not representative** — expect far lower on a real cold list, and that is the correct
+  outcome, not a regression.
+- One detail read "Using Posh as ticketing platform", i.e. an existing customer. The
+  eligibility filter excludes customers, so such a contact should never reach enrichment
+  in a real run, but it is worth knowing the extractor will surface it if one does.
+- A generated email tripped the `most ticketing platforms` banned phrase, unrelated to
+  callbacks: the model reached for competitor-disparagement framing. Existing guard
+  caught it.
+
+- **Re-run on a real cold list**, not internal records. The `none` tier has still never
+  been produced by live data: every sampled contact had genuine history, so the
+  ignored-outbound-only path (the one that guards against a false "good to reconnect")
+  is proven only by offline cases. That is the remaining gap.
+- Cost is now up to **4 cheap-LLM calls per contact** with history, not one, plus a 16k
+  window. Still ELIGIBLE-set only, but worth measuring on a real campaign before
+  assuming it is cheap.
+- The daily API quota was exhausted by something *outside* this project on 2026-08-25.
+  Still unexplained, and it will block a live run whenever it recurs.
 
 **Verified without HubSpot:** 19 classification cases; extraction faithfulness against
 the live model (voicemail text and vague admin notes both correctly yield no detail);
