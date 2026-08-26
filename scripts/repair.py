@@ -185,16 +185,65 @@ def strip_signoff(text: str) -> tuple[str, list[RepairRecord]]:
     return "\n".join(lines).rstrip(), records
 
 
+# ---- middle paragraph ----------------------------------------------------------
+
+SENTENCE_SPLIT_PARA = re.compile(r"(?<=[.!?])\s+")
+
+
+def trim_middle_paragraph(text: str) -> tuple[str, list[RepairRecord]]:
+    """Cut every middle paragraph down to its first sentence.
+
+    Mechanical for the same reason dash repair is: the rule is structural, not editorial.
+    "The middle paragraph is one sentence" was written four times across
+    config/message-shapes.md and instructions/message-generation.md and the model routed
+    around it each time with fresh wording ("which is the part most ticketing tools are
+    worst at", "so that part stops eating your week"). Blacklisting phrasings is
+    whack-a-mole; cutting the second sentence is not.
+
+    What is deliberately NOT touched:
+      - the OPENING paragraph, which legitimately carries the sender's intro line and
+        then the reason for reaching out,
+      - the CLOSING paragraph, which is the CTA,
+      - any paragraph containing a bullet list, since shape 2B is a scannable list.
+    """
+    records: list[RepairRecord] = []
+    paras = re.split(r"(\n\s*\n)", text)          # keep separators so joins are exact
+    blocks = [(i, s) for i, s in enumerate(paras) if i % 2 == 0 and s.strip()]
+    if len(blocks) < 3:
+        return text, records
+
+    # A bare greeting is not a content paragraph, so positions mean what they look like.
+    start = 1 if (len(blocks[0][1].split()) <= 4
+                  and blocks[0][1].rstrip().endswith(",")) else 0
+    middles = blocks[start + 1:-1]
+    for idx, para in middles:
+        if re.search(r"^\s*[-*\u2022]", para, re.M):
+            continue
+        sentences = [s for s in SENTENCE_SPLIT_PARA.split(para.strip()) if s.strip()]
+        if len(sentences) <= 1:
+            continue
+        kept = sentences[0].strip()
+        lead = para[:len(para) - len(para.lstrip())]
+        paras[idx] = lead + kept
+        records.append(RepairRecord(
+            "middle_para", para.strip(), kept,
+            note=f"cut {len(sentences) - 1} trailing sentence(s) from the middle paragraph"))
+    return "".join(paras), records
+
+
 # ---- driver -------------------------------------------------------------------
 
 def repair(body: str) -> tuple[str, list[RepairRecord]]:
-    """Sign-off first, then dashes: sign-off removal changes what the last line is, so
-    it must run before punctuation repair. Stat snapping used to run last and is gone,
-    since no numeric stat is approved: a percentage is now a validator FAIL, never a
-    silent rewrite."""
+    """Sign-off, then dashes, then the middle paragraph.
+
+    Order matters. Sign-off removal changes what the last paragraph is, which the middle
+    trim depends on, and dash repair can split a sentence, which changes the sentence
+    count the trim reads. Stat snapping used to run last and is gone: no numeric stat is
+    approved, so a percentage is a validator FAIL rather than a silent rewrite."""
     body, r0 = strip_signoff(body)
     body, r1 = normalize_dashes(body)
-    return body, r0 + r1
+    body, r2 = trim_middle_paragraph(body)
+    return body, r0 + r1 + r2
 
 
 def format_records(records: list[RepairRecord], indent: str = "    ") -> str:

@@ -35,6 +35,12 @@ competitor is the most interesting thing we know.
 
 **Subject example:** `eventbrite working out for Mo Mami?`
 
+
+**Opening variants (code picks one; use it as the opening move):**
+- Reaching out to see if you're locked in on your current ticketing setup with [competitor], or open to seeing what else is out there?
+- Wanted to reach out and ask whether [org] is committed to [competitor] for the year, or still weighing options?
+- Reaching out because I wasn't sure whether [competitor] is a long-term thing for [org] or just what you started on?
+
 > Hey [first name],
 >
 > I'm [sender], I run partnerships at Posh. Reaching out to see if you're locked in on
@@ -52,6 +58,12 @@ most interesting thing we know.
 
 
 **Subject example:** `Mo Mami's regular crowd`
+
+
+**Opening variants (code picks one; use it as the opening move):**
+- While looking at the event scene in [city], [org] stood out, so I wanted to reach out.
+- I was going through who is building a real regular crowd in [city] and [org] came up, so thought I would reach out.
+- [org] came up while I was looking at [vertical] organizers in [city], so wanted to say hello.
 
 > Hey [first name],
 >
@@ -83,6 +95,12 @@ The example already contains the organization, so substitute it rather than
 appending it. A generic example ("what happens after the sale?") got the org
 appended and ran to 9 words in 7 of 10 shape-1C emails.
 
+
+**Opening variants (code picks one; use it as the opening move):**
+- Reaching out because I was curious how [org] handles everything after a ticket sells, is much of that still by hand?
+- Wanted to reach out and ask what happens at [org] once a ticket is sold, how much of it is still manual?
+- Reaching out with one question about [org]: after the ticket sells, how much still runs on spreadsheets and DMs?
+
 > Hi [first name],
 >
 > I'm [sender], I run partnerships at Posh. Reaching out because I was curious how [org]
@@ -99,6 +117,12 @@ pad. Short does not mean blunt: it still opens with a reason for reaching out.
 
 
 **Subject example:** `Mo Mami on eventbrite`
+
+
+**Opening variants (code picks one; use it as the opening move):**
+- Reaching out since [org] is running on [competitor]. Open to seeing what else is out there?
+- Wanted to reach out about [org]: open to seeing what else is out there before your next run?
+- Reaching out because [org] is on [competitor] at the moment, worth a look at the alternative?
 
 > Hey [first name],
 >
@@ -219,10 +243,10 @@ Email 3 may use a short greeting because it is brief enough to read as a friendl
   family.** Shape 1D once read "Worth knowing what else is out there" and three emails
   generalised it into "worth a quick call", which is a hard FAIL. If a phrase is one word
   away from something banned, it does not belong in an exemplar.
-- **Vary the FIRST SENTENCE. Never copy the exemplar's opening words verbatim.** The
-  shape governs structure and length, not the literal opening. Shape 2B once opened
-  "Quick follow-up." and 18 of 34 emails copied it word for word, which is the same
-  failure a single anchor email caused for email 1.
+- **Use the opening variant you were handed** (`shapes.opening` in the research note),
+  filled with this contact's details. Code picks one of the shape's variants per contact,
+  because asking the model to "vary the first sentence" did nothing: within a shape, 13 of
+  16 emails opened with byte-identical wording. Variety has to come from the pipeline.
 - **Do not put an organization name of three or more words in the subject.** "still
   using RA for If You Know You Know?" is 9 words and FAILs. The body names them; the
   subject does not have to.

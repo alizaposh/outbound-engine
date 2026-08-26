@@ -182,23 +182,58 @@ Practical rule: if the model is doing something wrong, look for the exemplar tea
 before writing another instruction. If an exemplar can be extended or blended, prescribe
 the string instead of illustrating it.
 
+### Four copy fixes landed 2026-08-26 (logged to tab `Test8`)
+
+1. **The one-sentence middle paragraph is enforced in code, and repaired.** Validation
+   alone would have blocked 16 of 34 rows: the model writes a two-sentence middle about
+   20% of the time whatever the rule says. So `check_middle_paragraph` FAILs it and
+   `repair.trim_middle_paragraph` cuts everything after the first sentence, logging it in
+   the repair audit. The opening paragraph is exempt (intro line plus reason is
+   legitimately two sentences), the CTA is exempt, and bullet lists are exempt because
+   shape 2B is deliberately scannable. Result: 18 repairs, **0 violations surviving**.
+   This is the fourth attempt at this rule and the first that held, because it is
+   structural rather than a phrase blacklist.
+2. **Three opening variants per email-1 shape, picked by code.** 12 in play. Measured per
+   shape: 4/8, 6/8, 5/10, 8/8 distinct openings, against 13-of-16 identical before.
+   Deliberate asymmetry worth keeping: **shape** selection is signal-driven because what
+   we know about the organizer should decide it, but **variant** selection is hashed,
+   because every variant inside a shape is equally true for that contact and the only job
+   left is not repeating a sentence.
+3. **Subject ceiling widened to 8 words** (history: 2-5, 2-6, 2-7, now 2-8). Organization
+   names on this list run long; "If You Know You Know" is four words on its own.
+4. **`any opportunity to compare what posh could put together` un-banned**, by explicit
+   decision: it appears in the sales team's own live email. Removed from
+   `banned-phrases.md` and from the four places that called it banned. The reversal is
+   recorded with its date rather than deleted, because it originally came from AE feedback
+   (Ashley) and may resurface in a review. **The vague "worth a ..." family stays banned**
+   and is now the only banned CTA construction: it is a non-offer, not a stiff offer.
+
+Openers were also reframed on a principle worth keeping: **open with a reason for reaching
+out, never with an assertion about them.** "You're running [org] on [competitor] right
+now" and "Quick one about [org]:" both read as surveillance. A cold email has to answer
+"why am I getting this?" in its first line, and an assertion skips that question. All four
+blunt patterns measure 0.
+
+Run state: 30 WARN, 4 FAIL, 0 sender mismatches, email 1 median 62.5 words.
+
 ### Still open on the copy
 
-- **Email 1 length: median 64 against a 65 ceiling, but 14 of 34 over.** Nearly all the
-  excess is a second sentence in the middle paragraph. The one-sentence rule has leaked in
-  four phrasings, so enforcing it in `validate.py` is the honest next step rather than
-  asking again in prose.
+- **Email 1 length: median 62.5, inside target, but 15 of 34 still over the 65 ceiling.**
+  The middle-paragraph repair fixes structure, not total length, so the remaining excess
+  is spread across the opener and CTA. Length is a WARN by design and never gates a batch.
 - **Shape 1D's opener drifts** to "Saw [org] is running on [competitor]" instead of the
   written "Reaching out since...". Softer than the assertion it replaced, but still an
   assertion. Prescribe it if the AEs flag it.
-- **Within a shape, openers are near-identical** (13 of 16 for 2A). Variety scales with
-  the number of shapes; instructions to vary do not work. Cheap next step: 2-3 alternative
-  first sentences per shape, picked by code.
-- **The 2 to 7 word subject limit fights long organization names** ("If You Know You
-  Know" is four words). Widening to 8 would clear the last subject FAIL.
-- **The AE-facing question:** the rep's own live email contains "Any opportunity to
-  compare what Posh could put together?", which is banned on Ashley's feedback, and two
-  CTAs. Not adopted. Worth an explicit decision rather than drift.
+- **Emails 2 and 3 have no opening variants yet.** Email 1 has three per shape; the same
+  treatment would help emails 2 and 3, where within-shape openers are still near-identical.
+- **One subject still fails at 9 words** even with the 2-8 limit: "still running RA for If
+  You Know You Know?". A 4-word organization name plus the platform cannot fit. The rule
+  says not to put a 3-plus-word org in the subject and it was ignored once.
+- **The rep's live email also carries TWO CTAs** ("let me know if you're open to
+  connecting" plus "free for a 15 min chat?"). The one-CTA rule still stands and was not
+  relaxed alongside the phrase un-ban. Worth confirming that is intended.
+- **Three of the four remaining FAILs are the "worth a ..." family**, now the only banned
+  CTA construction. Shape 1D's blunt register keeps reaching for it.
 
 ### Superseded: email 1 is uniform, and the voice anchor is why
 

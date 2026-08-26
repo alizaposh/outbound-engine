@@ -124,9 +124,9 @@ different stages. Both must **already be selling tickets**.
 - **Preferred CTA:** a concrete offer as a plain question, which lands especially well
   since they're already comparing. Example: "Happy to pull together a tailored
   comparison for your next run of events, want me to?" Reply-based first; scheduling
-  link once interested. The old "any opportunity to compare what Posh could put
-  together in a custom proposal" wording is **banned** (_AE feedback: Ashley, reads as
-  AI and like inbox spam_); see `config/banned-phrases.md`.
+  link once interested. The "any opportunity to compare what Posh could put together"
+  wording was banned on AE feedback and **un-banned 2026-08-26** by explicit decision, so
+  either phrasing is acceptable now; see `config/banned-phrases.md`.
 
 ## Not a cold-outbound target: Free tier
 - Free-tier organizers (RSVP-only, $0 tickets, 1 to 50 attendees, often new to event

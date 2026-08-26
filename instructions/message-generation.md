@@ -77,7 +77,7 @@ rule.*
 ## 5. Voice
 
 - Casual and human. Write like a real person typing a quick note.
-- **Banned phrasing:** "any opportunity to compare what Posh could put together in a custom proposal" and similar stiff, passive CTAs. _Feedback: Ashley, "CTAs are way too AI ... too fluffed up ... like the spam I get."_
+- **"Any opportunity to compare what Posh could put together?" is ALLOWED again** (un-banned 2026-08-26 by an explicit call: it appears in the sales team's own live email). It was banned on _Ashley's_ feedback ("CTAs are way too AI ... too fluffed up ... like the spam I get"), so the reversal is recorded rather than quietly dropped. Still avoid *stiff, passive* CTAs generally, and the vague "worth a ..." family remains a hard FAIL: that one is a non-offer rather than a stiff offer.
 - **Watch for AI tells:** vivid-but-hollow phrases like "firefighting through it." _Feedback: West Coast Makers flagged that exact phrase._
 - CTAs are plain questions that offer to do one thing: "want me to show you?", "happy to put together a quick comparison, want me to?". Never a mini-pitch. Note the "worth a look / chat / conversation" family is itself banned (`config/banned-phrases.md`): it is a vague ask, not an offer.
 
@@ -314,9 +314,6 @@ shapes file where exactly one reaches you at a time.
 - **The CTA is a plain, concrete question.** Offer to *do* one specific thing and ask if
   they want it: "happy to put together a quick comparison, want me to?", "want me to
   show you how that'd look?", "open to seeing what we'd put together for your next one?".
-  - **Do NOT use** "any opportunity to compare what Posh could put together in a custom
-    proposal", or its "custom proposal" / "competitive offer" variants. _AE feedback
-    (Ashley): reads as AI and like inbox spam._
   - **Do NOT use** the "worth a quick conversation / chat / call / comparison / look"
     family. It is a hard FAIL in `config/banned-phrases.md`: a vague ask, not an offer.
     The fix is to name the thing you will do, not to soften the ask.
@@ -362,10 +359,6 @@ no platform anywhere.
 > Managing events on Resident Advisor works, but it's built for discovery, not for
 > running the show. Worth a quick conversation about how it could simplify your next
 > event?
-
-**NOT** (stiff, AI-sounding pitch, the phrasing AEs flagged as spam):
-> Any opportunity to compare what Posh could put together in a custom proposal for your
-> next run of events?
 
 **NOT** (a claim we cannot support):
 > We have a huge and active community in New York.
@@ -465,12 +458,11 @@ it stays caught rather than prevented.
   together a quick comparison for your next one, want me to?", "want me to show you how
   that'd look?", or "open to seeing what we'd put together for your next one?" Name the
   one thing you will do, then ask.
-  - **Banned:** "any opportunity to compare what Posh could put together in a custom
-    proposal" and its custom-proposal / competitive-offer variants (_AE feedback:
-    Ashley, reads as AI and like inbox spam_), and the vague "worth a quick
-    conversation / chat / call / comparison / look" family. Both are hard FAILs; the
-    authoritative list is `config/banned-phrases.md`. The fix for a weak ask is to name
-    the thing you will do, never to soften it further.
+  - **Banned:** the vague "worth a quick conversation / chat / call / comparison / look"
+    family. A hard FAIL; the authoritative list is `config/banned-phrases.md`. The fix
+    for a weak ask is to name the thing you will do, never to soften it further.
+    ("Any opportunity to compare what Posh could put together?" was banned on AE
+    feedback and un-banned 2026-08-26 by explicit decision.)
   - Persona-specific wording lives in `config/personas.md`.
 - **One clear CTA per email. No stacked asks.**
 - **Keep the opener link-light.** A booking link in a cold first email can hurt

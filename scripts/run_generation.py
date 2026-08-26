@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import pathlib
@@ -322,6 +323,45 @@ BAND_SHAPE_M2 = {"emerging": "B", "unknown": "C", "established": "A", "scaled": 
 M1_TO_M3 = {"A": "A", "B": "A", "C": "B", "D": "C"}
 
 
+def shape_openings(path: str = SHAPES_FILE) -> dict[str, list[str]]:
+    """{"1A": ["variant", ...], ...} from the "Opening variants" list in each section."""
+    text = (ROOT / path).read_text(encoding="utf-8")
+    out: dict[str, list[str]] = {}
+    key = None
+    collecting = False
+    for line in text.splitlines():
+        m = re.match(r"^#{2,3} Shape (\d[A-Z]):", line)
+        if m:
+            key, collecting = m.group(1), False
+            continue
+        if key and "Opening variants" in line:
+            collecting = True
+            continue
+        if collecting:
+            mv = re.match(r"^-\s+(.*\S)\s*$", line)
+            if mv:
+                out.setdefault(key, []).append(mv.group(1))
+            elif line.strip() and not line.startswith("-"):
+                collecting = False
+    return out
+
+
+def pick_opening(c: Contact, shape_key: str,
+                 openings: dict[str, list[str]]) -> str:
+    """One opening variant per contact, within the assigned shape.
+
+    Hashed on email, unlike shape selection which is signal-driven. That difference is
+    deliberate: WHICH shape to use depends on what we know about the organizer, but every
+    variant inside a shape is equally true for them, so the only job left is not repeating
+    the same sentence 13 times.
+    """
+    variants = openings.get(shape_key) or []
+    if not variants:
+        return ""
+    seed = (c.email or c.prospect_org or "").strip().lower()
+    return variants[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(variants)]
+
+
 def assign_shapes(c: Contact, shapes: dict[int, dict[str, str]],
                   platform_known: bool = True) -> dict[int, str]:
     """One shape key per message position, chosen from THIS contact's signals.
@@ -377,7 +417,7 @@ def role_register(jobtitle: str | None) -> str:
 def research_note(c: Contact, persona, basis, platform_known,
                   sender_name: str = "", sender_intro: str = "",
                   shape_keys: dict | None = None,
-                  shape_specs: dict | None = None) -> dict:
+                  shape_specs: dict | None = None, opening: str = "") -> dict:
     """estimated_gmv_usd is deliberately absent: it routes upstream and stops.
 
     sender_name / sender_intro are the ACTUAL sending identity for this run, from
@@ -401,6 +441,11 @@ def research_note(c: Contact, persona, basis, platform_known,
             "message_2": (shape_specs or {}).get(2, ""),
             "message_3": (shape_specs or {}).get(3, ""),
             "assigned": (shape_keys or {}),
+            "opening": opening,
+            "opening_guidance": (
+                "Open email 1 with this exact move, filled with this contact's details. "
+                "It is one of several variants for the assigned shape and was chosen for "
+                "this contact, so do not substitute another opening."),
             "guidance": (
                 "Write each email in ITS OWN assigned shape: follow the structure, the "
                 "length, and where it puts the intro line. These are register and "
@@ -501,7 +546,7 @@ def generate_with_retry(client, model, rulebook, instruction, note):
 
 def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                     identity, sender_map, footer, token, literals, regexes,
-                    failure_fallback, sender_name, sender_intro, shapes):
+                    failure_fallback, sender_name, sender_intro, shapes, openings):
     persona, basis, platform_known = route(c)
     res = ContactResult(contact=c, persona=persona, persona_basis=basis,
                         platform_known=platform_known)
@@ -513,8 +558,9 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
 
     keys = assign_shapes(c, shapes, platform_known)
     specs = {pos: shapes[pos][k] for pos, k in keys.items() if k}
+    opening = pick_opening(c, f"1{keys[1]}", openings)
     note = research_note(c, persona, basis, platform_known, sender_name, sender_intro,
-                         keys, specs)
+                         keys, specs, opening)
     res.shape = "/".join(f"{p}{keys[p]}" for p in POSITIONS if keys.get(p))
     emails, attempts, bid, err = generate_with_retry(
         client, model, rulebook, instruction, note)
@@ -659,6 +705,7 @@ def main(argv=None) -> int:
         contacts = contacts[:a.limit]
     failure_fallback = load_failure_fallback()
     shapes = load_shapes()
+    openings = shape_openings()
     print("shapes: " + "; ".join(f"m{p}={','.join(sorted(shapes[p]))}"
                                  for p in POSITIONS) + " (assigned per contact)")
     rulebook, instruction = build_system_prompt()
@@ -674,7 +721,7 @@ def main(argv=None) -> int:
                             literals=literals, regexes=regexes,
                             failure_fallback=failure_fallback,
                             sender_name=sender_name, sender_intro=sender_intro,
-                            shapes=shapes)
+                            shapes=shapes, openings=openings)
         results.append(r)
         # Fallback rows carry committed copy, not model output. Scoring them would
         # inflate the pass rate with emails the model never wrote.

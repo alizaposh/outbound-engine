@@ -12,6 +12,13 @@ Add to this list whenever a review catches a phrasing the rules already forbid b
 model produced anyway. Each entry should note why, so nobody removes it later without
 understanding what it prevented.
 
+**Removed 2026-08-26: `any opportunity to compare what posh could put together`.** It was
+banned on AE feedback (Ashley: "reads like the spam I get") and has been un-banned by an
+explicit call from the person running outbound: the phrasing is acceptable and appears in
+the sales team's own live email. Recorded rather than quietly dropped, so the reversal is
+visible if the AEs raise it again. **The vague "worth a ..." family stays banned** and is
+a separate rule: that one is a non-offer, not a stiff offer.
+
 ## Literal
 
 - `strategic positioning on the marketplace`
@@ -25,12 +32,6 @@ understanding what it prevented.
 - `most ticketing platforms`
   Disparagement opener. Any sentence starting this way is characterizing competitors
   rather than winning on Posh's strengths.
-- `any opportunity to compare what posh could put together`
-  The stiff-pitch CTA. AE-flagged as reading like AI and like inbox spam (_Ashley_).
-  Banned as this specific construction only: `positioning.md` explicitly approves
-  *offering* a "custom / competitive offer" as vague commercial language, so banning
-  "custom proposal" or "competitive offer" on their own would fail approved copy. The
-  vague "worth a ..." family is already covered by the regex below.
 - `organic discovery alone`
   Restates a retired marketplace stat. No numeric or quantified marketplace claim is
   approved (see `config/positioning.md`); the marketplace is described qualitatively.

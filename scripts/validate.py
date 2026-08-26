@@ -45,9 +45,11 @@ NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
 # ceiling is what a rep actually sends rather than what a model will pad to.
 LENGTH_TARGETS = {1: (35, 65), 2: (30, 60), 3: (18, 42)}
 
-# Subject word count. Widened from 2-5 to 2-6 to 2-7 as the warmer SDR voice settled:
-# it pulls subjects toward short natural phrases rather than clipped fragments.
-SUBJECT_WORDS = (2, 7)
+# Subject word count. Widened 2-5 -> 2-6 -> 2-7 as the warmer SDR voice settled, then to
+# 2-8 on 2026-08-26: organization names on this list run long ("If You Know You Know" is
+# four words on its own), and a subject naming the organizer is worth more than a word
+# saved. It pulls subjects toward short natural phrases rather than clipped fragments.
+SUBJECT_WORDS = (2, 8)
 
 # Platform names that must never appear when current_competitor is unknown.
 # Naming a platform the sender did not actually verify proves they did not look.
@@ -280,6 +282,57 @@ def check_subject_shape(subject: str, body: str, *, position: int = 1,
     return out
 
 
+SENTENCE_END = re.compile(r"[.!?]['\")]?(?:\s|$)")
+
+
+def _count_sentences(para: str) -> int:
+    """Sentence count, tolerant of the things that are not sentence ends.
+
+    Decimals, initials, and common abbreviations are masked first so "15 min." or
+    "e.g." does not read as a boundary.
+    """
+    masked = re.sub(r"\d\.\d", "0 0", para)
+    masked = re.sub(r"\b(e\.g|i\.e|Mr|Mrs|Ms|Dr|vs|etc|approx|no)\.", r"\1 ", masked, flags=re.I)
+    masked = re.sub(r"\b[A-Z]\.", "X ", masked)          # initials
+    return len(SENTENCE_END.findall(masked.strip())) or (1 if masked.strip() else 0)
+
+
+def check_middle_paragraph(subject: str, body: str, *, footer: str) -> list[Finding]:
+    """The middle paragraph carries ONE sentence.
+
+    Enforced in code because prose could not hold it. The rule was written four times in
+    config/message-shapes.md and instructions/message-generation.md, and each time the
+    model routed around it with a new phrasing: "which is the part most ticketing tools
+    are worst at", then "so that part stops eating your week", then "so the part that
+    actually scales a party business". Blacklisting phrasings is whack-a-mole; the
+    structure is the rule.
+
+    The MIDDLE is what is enforced, not the whole email. The opening paragraph
+    legitimately carries two sentences (the sender's intro line, then the reason for
+    reaching out), and the closing paragraph is the CTA. Only what sits between them is
+    capped, because that is where every observed instance of bloat lived.
+
+    Bullet lists are exempt: shape 2B is deliberately a scannable list of outcomes.
+    """
+    copy = body.replace(footer, "")
+    copy = re.sub(r"\n\s*\w+\s*\nPosh\s*$", "", copy.strip())
+    paras = [p.strip() for p in re.split(r"\n\s*\n", copy) if p.strip()]
+    # drop a bare greeting line so paragraph positions mean what they look like
+    if paras and len(paras[0].split()) <= 4 and paras[0].rstrip().endswith(","):
+        paras = paras[1:]
+    if len(paras) < 3:
+        return []                     # opener + CTA only: there is no middle to check
+    out = []
+    for i, para in enumerate(paras[1:-1], start=2):
+        if re.search(r"^\s*[-*\u2022]", para, re.M):
+            continue                  # a deliberate list, not prose
+        n = _count_sentences(para)
+        if n > 1:
+            out.append(Finding("middle_paragraph", FAIL,
+                f"paragraph {i} has {n} sentences, rule is 1: {para[:110]!r}"))
+    return out
+
+
 def check_footer(subject: str, body: str, *, footer: str, token: str) -> list[Finding]:
     out = []
     if not body.rstrip().endswith(footer):
@@ -424,6 +477,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_approved_stats(subject, body)
     res.findings += check_subject_shape(subject, body, position=position,
                                         allowed_names=allowed_names)
+    res.findings += check_middle_paragraph(subject, body, footer=footer)
     res.findings += check_footer(subject, body, footer=footer, token=token)
     res.findings += check_no_real_optout_url(subject, body)
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
@@ -567,6 +621,35 @@ SUBJECT_SHAPE_CASES = [
      "over the word ceiling"),
 ]
 
+# Middle-paragraph cases. The FAIL examples are real generated copy: prose rules could
+# not stop them, which is why this is enforced in code.
+MIDDLE_PARA_CASES = [
+    ("Hey Rolando,\n\nI'm Carl, I run partnerships at Posh. Reaching out to see if you're "
+     "locked in on RA?\n\nPosh keeps ticketing, guest list, and payouts in one place.\n\n"
+     "Want me to put a comparison together?", False, "one-sentence middle: the target"),
+    ("Hey Rolando,\n\nI'm Carl, I run partnerships at Posh. Reaching out to see if you're "
+     "locked in on RA?\n\nPosh keeps ticketing, guest list, and payouts in one place "
+     "instead of scattered across tools. For a party series like yours, that means you're "
+     "not juggling RSVPs and approvals between platforms.\n\n"
+     "Happy to put a quick comparison together, want me to?", True,
+     "two sentences in the middle: the exact bloat the AEs flagged"),
+    ("Hey there,\n\nI'm Carl, I run partnerships at Posh. Reaching out about your setup?"
+     "\n\nWant me to put a comparison together?", False,
+     "opener plus CTA only: no middle to check"),
+    ("Hi Leanne,\n\nI'm Carl, I run partnerships at Posh. Reaching out because I was "
+     "curious how Main Street handles this. Is much of it still by hand?\n\n"
+     "On Posh the guest list, promo, and payouts sit with the ticketing.\n\n"
+     "Open to seeing what we would put together?", False,
+     "TWO sentences in the OPENER are fine: intro line plus the reason"),
+    ("Hey there,\n\nStill working out whether Posh fits? The short version, organizers "
+     "come to us when they want to:\n\n- Sell more tickets\n- Reach more of the right "
+     "people\n- Own their attendee community\n\nAny of those live for you?", False,
+     "a bullet list is exempt: shape 2B is deliberately scannable"),
+    ("Hey there,\n\nI'm Carl. Reaching out about your setup?\n\nPosh does ticketing in "
+     "one place. It also handles payouts. And promo.\n\nWant a comparison?", True,
+     "three sentences in the middle"),
+]
+
 # Subjects that must PASS only because the contact's own proper nouns are supplied.
 # Real failures from the 2026-08-26 run: an all-caps org name and a possessive of one.
 SUBJECT_NAME_CASES = [
@@ -602,6 +685,17 @@ STAT_BUDGET_CASES = [
 
 def _self_test() -> int:
     failures = 0
+    for body, expect_fail, why in MIDDLE_PARA_CASES:
+        f = check_middle_paragraph("subj", body, footer="")
+        got = any(x.severity == FAIL for x in f)
+        ok = got == expect_fail
+        failures += not ok
+        print(f"  {'ok  ' if ok else 'FAIL'} middle_paragraph "
+              f"{'FAIL' if got else 'PASS'} (want {'FAIL' if expect_fail else 'PASS'})"
+              f"  {why}")
+        if not ok:
+            for x in f:
+                print(f"         {x.detail[:90]}")
     for subject, names, expect_fail, why in SUBJECT_NAME_CASES:
         f = check_subject_shape(subject, "body", position=1, allowed_names=names)
         got = any(x.severity == FAIL for x in f)
