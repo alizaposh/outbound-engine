@@ -143,7 +143,22 @@ one.
   share, conversion, or any other performance claim. Describe advantages qualitatively.
   The validator FAILs any percentage in a body (`check_approved_stats` in
   `scripts/validate.py`).
-- No competitor disparagement. Win on Posh's strengths, don't trash Eventbrite/Dice/etc.
+- **Competitor observations are allowed; invented claims about them are not** (revised
+  2026-08-26). The blanket "no competitor disparagement" rule was removed because it got
+  in the way of copy the sales lead endorsed: "I often notice that organizers on
+  Eventbrite face operational challenges, such as having your guest lists, payouts, and
+  promotion all living in three different places." That is an observation about where a
+  workflow lands, and it is the line that gives the email its human tone.
+  What still holds, and why each one is narrower than "no disparagement":
+  - **Never invent a shortcoming or a capability.** "built for small creators", "not
+    built for someone running your scale" are assertions about another product that we
+    cannot support. Fabrication, not tone.
+  - **Never characterize all competitors at once.** "most ticketing platforms ..." is a
+    claim about a market we have not surveyed.
+  - **Never open with a diagnosis of their tool.** "Managing events on [platform] works,
+    but ..." is the cold-diagnosis opener the AEs rejected on its own merits.
+  - **No head-to-head comparison claims:** "unlike Eventbrite", "better than DICE".
+  These stay enforced in `config/banned-phrases.md`.
 - No guarantees of revenue, attendance, or outcomes.
 - [FILL IN any regulated or brand claims Legal wants excluded]
 

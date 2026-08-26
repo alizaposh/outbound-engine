@@ -37,13 +37,16 @@ enforcement that no longer exists.
   Invented feature. Appears nowhere in `positioning.md`, and prohibited claims forbids
   inventing capabilities. Produced by Haiku on the first real generation run.
 - `built for small creators`
-  Competitor disparagement, and an invented claim about other platforms. From the same
-  run.
+  An INVENTED claim about another product, which is why this survives the 2026-08-26
+  relaxation: observations about a competitor's workflow are allowed now, assertions
+  about what their product is built for are not. We cannot support it. From the same run.
 - `not built for someone running your scale`
   Same sentence as above, second half. Listed separately so a partial reuse still hits.
 - `most ticketing platforms`
-  Disparagement opener. Any sentence starting this way is characterizing competitors
-  rather than winning on Posh's strengths.
+  A claim about a whole market we have not surveyed. Kept after the blanket
+  "no competitor disparagement" rule was dropped on 2026-08-26: naming where ONE
+  named platform's workflow lands is an observation and is now allowed, but
+  characterizing every competitor at once is still an unsupported claim.
 - `organic discovery alone`
   Restates a retired marketplace stat. No numeric or quantified marketplace claim is
   approved (see `config/positioning.md`); the marketplace is described qualitatively.

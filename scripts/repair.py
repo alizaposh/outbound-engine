@@ -190,15 +190,21 @@ def strip_signoff(text: str) -> tuple[str, list[RepairRecord]]:
 SENTENCE_SPLIT_PARA = re.compile(r"(?<=[.!?])\s+")
 
 
-def trim_middle_paragraph(text: str) -> tuple[str, list[RepairRecord]]:
-    """Cut every middle paragraph down to its first sentence.
+MIDDLE_MAX_SENTENCES = 2
 
-    Mechanical for the same reason dash repair is: the rule is structural, not editorial.
-    "The middle paragraph is one sentence" was written four times across
-    config/message-shapes.md and instructions/message-generation.md and the model routed
-    around it each time with fresh wording ("which is the part most ticketing tools are
-    worst at", "so that part stops eating your week"). Blacklisting phrasings is
-    whack-a-mole; cutting the second sentence is not.
+
+def trim_middle_paragraph(text: str) -> tuple[str, list[RepairRecord]]:
+    """Cut a middle paragraph back to its first TWO sentences.
+
+    Trimmed to ONE sentence for a few hours on 2026-08-26. That was wrong and this repair
+    was the direct cause: chopping the second sentence off the middle paragraph is what
+    made the copy read "cobbled together" to the sales lead. The middle is where the
+    concrete detail lives.
+
+    Two sentences is the endorsed shape, so this now only fires on three or more, which is
+    genuine bloat rather than substance. It stays mechanical for the same reason dash
+    repair is: cutting a third sentence needs no judgement. Deciding whether a sentence is
+    vague or concrete does need judgement, and that is left to review.
 
     What is deliberately NOT touched:
       - the OPENING paragraph, which legitimately carries the sender's intro line and
@@ -220,14 +226,15 @@ def trim_middle_paragraph(text: str) -> tuple[str, list[RepairRecord]]:
         if re.search(r"^\s*[-*\u2022]", para, re.M):
             continue
         sentences = [s for s in SENTENCE_SPLIT_PARA.split(para.strip()) if s.strip()]
-        if len(sentences) <= 1:
+        if len(sentences) <= MIDDLE_MAX_SENTENCES:
             continue
-        kept = sentences[0].strip()
+        kept = " ".join(s.strip() for s in sentences[:MIDDLE_MAX_SENTENCES])
         lead = para[:len(para) - len(para.lstrip())]
         paras[idx] = lead + kept
         records.append(RepairRecord(
             "middle_para", para.strip(), kept,
-            note=f"cut {len(sentences) - 1} trailing sentence(s) from the middle paragraph"))
+            note=f"cut {len(sentences) - MIDDLE_MAX_SENTENCES} trailing sentence(s) "
+                 f"from the middle paragraph"))
     return "".join(paras), records
 
 

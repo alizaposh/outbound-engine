@@ -443,9 +443,11 @@ def research_note(c: Contact, persona, basis, platform_known,
             "assigned": (shape_keys or {}),
             "opening": opening,
             "opening_guidance": (
-                "Open email 1 with this exact move, filled with this contact's details. "
-                "It is one of several variants for the assigned shape and was chosen for "
-                "this contact, so do not substitute another opening."),
+                "ORDER: greeting, then sender.intro_line, THEN this move. The intro line "
+                "comes first and is never pushed below the opening move. Use this move "
+                "verbatim-in-structure, filled with this contact's details; it is one of "
+                "several variants for the assigned shape and was chosen for this contact, "
+                "so do not substitute another."),
             "guidance": (
                 "Write each email in ITS OWN assigned shape: follow the structure, the "
                 "length, and where it puts the intro line. These are register and "

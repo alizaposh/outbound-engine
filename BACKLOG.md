@@ -237,6 +237,45 @@ quality now depends on the review step rather than the pipeline.
 Run after removal: 33 WARN, **1 FAIL** (a 9-word subject, not a CTA), 22 repairs, email 1
 median 60.5 words, "worth a ..." used 3 times and passing.
 
+### Reversed my own over-correction 2026-08-26 (tab `Test10`)
+
+The "too long, cut the fluff" pass went too far and produced copy the sales lead called
+"cobbled together". **The one-sentence middle paragraph rule, and especially its repair,
+was the direct cause:** the repair truncated the middle mid-thought, and the middle is
+where an email earns its tone.
+
+**Both diagnoses were pointing at the same thing and I misread it as word count.**
+Vagueness was always the problem. A longer concrete email beats a short choppy one.
+
+What changed:
+- **Middle paragraph: two sentences, not one.** Three or more is still trimmed in
+  `repair.py`. Repairs per 34-run fell from 22 to 3, because the copy now complies instead
+  of being cut.
+- **Length back up: email 1 is 50 to 95 words** (was 110, then 65, now this). The endorsed
+  email is ~85. The first ceiling let it pad, the second squeezed out the middle.
+- **The rule is CONCRETE vs VAGUE, not explainer-vs-none.** Naming their vertical, city,
+  and the actual items that scatter is substance. "which is the part most ticketing tools
+  are worst at" is an opinion with no content. A closing "so ..." consequence is good when
+  specific ("so you're not juggling tools on event night") and filler only when it
+  restates the sentence before it. **This is not machine-checkable and lives in review.**
+- **Shape 1D is now the endorsed shape**, reproducing the email the sales lead wrote, with
+  its middle in their exact phrasing: first person ("I often notice"), their world named,
+  the actual items listed. That device spread to 22 of 34 emails on its own.
+- **Ordering conflict fixed:** the opening-variant mechanism fought the intro-placement
+  rule and pushed "I'm Carl, I run partnerships at Posh" into the third paragraph. Order
+  is now explicit (greeting, intro, opening move) and 0 of 34 have it misplaced.
+- **"No competitor disparagement" removed from `positioning.md`**, because it blocked the
+  endorsed phrasing ("I often notice that organizers on Eventbrite face operational
+  challenges ..."). Replaced with narrower rules rather than deleted outright: no invented
+  shortcoming or capability ("built for small creators" is fabrication, not tone), no
+  market-wide claim ("most ticketing platforms"), no head-to-head comparison ("unlike
+  Eventbrite"), and no cold-diagnosis opener. All six patterns verified still caught.
+  **Checked for drift after removing it: zero negative adjectives near a platform name,
+  zero comparisons, zero market-wide claims.** The rulebook getting less strict did not
+  make the copy sharper.
+
+Run state: 33 WARN, 1 FAIL, 3 repairs, email 1 median 83.5 words, 0 sender mismatches.
+
 ### Still open on the copy
 
 - **Email 1 length: median 62.5, inside target, but 15 of 34 still over the 65 ceiling.**

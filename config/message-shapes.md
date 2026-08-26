@@ -110,29 +110,40 @@ appended and ran to 9 words in 7 of 10 shape-1C emails.
 >
 > Open to seeing what we would put together?
 
-## Shape 1D: short and warm
+## Shape 1D: the endorsed shape
 
-The shortest shape. Use for a busy or high-volume operator, where the other shapes would
-pad. Short does not mean blunt: it still opens with a reason for reaching out.
+**This is the email the sales lead endorsed (2026-08-26), so treat it as the closest
+thing to a target.** Note what carries its tone: it names the vertical and the city, it
+names the three things that actually scatter (guest lists, payouts, promotion), and it
+closes the middle with a real consequence ("so you're not juggling tools on event
+night"). That is concrete detail, not filler. An earlier, shorter version of this shape
+was cut back to a bare assertion and read "cobbled together".
 
 
 **Subject example:** `Mo Mami on eventbrite`
 
 
 **Opening variants (code picks one; use it as the opening move):**
-- Reaching out since [org] is running on [competitor]. Open to seeing what else is out there?
-- Wanted to reach out about [org]: open to seeing what else is out there before your next run?
-- Reaching out because [org] is on [competitor] at the moment, worth a look at the alternative?
+- Saw [org] is running ticketing through [competitor].
+- Reaching out since [org] is running on [competitor].
+- Came across [org] and saw you're running ticketing through [competitor].
+
+Note these carry **no question**: the endorsed email states the reason, develops it in the
+middle, and saves the only question for the CTA. Putting a question in the opener as well
+gives the email two asks.
 
 > Hey [first name],
 >
-> I'm [sender], I run partnerships at Posh. Reaching out since [org] is running on
-> [competitor]. Open to seeing what else is out there?
+> I'm [sender], I run partnerships at Posh.
 >
-> Posh does the ticketing, plus the part after the sale: your crowd, your promo, your
-> payouts.
+> Saw [org] is running ticketing through [competitor]. We work with a lot of [vertical]
+> organizers in [city], and I often notice that organizers on [competitor] face
+> operational challenges, such as having your guest lists, payouts, and promotion all
+> living in three different places.
 >
-> Want me to put a comparison together?
+> Posh pulls that into one platform, so you're not juggling tools on event night.
+>
+> Want me to put together a comparison for your next show?
 
 ---
 
@@ -176,7 +187,9 @@ one-line answer is easy to give.
 
 > How are you handling promo at [org] right now, mostly by hand?
 >
-> On Posh it sits with the ticketing, so texting people who already came takes minutes.
+> Most [vertical] organizers we work with were exporting a list, pasting it somewhere
+> else, then chasing the same people who already came once. On Posh it sits with the
+> ticketing, so texting your past guests takes minutes.
 >
 > Want me to walk you through it?
 
@@ -220,23 +233,34 @@ Email 3 may use a short greeting because it is brief enough to read as a friendl
   - "Quick one about [org]:" Abrupt, and it opens on a demand rather than a reason.
   A cold email has to answer "why am I getting this?" in the first line. Assertions skip
   that question; a reason answers it.
-- **The middle paragraph is ONE sentence, and it does not end in a "so ..." clause.**
-  This is structural because a phrase blacklist does not hold: banning four explainer
-  phrasings produced two fresh ones ("so that part stops eating your week", "so the part
-  that actually scales a party business"). One sentence, full stop, move to the question.
-- **CUT THE EXPLAINER CLAUSE.** State the thing and stop. Do not add a clause telling
-  the prospect why it matters, what most tools get wrong, or what usually happens. These
-  are the exact patterns to delete, all taken from real generated copy:
-  - "which is the part most ticketing tools are worst at"
-  - "that is the part that usually lives scattered across three tools"
-  - "that is the part organizers tell us eats the week"
-  - "most organizers only go looking when something starts to pinch"
-  A rep does not explain the problem back to the person who has it. **Punchy, direct,
-  light. Not sales, not marketing.**
-- **Length is the constraint that makes the rest true.** A real email from the sales team
-  runs about 60 words of body. Email 1 is 35 to 65 words, email 2 is 30 to 60, email 3 is
-  18 to 42. If an email is over, the thing to cut is almost always an explainer clause or
-  a second sentence in the middle paragraph, never the question.
+- **CONCRETE, NOT VAGUE. This is the whole distinction, and it replaced a phrase
+  blacklist that was cutting the wrong things.** The middle paragraph is where an email
+  earns its tone, so it needs real content, not less content.
+  - **Write this:** "We work with a lot of [vertical] organizers in [city], and I often
+    notice that organizers on [competitor] face operational challenges, such as having
+    your guest lists, payouts, and promotion all living in three different places."
+    Three things make it work: **first person** ("I often notice") so a person is
+    speaking rather than a brand, **their world named** (vertical, city, platform), and
+    **the actual items listed** rather than gestured at.
+  - **Only name the platform when we actually know it.** This device references
+    `[competitor]` twice, so it belongs to shapes used when the platform is known. With
+    an unusable competitor, keep the observation and name no platform: "I often notice
+    that organizers running a few events a month end up with guest lists, payouts, and
+    promotion in three different places."
+  - **Not this:** "which is the part most ticketing tools are worst at", "that is the
+    part organizers tell us eats the week". These are opinions with no content: they
+    explain the problem back to the person who has it and say nothing.
+  - A closing "so ..." consequence is **good** when it is specific: "so you're not
+    juggling tools on event night" is exactly right. It is only filler when it restates
+    the sentence before it.
+- **Two sentences in the middle paragraph, not one.** Cutting it to one produced
+  bare assertions that read "cobbled together"; three or more is bloat and is trimmed in
+  `repair.py`. Two is the endorsed shape.
+- **Length: email 1 is 50 to 95 words, email 2 is 35 to 70, email 3 is 18 to 45.** The
+  endorsed email is about 85 words. Earlier ceilings of 110 and then 65 were both wrong in
+  different directions: the first let the copy pad, the second squeezed out the concrete
+  middle. **Vagueness was always the real problem, not length.** If an email is over, cut
+  a vague sentence, never a specific one, and never the question.
 - **One CTA. One.** Two asks ("let me know if you're open to connecting" plus "free for
   a 15 min chat?") is the pattern to avoid, however natural it feels when typing.
 - **An exemplar's phrasing propagates, so watch what sits next to it.** Shape 1D once
@@ -244,6 +268,9 @@ Email 3 may use a short greeting because it is brief enough to read as a friendl
   a quick call". That is no longer a FAIL (the CTA bans were lifted 2026-08-26) but it is
   still the weaker CTA, and the mechanism is the point: whatever an exemplar is one word
   away from, the model will eventually write.
+- **Order is greeting, intro line, THEN the opening move.** The sender's intro line is
+  never pushed below the opener; a run that let the move come first put "I'm Carl, I run
+  partnerships at Posh" in the third paragraph, which reads as an afterthought.
 - **Use the opening variant you were handed** (`shapes.opening` in the research note),
   filled with this contact's details. Code picks one of the shape's variants per contact,
   because asking the model to "vary the first sentence" did nothing: within a shape, 13 of

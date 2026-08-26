@@ -324,15 +324,21 @@ shapes file where exactly one reaches you at a time.
 - **Sell with warmth, not fluff.** The bundle (dedicated account support, financial
   incentives, marketing push) is real, but naming all of it in one breath is the feature
   dump the AEs down-scored. Pick the single facet that fits this persona and band.
-- **No explainer clauses.** State the thing and stop. Never add a clause telling the
-  prospect why it matters or what most tools get wrong: "which is the part most ticketing
-  tools are worst at", "that is the part that usually lives scattered across three
-  tools", "most organizers only go looking when something starts to pinch". A rep does
-  not explain the problem back to the person who has it. Punchy, direct, light hearted.
-  Not sales, not marketing.
-- **Shorter than feels finished.** Email 1 is 35 to 65 words of body. A real email from
-  the sales team is about 60. When over, cut an explainer clause or the second sentence
-  of the middle paragraph, never the question.
+- **CONCRETE, NOT VAGUE.** The middle of the email is where it earns its tone, so it
+  needs real content rather than less content. Speak in the first person, name their
+  world, and list the actual items: "We work with a lot of [vertical] organizers in
+  [city], and I often notice that organizers on [competitor] face operational challenges,
+  such as having your guest lists, payouts, and promotion all living in three different
+  places." The "I often notice" is doing work: a person is speaking, not a brand. Name a
+  platform only when the research note actually carries one. What to avoid is the opinion with no content: "which is the
+  part most ticketing tools are worst at", "that is the part organizers tell us eats the
+  week". A closing "so ..." consequence is good when specific ("so you're not juggling
+  tools on event night") and filler only when it restates the sentence before it.
+- **Length: email 1 is 50 to 95 words of body.** The email the sales lead endorsed is
+  about 85. When over, cut a vague sentence, never a specific one, and never the
+  question. Vagueness is the problem, not length: a longer concrete email beats a short
+  choppy one, and an earlier 65-word ceiling squeezed out the middle and read "cobbled
+  together".
 - **Write to THIS organizer.** `organization`, `city`, `vertical`, `volume_angle` and the
   competitor are all in the research note. A shape filled with generic nouns is the
   failure the shapes exist to prevent.

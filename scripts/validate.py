@@ -38,12 +38,15 @@ NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
 # Recalibrated twice, downward both times.
 #   original      {1,2: (80,110), 3: (40,70)}
 #   2026-08-25    {1,2: (45,90),  3: (20,50)}
-#   2026-08-26    below
-# The second cut was still too generous: a 34-run came back at an 81-word median for
-# email 1 and read as marketing rather than as a rep typing a note. A real email from
-# the sales team runs about 60 words of body. These bands are set around that, so the
-# ceiling is what a rep actually sends rather than what a model will pad to.
-LENGTH_TARGETS = {1: (35, 65), 2: (30, 60), 3: (18, 42)}
+#   2026-08-26a   {1: (35,65),  2: (30,60), 3: (18,42)}
+#   2026-08-26b   below
+# The 65-word ceiling was too tight and cost more than it saved. Squeezed to fit, email 1
+# lost the concrete middle that carried its tone and read "cobbled together". The email
+# the sales lead actually endorsed runs about 85 words of body: it names the vertical and
+# city, lists the three things that scatter (guest lists, payouts, promotion), and closes
+# with a "so ..." consequence. Length was never the real problem; vagueness was. A longer
+# concrete email beats a short choppy one, so the ceiling is set around that email.
+LENGTH_TARGETS = {1: (50, 95), 2: (35, 70), 3: (18, 45)}
 
 # Subject word count. Widened 2-5 -> 2-6 -> 2-7 as the warmer SDR voice settled, then to
 # 2-8 on 2026-08-26: organization names on this list run long ("If You Know You Know" is
@@ -297,15 +300,23 @@ def _count_sentences(para: str) -> int:
     return len(SENTENCE_END.findall(masked.strip())) or (1 if masked.strip() else 0)
 
 
-def check_middle_paragraph(subject: str, body: str, *, footer: str) -> list[Finding]:
-    """The middle paragraph carries ONE sentence.
+MIDDLE_MAX_SENTENCES = 2
 
-    Enforced in code because prose could not hold it. The rule was written four times in
-    config/message-shapes.md and instructions/message-generation.md, and each time the
-    model routed around it with a new phrasing: "which is the part most ticketing tools
-    are worst at", then "so that part stops eating your week", then "so the part that
-    actually scales a party business". Blacklisting phrasings is whack-a-mole; the
-    structure is the rule.
+
+def check_middle_paragraph(subject: str, body: str, *, footer: str) -> list[Finding]:
+    """The middle paragraph carries at most TWO sentences.
+
+    Was ONE sentence for a few hours on 2026-08-26 and that was wrong. A hard cap of one,
+    plus a repair that truncated the second, produced exactly the "cobbled together" read
+    the sales lead flagged: the middle is where the concrete detail lives, and cutting it
+    left a bare assertion. The endorsed email has a two-sentence middle.
+
+    Three or more is still bloat, and that is what this catches. The thing to police is
+    VAGUENESS, not sentence count, and vagueness is not machine-checkable: "which is the
+    part most ticketing tools are worst at" is an opinion with no content, while "the
+    operational side (guest lists, payouts, promotion) ends up living in three different
+    places" is substance, and no regex separates them. That judgement lives in
+    config/message-shapes.md and in review.
 
     The MIDDLE is what is enforced, not the whole email. The opening paragraph
     legitimately carries two sentences (the sender's intro line, then the reason for
@@ -327,9 +338,10 @@ def check_middle_paragraph(subject: str, body: str, *, footer: str) -> list[Find
         if re.search(r"^\s*[-*\u2022]", para, re.M):
             continue                  # a deliberate list, not prose
         n = _count_sentences(para)
-        if n > 1:
+        if n > MIDDLE_MAX_SENTENCES:
             out.append(Finding("middle_paragraph", FAIL,
-                f"paragraph {i} has {n} sentences, rule is 1: {para[:110]!r}"))
+                f"paragraph {i} has {n} sentences, max is {MIDDLE_MAX_SENTENCES}: "
+                f"{para[:110]!r}"))
     return out
 
 
@@ -627,12 +639,13 @@ MIDDLE_PARA_CASES = [
     ("Hey Rolando,\n\nI'm Carl, I run partnerships at Posh. Reaching out to see if you're "
      "locked in on RA?\n\nPosh keeps ticketing, guest list, and payouts in one place.\n\n"
      "Want me to put a comparison together?", False, "one-sentence middle: the target"),
-    ("Hey Rolando,\n\nI'm Carl, I run partnerships at Posh. Reaching out to see if you're "
-     "locked in on RA?\n\nPosh keeps ticketing, guest list, and payouts in one place "
-     "instead of scattered across tools. For a party series like yours, that means you're "
-     "not juggling RSVPs and approvals between platforms.\n\n"
-     "Happy to put a quick comparison together, want me to?", True,
-     "two sentences in the middle: the exact bloat the AEs flagged"),
+    ("Hey there,\n\nI'm Carl, I run partnerships at Posh.\n\nSaw Gotham's Den is running "
+     "ticketing through Eventbrite. We work with a lot of live performance venues in New "
+     "York, and what tends to happen is the operational side (guest lists, payouts, "
+     "promotion) ends up living in three different places.\n\nPosh pulls that into one "
+     "platform, so you're not juggling tools on event night.\n\nWant me to put together a "
+     "comparison for your next show?", False,
+     "THE ENDORSED EMAIL: two-sentence opener, concrete middle, must pass"),
     ("Hey there,\n\nI'm Carl, I run partnerships at Posh. Reaching out about your setup?"
      "\n\nWant me to put a comparison together?", False,
      "opener plus CTA only: no middle to check"),
@@ -647,7 +660,10 @@ MIDDLE_PARA_CASES = [
      "a bullet list is exempt: shape 2B is deliberately scannable"),
     ("Hey there,\n\nI'm Carl. Reaching out about your setup?\n\nPosh does ticketing in "
      "one place. It also handles payouts. And promo.\n\nWant a comparison?", True,
-     "three sentences in the middle"),
+     "three sentences in the middle is still bloat"),
+    ("Hey there,\n\nI'm Carl. Reaching out about your setup?\n\nPosh keeps it in one "
+     "place. You are not juggling tools on event night.\n\nWant a comparison?", False,
+     "two sentences in the middle is the endorsed shape"),
 ]
 
 # Subjects that must PASS only because the contact's own proper nouns are supplied.
