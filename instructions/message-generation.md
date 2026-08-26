@@ -126,7 +126,8 @@ Generation never reads HubSpot itself. If the columns are absent the tier defaul
 `none` and email 1 opens cold, so an un-enriched run is safe.
 
 **First, decide whether a real interaction even happened:**
-- **Counts as a prior interaction:** a logged meeting, a connected call, or an email that got a genuine reply from the contact. These are two-way.
+- **Counts as a prior interaction: a previous EMAIL conversation only** (narrowed 2026-08-26). An email that got a genuine reply *from the contact* is two-way and qualifies. Calls and meetings are deliberately not read: we are unlikely to be cold-emailing anyone we have already taken a call with, and supporting that path cost real complexity for a case that barely occurs.
+- **Only the prospect's own new words are used.** A reply carries the whole quoted thread beneath it, which is *our* text. One real example ran 7.7k characters of which the prospect wrote 105; the rest was our own message, including per-ticket pricing and an advance. Everything from the first quote marker onward is discarded, so a callback can never be built out of our own words and attributed to them.
 - **Does NOT count:** outbound emails we sent with no reply. A prior *send* is not a prior *conversation*. Several of these leads are old HubSpot contacts with ignored past outreach (per the project brief), and opening "great to reconnect" on a one-way send reads as false. Treat these as cold.
 
 **Then pick the callback tier:**

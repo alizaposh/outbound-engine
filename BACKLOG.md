@@ -275,7 +275,31 @@ Rewrite the stages accordingly:
 
 ---
 
-## Prior-interaction callbacks — BUILT 2026-08-25, DRY-RUN PASSED 2026-08-26
+## Prior-interaction callbacks — EMAIL ONLY, dry-run passed 2026-08-26
+
+**Narrowed to previous email conversations (2026-08-26).** Calls and meetings are no
+longer read: we are unlikely to be cold-emailing anyone we have already taken a call
+with, so that path cost real complexity for a case that barely occurs. Deleting it
+removed three of the five bugs below at the source (the mis-documented meeting-outcome
+enum, calendar boilerplate, and 20k-char Gong transcripts) and halved the cost, from 8
+HubSpot calls per contact to 2.
+
+**The hazard email brings instead, and the guard for it.** An inbound reply carries the
+entire quoted thread beneath it, and that text is *ours*. A real example: 7741 chars, of
+which the prospect wrote the first 105 ("Thanks for sending. We will review along with
+our other proposals...") and the rest was our own message including "3% + $1.50 per
+ticket" and "a $1M advance, interest-free". Reading the full body would have built a
+callback out of our own confidential pricing and attributed it to the prospect.
+`clean_body()` now cuts at the first quote marker (Gmail "On ... wrote:", Outlook
+From:/Sent:/divider, any ">" line) before anything else runs, and mobile signatures are
+dropped. Verified on the live record: 7741 chars in, 105 out, none of our pricing
+surviving.
+
+**Effect on the tier mix:** the same 12-contact sample went from 11/12 `specific` to
+**2/12**, and both survivors are genuine prospect statements from their own replies.
+That drop is the point, not a regression.
+
+### History: what the first dry-run caught (kept for the reasoning)
 `scripts/enrich_callbacks.py`. Reads a contact's HubSpot timeline and emits a callback
 for email 1 (`instructions/message-generation.md` §9, which holds the wording rules).
 Sits between eligibility and generation:

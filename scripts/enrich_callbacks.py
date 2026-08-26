@@ -19,10 +19,20 @@ Four guarantees:
      an interaction. hs_email_direction == INCOMING_EMAIL is the crux: that is a reply
      from the contact. Many of these leads are old records with ignored outreach, and
      "good to reconnect" on a one-way send reads false.
-  3. A VOICEMAIL IS NOT A CHAT. Only a CONNECTED call counts. No-answer, busy,
-     voicemail, and wrong-number are not interactions.
+  3. ONLY THE PROSPECT'S OWN NEW WORDS ARE READ. An inbound reply carries the whole
+     quoted thread beneath it, which is OUR text. One real example ran 7.7k chars of
+     which the prospect wrote 105: the rest was our own message including "3% + $1.50
+     per ticket" and "a $1M advance, interest-free". Extracting from the full body
+     would build a callback out of our own confidential pricing and attribute it to
+     them. Everything from the first quote marker onward is discarded.
   4. UNCERTAIN MEANS NONE. Any doubt returns tier "none" and the generator writes a
      cold open. A missing callback costs nothing; a fabricated one costs the lead.
+
+EMAIL ONLY (narrowed 2026-08-26). Calls and meetings are no longer read: we are
+unlikely to be cold-emailing anyone we have already taken a call with, so supporting
+that path cost real complexity (a mis-documented meeting-outcome enum, calendar
+boilerplate, 20k-char Gong transcripts) for a case that barely occurs. Prior EMAIL
+conversation is the signal that actually exists on a cold list.
 
 Property names and enum values below were confirmed against HubSpot's current API
 docs (2026-08-25), not assumed.
@@ -49,49 +59,19 @@ RATE_PAUSE = 0.12
 
 # Association reads. The v3 path is what the working eligibility client already speaks;
 # v4 moved to /crm/objects/2026-03/... and is not needed for a simple per-contact read.
-ENGAGEMENT_TYPES = ("meetings", "calls", "emails", "notes")
+ENGAGEMENT_TYPES = ("emails",)
 
 PROPS = {
-    "meetings": ["hs_timestamp", "hs_meeting_title", "hs_meeting_body",
-                 "hs_meeting_outcome", "hs_meeting_start_time"],
-    "calls":    ["hs_timestamp", "hs_call_title", "hs_call_body",
-                 "hs_call_status", "hs_call_disposition", "hs_call_direction"],
-    "emails":   ["hs_timestamp", "hs_email_subject", "hs_email_text",
-                 "hs_email_direction", "hs_email_status"],
-    "notes":    ["hs_timestamp", "hs_note_body"],
+    "emails": ["hs_timestamp", "hs_email_subject", "hs_email_text",
+               "hs_email_direction", "hs_email_status"],
 }
 
 # hs_email_direction: EMAIL (we sent it), INCOMING_EMAIL (the contact replied),
 # FORWARDED_EMAIL. Only INCOMING_EMAIL is two-way.
 EMAIL_INBOUND = "INCOMING_EMAIL"
 
-# hs_call_disposition is a GUID, not a label. Only "Connected" is a conversation.
-# Everything else here is explicitly NOT one, and is listed so the intent is legible.
-CALL_DISPOSITION = {
-    "f240bbac-87c9-4f6e-bf70-924b57d47db7": ("connected", True),
-    "b2cf5968-551e-4856-9783-52b3da59a7d0": ("left voicemail", False),
-    "a4c4c377-d246-4b32-a13b-75a56a4cd0ff": ("left live message", False),
-    "73a0d17f-1163-4015-bdd5-ec830791da20": ("no answer", False),
-    "9d9162e7-6cf3-4944-bf63-4dff82258764": ("busy", False),
-    "17b47fee-58de-441e-a44c-c6300d46f273": ("wrong number", False),
-}
-# hs_call_status. COMPLETED alone does not mean anyone spoke: a voicemail is a
-# completed call. Disposition decides; status only rules out calls that never happened.
-CALL_STATUS_DEAD = {"CANCELED", "FAILED", "NO_ANSWER", "BUSY", "QUEUED", "RINGING",
-                    "CONNECTING", "CALLING_CRM_USER", "IN_PROGRESS"}
-
-# hs_meeting_outcome real values, read off the portal's own property definition:
-# SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW, CANCELED. HubSpot's docs say lowercase
-# with a space ("no show"); the API returns UPPERCASE_UNDERSCORE. Compared normalized,
-# because matching the documented spelling would have let NO_SHOW through as a genuine
-# interaction, which is precisely the false "good to reconnect" this exists to prevent.
-MEETING_OUTCOME_DEAD = {"NO_SHOW", "CANCELED", "CANCELLED", "RESCHEDULED"}
-
-# In this portal SCHEDULED is the default and nobody updates it (77 of the 100 most
-# recent meetings; COMPLETED appears zero times). So "outcome == COMPLETED" cannot be
-# the test for whether a meeting happened. The timestamp is: a meeting dated in the
-# future has definitionally not happened yet, whatever its outcome says.
-FUTURE_GRACE = dt.timedelta(hours=12)   # a meeting today is not yet a memory
+# A future-dated email is not a memory (a scheduled send, or a bad timestamp).
+FUTURE_GRACE = dt.timedelta(hours=12)
 
 OUT_COLUMNS = ELIGIBLE_COLUMNS + ["callback_tier", "callback_detail",
                                   "callback_source_id", "callback_last_date"]
@@ -100,10 +80,10 @@ REVIEW_COLUMNS = ["email", "hs_object_id", "callback_tier", "callback_detail",
                   "evidence", "skipped_reason"]
 
 MODEL_ENV = "BULK_LLM_MODEL"
-# Gong call transcripts land in notes and run 20k+ chars, opening with small talk
-# ("Rep: beep... had to do the groceries"). A 4000-char cap cut the substance off
-# entirely, so the model saw only chit-chat and returned nothing.
-MAX_DETAIL_CHARS = 16000
+# A safety bound, not a working limit. Once the quoted thread is stripped, a reply is
+# usually a sentence or two: the 7.7k-char example collapsed to 105 chars of the
+# prospect's own words. This only guards against an unusually long single message.
+MAX_DETAIL_CHARS = 8000
 
 
 # ---- fetching -----------------------------------------------------------------
@@ -163,92 +143,83 @@ def _ts(v) -> dt.datetime | None:
         return None
 
 
-def _norm_outcome(v) -> str:
-    return (v or "").strip().upper().replace(" ", "_")
-
-
 def is_two_way(eng: dict, now: dt.datetime | None = None) -> tuple[bool, str]:
-    """Did a real two-way interaction happen? Returns (yes, human-readable reason)."""
+    """Did the contact actually write to us? Returns (yes, human-readable reason)."""
     now = now or dt.datetime.now(dt.timezone.utc)
-    t = eng["_type"]
     when = _ts(eng.get("hs_timestamp"))
-    # Nothing in the future is a memory. Applies to every type: a booked-but-unheld
-    # meeting is the common case, and it must never produce "good to reconnect".
     if when and when > now - FUTURE_GRACE:
-        return False, f"{t[:-1]} is not in the past ({when.date()})"
-    if t == "meetings":
-        outcome = _norm_outcome(eng.get("hs_meeting_outcome"))
-        if outcome in MEETING_OUTCOME_DEAD:
-            return False, f"meeting {outcome}"
-        return True, f"meeting ({outcome or 'no outcome set'})"
-    if t == "calls":
-        disp = (eng.get("hs_call_disposition") or "").strip().lower()
-        status = (eng.get("hs_call_status") or "").strip().upper()
-        label, connected = CALL_DISPOSITION.get(disp, ("unknown disposition", False))
-        if connected:
-            return True, "connected call"
-        if disp:
-            return False, f"call: {label}"
-        # No disposition logged. COMPLETED is not evidence anyone spoke, so this is
-        # exactly the "when in doubt" case.
-        return False, f"call with no disposition (status {status or 'unset'})"
-    if t == "emails":
-        direction = (eng.get("hs_email_direction") or "").strip().upper()
-        if direction == EMAIL_INBOUND:
-            return True, "inbound email (contact replied)"
-        return False, f"outbound email ({direction or 'no direction'}), not a conversation"
-    return False, "note only"      # a note is context, never itself an interaction
+        return False, f"email is not in the past ({when.date()})"
+    direction = (eng.get("hs_email_direction") or "").strip().upper()
+    if direction == EMAIL_INBOUND:
+        return True, "inbound email (contact replied)"
+    return False, f"outbound email ({direction or 'no direction'}), not a conversation"
 
 
-# Meeting bodies in this portal are the booking tool's own description, not rep notes:
-# "Quick 15-min demo to get you set up as a Posh Organizer. Looking forward!" plus a
-# join link and form answers. Left unfiltered, that yields a "specific" callback built
-# from our own calendar copy, and "get you set up as a Posh Organizer" would imply the
-# prospect is already a customer. These lines are stripped before anything is extracted.
-BOILERPLATE = re.compile(
-    r"(join link[^\n]*|https?://\S+|meet\.google\.com\S*|zoom\.us/\S+|"
-    r"looking forward!?|quick \d+.?min demo[^.]*\.|"
-    r"to get you set up as a posh organizer)", re.I)
 HTML_TAG = re.compile(r"<[^>]+>")
 
-# Trust order for a detail source. Rep-written and prospect-written text first; the
-# calendar description last, because it is the one nobody typed for this conversation.
-SOURCE_TRUST = {"notes": 0, "calls": 1, "emails": 2, "meetings": 3}
+# THE QUOTED THREAD IS OUR TEXT, NOT THEIRS. An inbound reply carries the whole prior
+# conversation beneath it. A real example: 7741 chars total, of which the prospect wrote
+# the first 105 ("Thanks for sending. We will review along with our other proposals...")
+# and the remainder was our own message, including "3% + $1.50 per ticket" and "a $1M
+# advance, interest-free". Reading past the first marker would let our own confidential
+# pricing become a "callback" attributed to the prospect. Everything from the first
+# marker onward is discarded, so only their new words survive.
+QUOTE_MARKERS = [
+    re.compile(r"^\s*On .{4,80}\bwrote:\s*$", re.M | re.I),   # Gmail / Apple Mail
+    re.compile(r"^\s*-{2,}\s*Original Message\s*-{2,}", re.M | re.I),
+    re.compile(r"^\s*_{5,}\s*$", re.M),                        # Outlook divider
+    re.compile(r"^\s*From:\s.+$", re.M),                       # Outlook header block
+    re.compile(r"^\s*Sent:\s.+$", re.M),
+    re.compile(r"^\s*>", re.M),                                 # any quoted line
+]
+# Mobile signatures: harmless, but they are not content and skew the length floor.
+SIGNATURE = re.compile(
+    r"^\s*(sent from my \w+|get outlook for \w+|sent via \w+).*$", re.M | re.I)
+
+
+def strip_quoted(raw: str) -> str:
+    """Keep only what the sender typed above the quoted thread."""
+    txt = raw or ""
+    cut = len(txt)
+    for pat in QUOTE_MARKERS:
+        m = pat.search(txt)
+        if m:
+            cut = min(cut, m.start())
+    return txt[:cut]
 
 
 def clean_body(raw: str) -> str:
-    """Strip HTML, links, and calendar boilerplate. What remains is what a human
-    actually wrote about this contact, which is the only thing safe to paraphrase."""
-    txt = HTML_TAG.sub(" ", raw or "")
-    txt = txt.replace("&nbsp;", " ").replace("&amp;", "&")
-    txt = BOILERPLATE.sub(" ", txt)
+    """Quoted thread out first, then HTML, then whitespace.
+
+    Order matters: HTML stripping would destroy the ">" and header markers that
+    identify where the quoted thread begins, so quoting is removed first.
+    """
+    txt = strip_quoted(raw or "")
+    txt = HTML_TAG.sub(" ", txt)
+    txt = txt.replace("&nbsp;", " ").replace("&amp;", "&").replace("&#39;", "'")
+    txt = SIGNATURE.sub(" ", txt)
     return re.sub(r"\s+", " ", txt).strip()
 
 
 MAX_SOURCES_TRIED = 4       # cap the cheap-LLM calls per contact
 
 
-def detail_sources(engagements: list[dict], notes: list[dict]) -> list[tuple[dict, str]]:
-    """Candidate detail sources, best first.
+def detail_sources(inbound: list[dict]) -> list[tuple[dict, str]]:
+    """Inbound emails carrying enough of the prospect's own text to be worth reading,
+    most recent first.
 
-    Returns a LIST, not one pick: ranking by trust alone meant a single unhelpful
-    top-ranked source (a transcript full of small talk) blocked richer text further
-    down, and the contact silently fell back to soft. The caller tries these in order
-    until one yields a usable detail.
+    Returns a LIST, not one pick: a single unhelpful top candidate used to block better
+    text further down, and the contact fell back to soft. The caller tries these in
+    order until one yields a usable detail.
     """
-    def text_of(e) -> str:
-        for k in ("hs_note_body", "hs_call_body", "hs_email_text", "hs_meeting_body"):
-            v = (e.get(k) or "").strip()
-            if v:
-                return clean_body(v)
-        return ""
-
-    candidates = [(e, text_of(e)) for e in engagements] + [(n, text_of(n)) for n in notes]
-    with_text = [(e, txt[:MAX_DETAIL_CHARS]) for e, txt in candidates if len(txt) >= 25]
-    with_text.sort(key=lambda pair: (
-        SOURCE_TRUST.get(pair[0].get("_type", ""), 9),
-        -(_ts(pair[0].get("hs_timestamp")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)).timestamp()))
-    return with_text[:MAX_SOURCES_TRIED]
+    scored = []
+    for e in inbound:
+        txt = clean_body(e.get("hs_email_text") or "")
+        if len(txt) >= 25:                     # below this it is "thanks!" and nothing more
+            scored.append((e, txt[:MAX_DETAIL_CHARS]))
+    scored.sort(key=lambda pair: -( _ts(pair[0].get("hs_timestamp"))
+                                    or dt.datetime.min.replace(tzinfo=dt.timezone.utc)).timestamp())
+    return scored[:MAX_SOURCES_TRIED]
 
 
 # Screens the model's output. Added after a live dry-run returned 12/12 "specific",
@@ -349,10 +320,9 @@ def classify(timeline: dict[str, list[dict]], client=None, model: str = "",
              "callback_last_date": "", "interaction_kind": "", "evidence": "",
              "skipped_reason": ""}
 
-    engagements = [e for t in ("meetings", "calls", "emails") for e in timeline.get(t, [])]
-    notes = timeline.get("notes", [])
-    if not engagements and not notes:
-        return {**blank, "skipped_reason": "no engagements on the timeline"}
+    engagements = list(timeline.get("emails", []))
+    if not engagements:
+        return {**blank, "skipped_reason": "no logged emails on the timeline"}
 
     now = now or dt.datetime.now(dt.timezone.utc)
     two_way, rejected = [], []
@@ -373,7 +343,7 @@ def classify(timeline: dict[str, list[dict]], client=None, model: str = "",
             "interaction_kind": kind,
             "evidence": f"{len(two_way)} two-way engagement(s); newest {kind}"}
 
-    sources = detail_sources([e for e, _ in two_way], notes)
+    sources = detail_sources([e for e, _ in two_way])
     if not sources:
         return {**base, "callback_tier": "soft",
                 "callback_source_id": str(newest.get("_id", "")),

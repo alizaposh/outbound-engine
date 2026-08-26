@@ -148,8 +148,9 @@ config/                    ← company-specific facts Claude relies on
 
 scripts/                   ← Python (stdlib + anthropic only)
   eligibility.py           ← THE PRE-SEND FILTER. Run before generation. Read-only
-  enrich_callbacks.py      ← optional: reads HubSpot timelines, adds callback_* columns
-                             for §9 warm opens. Read-only. Runs between the two below
+  enrich_callbacks.py      ← optional: reads logged EMAIL history, adds callback_*
+                             columns for §9 warm opens. Read-only. Runs between the
+                             two below
   run_generation.py        ← draft-only generation: CSV in, reviewed CSV out.
                              HubSpot-free by design; callbacks arrive on the CSV
   review_queue.py          ← appends replies needing a human decision to the review
@@ -173,7 +174,7 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
    with no HubSpot record is eligible and gets created there (that file's Step 4).
 3. Research each prospect using available company + contact data. See
    `instructions/research.md`. **Optionally** run `scripts/enrich_callbacks.py` on the
-   ELIGIBLE list first: it reads each contact's HubSpot timeline and adds
+   ELIGIBLE list first: it reads each contact's logged email history in HubSpot and adds
    `callback_tier` / `callback_detail` columns, so email 1 can open on a real prior
    interaction (`instructions/message-generation.md` §9). A prior *send* with no reply
    is not an interaction; uncertain always means no callback.
