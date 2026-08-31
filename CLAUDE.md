@@ -145,6 +145,8 @@ config/                    ← company-specific facts Claude relies on
   banned-phrases.md        ← phrasing the generator must never produce
   generation-failure-fallback.md  ← what to do when generation fails a prospect
   smartlead-defaults.md    ← schedule, limits, delays, HubSpot activity-logging gate
+  reply-defaults.md        ← recycle windows + the (empty, enforced) auto-send allowlist.
+                             Parsed by reply_check.py; the numbers live here only
 
 scripts/                   ← Python (stdlib + anthropic only)
   eligibility.py           ← THE PRE-SEND FILTER. Run before generation. Read-only

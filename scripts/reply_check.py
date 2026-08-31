@@ -40,6 +40,7 @@ replied, then per-lead message history.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures as cf
 import datetime as dt
 import json
 import os
@@ -51,7 +52,7 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import review_queue as rq  # noqa: E402
-from eligibility import env_token  # noqa: E402
+from eligibility import env_token, load_config  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SL_BASE = "https://server.smartlead.ai/api/v1"
@@ -70,14 +71,42 @@ INTENTS = {
     "out_of_office":   {"status": None,           "resume": True,  "queue": False},
     "automated_reply": {"status": None,           "resume": True,  "queue": False},
 }
-# Recycle floors, from instructions/reply-handling.md. Floors, not fixed values: see
-# recycle_date, which honours an earlier date the prospect actually named.
-RECYCLE_NOT_NOW_DAYS = 90
-RECYCLE_NOT_INTERESTED_DAYS = 180
+REPLY_CONFIG = ROOT / "config" / "reply-defaults.md"
+_DEFAULTS: dict | None = None
+
+
+def defaults() -> dict:
+    """The recycle floors and the auto-send allowlist, from config/reply-defaults.md.
+
+    Parsed rather than restated. These numbers previously lived in this file AND in
+    instructions/reply-handling.md, so tuning one left the other wrong; config/ is where
+    the repo keeps tunable values and eligibility.py already has the parser.
+
+    The auto_send_intents assertion is the point of loading it here. reply_check.py has
+    no send path, so a non-empty list cannot silently start sending -- but it also must
+    not look like consent that was already given. Refusing to run makes building the
+    send path a deliberate act instead of a config edit nobody reviewed.
+    """
+    global _DEFAULTS
+    if _DEFAULTS is None:
+        cfg = load_config(REPLY_CONFIG)
+        for key in ("recycle_not_now_days", "recycle_not_interested_days"):
+            if not isinstance(cfg.get(key), int) or cfg[key] < 0:
+                raise RuntimeError(
+                    f"{REPLY_CONFIG.name}: {key} must be a non-negative integer, "
+                    f"got {cfg.get(key)!r}")
+        if cfg.get("auto_send_intents"):
+            raise RuntimeError(
+                f"{REPLY_CONFIG.name} lists auto_send_intents "
+                f"{cfg['auto_send_intents']}, but this script has no send path and "
+                "every reply goes to a human. Build the send path deliberately, with "
+                "the review gate in instructions/reply-handling.md, or empty the list.")
+        _DEFAULTS = cfg
+    return _DEFAULTS
 
 
 def recycle_date(intent: str, reply_at: str, named: str | None,
-                 existing: str | None) -> str | None:
+                 existing: str | None, cfg: dict | None = None) -> str | None:
     """The earliest day this contact may re-enter a campaign, or None.
 
     Four rules from instructions/reply-handling.md, each of which this got wrong first
@@ -95,6 +124,7 @@ def recycle_date(intent: str, reply_at: str, named: str | None,
     """
     if intent not in ("not_now", "not_interested"):
         return None
+    cfg = cfg or defaults()
     base = (reply_at or "")[:10]
     try:
         anchor = dt.date.fromisoformat(base)
@@ -104,14 +134,14 @@ def recycle_date(intent: str, reply_at: str, named: str | None,
         anchor = dt.datetime.now(dt.timezone.utc).date()
 
     if intent == "not_now":
-        candidate = anchor + dt.timedelta(days=RECYCLE_NOT_NOW_DAYS)
+        candidate = anchor + dt.timedelta(days=cfg["recycle_not_now_days"])
         if named:
             try:
                 candidate = dt.date.fromisoformat(named[:10])  # rule 2, may be earlier
             except ValueError:
                 pass
     else:
-        candidate = anchor + dt.timedelta(days=RECYCLE_NOT_INTERESTED_DAYS)
+        candidate = anchor + dt.timedelta(days=cfg["recycle_not_interested_days"])
 
     if existing:  # rule 4
         try:
@@ -439,26 +469,68 @@ def _self_test() -> int:
         if got != want:
             fails.append(f"{label}: got {got!r}, want {want!r}")
 
-    # -- recycle_date, the four rules
+    # -- recycle_date, the four rules.
+    # Expectations are DERIVED from config, not hardcoded, so tuning a window in
+    # config/reply-defaults.md does not produce mystery failures here. The floors
+    # themselves are printed below rather than asserted.
+    cfg = defaults()
+    nn, ni = cfg["recycle_not_now_days"], cfg["recycle_not_interested_days"]
+
+    def after(date: str, days: int) -> str:
+        return (dt.date.fromisoformat(date) + dt.timedelta(days=days)).isoformat()
+
     check("rule 1: anchored on the reply date, not today",
-          recycle_date("not_interested", "2026-01-01T10:00:00Z", None, None), "2026-06-30")
+          recycle_date("not_interested", "2026-01-01T10:00:00Z", None, None),
+          after("2026-01-01", ni))
     check("rule 2: a named date is honoured",
           recycle_date("not_now", "2026-08-31T10:00:00Z", "2027-01-15", None), "2027-01-15")
     check("rule 2: a named date EARLIER than the floor is still honoured",
           recycle_date("not_now", "2026-08-31T10:00:00Z", "2026-10-01", None), "2026-10-01")
     check("rule 2: no named date falls back to the floor",
-          recycle_date("not_now", "2026-08-31T10:00:00Z", "", None), "2026-11-29")
+          recycle_date("not_now", "2026-08-31T10:00:00Z", "", None),
+          after("2026-08-31", nn))
     check("rule 3: not_interested ignores a named date",
           recycle_date("not_interested", "2026-08-31T10:00:00Z", "2026-09-05", None),
-          "2027-02-27")
+          after("2026-08-31", ni))
     check("rule 4: an existing later date wins",
           recycle_date("not_now", "2026-08-31T10:00:00Z", None, "2028-01-01"), "2028-01-01")
     check("rule 4: an existing EARLIER date does not win",
-          recycle_date("not_now", "2026-08-31T10:00:00Z", None, "2026-09-01"), "2026-11-29")
+          recycle_date("not_now", "2026-08-31T10:00:00Z", None, "2026-09-01"),
+          after("2026-08-31", nn))
     check("no recycle date for other intents",
           recycle_date("interested", "2026-08-31T10:00:00Z", None, None), None)
     check("a garbage named date falls back to the floor rather than crashing",
-          recycle_date("not_now", "2026-08-31T10:00:00Z", "next spring", None), "2026-11-29")
+          recycle_date("not_now", "2026-08-31T10:00:00Z", "next spring", None),
+          after("2026-08-31", nn))
+
+    # -- the config is genuinely in charge, not decoration. If the windows were still
+    # hardcoded every case above would pass unchanged, so this is what actually proves
+    # the duplication is gone.
+    check("a config value actually drives the floor",
+          recycle_date("not_now", "2026-08-31T10:00:00Z", None, None,
+                       cfg={"recycle_not_now_days": 7, "recycle_not_interested_days": ni}),
+          "2026-09-07")
+
+    # -- the auto-send allowlist is asserted, not just read
+    try:
+        load_config(REPLY_CONFIG)
+        global _DEFAULTS
+        saved, _DEFAULTS = _DEFAULTS, None
+        cfgfile = REPLY_CONFIG.read_text()
+        REPLY_CONFIG.write_text(cfgfile.replace("auto_send_intents: []",
+                                                "auto_send_intents: [interested]"))
+        try:
+            defaults()
+            fails.append("a non-empty auto_send_intents did NOT stop the script")
+        except RuntimeError as e:
+            check("refusing to run names the send path, not just the value",
+                  "no send path" in str(e), True)
+        finally:
+            REPLY_CONFIG.write_text(cfgfile)
+            _DEFAULTS = saved
+    except Exception as e:                       # never leave the config edited
+        REPLY_CONFIG.write_text(cfgfile)
+        fails.append(f"auto-send check errored: {e}")
 
     # -- read_thread
     msgs, newest = read_thread([
@@ -479,6 +551,29 @@ def _self_test() -> int:
     except RuntimeError as e:
         check("guarantee 4 names the fix", "BODY_FIELDS" in str(e), True)
 
+    # -- the action map in this file must match the table in reply-handling.md.
+    # The dict stays authoritative at RUNTIME on purpose: parsing a prose table to
+    # decide what to write to a prospect's record turns a mis-parse into a wrong write.
+    # So the doc is not parsed to drive behaviour, only to prove behaviour matches it.
+    doc = (ROOT / "instructions" / "reply-handling.md").read_text(encoding="utf-8")
+    table = {}
+    for line in doc.splitlines():
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) < 5 or cells[0] not in INTENTS:
+            continue
+        status = cells[1].split("(")[0].strip()          # "disqualified (old contact)"
+        table[cells[0]] = {
+            "status": None if status == "unchanged" else status,
+            "resume": cells[3].strip().upper() == "RESUME"}
+    if len(table) != len(INTENTS):
+        fails.append(f"could not parse every intent out of the reply-handling.md table: "
+                     f"got {sorted(table)}, expected {sorted(INTENTS)}")
+    for intent, want in table.items():
+        check(f"action map agrees with the doc for {intent} (status)",
+              INTENTS[intent]["status"], want["status"])
+        check(f"action map agrees with the doc for {intent} (sequence)",
+              INTENTS[intent]["resume"], want["resume"])
+
     # -- guarantee 5, structurally
     check("native opt-out is not writable", "hs_email_optout" in HubSpotWriter.write.__doc__
           if HubSpotWriter.write.__doc__ else False, False)
@@ -486,6 +581,8 @@ def _self_test() -> int:
           sorted(m for m in dir(Smartlead) if not m.startswith("_")),
           ["campaigns", "get", "replied_leads", "resume", "thread", "unsubscribe"])
 
+    print(f"config: not_now floor {nn}d, not_interested {ni}d, auto-send "
+          f"{cfg['auto_send_intents'] or 'empty (enforced)'}")
     print(f"pure cases: {'all passed' if not fails else str(len(fails)) + ' FAILED'}")
     for f in fails:
         print(f"  FAIL {f}")
@@ -498,16 +595,26 @@ def _self_test() -> int:
         return 1 if fails else 0
 
     print(f"\nclassifying {len(CLASSIFY_CASES)} cases against {model}:")
-    wrong = 0
-    for text, want, why in CLASSIFY_CASES:
+
+    def run_case(case):
+        text = case[0]
         thread = [{"inbound": False, "at": "2026-08-28T09:00:00Z", "subject": "quick one",
                    "body": "Saw you run ticketed events. Worth a look at Posh?"},
                   {"inbound": True, "at": "2026-08-30T09:00:00Z", "subject": "Re: quick one",
                    "body": text}]
         try:
-            got = classify(client, model, thread)["intent"]
+            return classify(client, model, thread)["intent"]
         except Exception as e:
-            got = f"ERROR {e}"
+            return f"ERROR {e}"
+
+    # Concurrent because 15 sequential calls pushed this past two minutes, and a
+    # self-test nobody waits for is a self-test nobody runs. Modest width, and the
+    # executor preserves input order so the printed report stays stable.
+    with cf.ThreadPoolExecutor(max_workers=5) as pool:
+        results = list(pool.map(run_case, CLASSIFY_CASES))
+
+    wrong = 0
+    for (text, want, why), got in zip(CLASSIFY_CASES, results):
         allowed = want if isinstance(want, tuple) else (want,)
         ok = got in allowed
         wrong += 0 if ok else 1

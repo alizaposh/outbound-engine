@@ -933,9 +933,41 @@ wanted before wiring it.
 
 ---
 
-## Move the recycle constants into config
-**Trigger fired 2026-08-31: the reply handler is implemented.** Now more than a tidiness
-item, because the constants are DUPLICATED. `RECYCLE_NOT_NOW_DAYS = 90` and
+## Move the recycle constants into config — DONE 2026-08-31
+Closed the same day the trigger fired. `config/reply-defaults.md` is now the only place
+the recycle windows exist; `scripts/reply_check.py` parses it with
+`eligibility.load_config`, so there is no second parser either. The copy in
+`instructions/reply-handling.md` is gone, replaced by a pointer.
+
+Two things went in beyond the literal de-duplication, both because the first version
+would have passed its tests either way:
+
+- **A self-test case that proves config is actually in charge.** Every recycle case
+  passed identically when the numbers were still hardcoded, so those cases could not
+  detect the bug they were supposed to guard. One case now drives the floor to 7 days
+  through config and asserts the date moves.
+- **`auto_send_intents`, asserted rather than read.** The list is empty and
+  `reply_check.py` has no send path, so a value there cannot start sending mail. But it
+  must not read as consent already given either, so a non-empty list makes the script
+  refuse to run and name the review gate. Building the send path stays a deliberate act
+  instead of a config edit nobody reviewed.
+
+**Also closed a second instance of the same problem, unprompted:** the action map
+(intent to `outbound_status`, and stop vs RESUME) existed as a table in
+`reply-handling.md` and as a dict in `reply_check.py`. The dict stays authoritative at
+runtime on purpose — parsing a prose table to decide what to write to a real person's
+record turns a mis-parse into a wrong write — so the self-test parses the table and
+asserts the two agree on all 10 intents. Drift is caught, not permitted, and behaviour
+never depends on the parse.
+
+**And a usability fix that matters more than it sounds:** the self-test had grown to 15
+sequential model calls and exceeded two minutes, which is how a self-test quietly stops
+being run. Now concurrent, 32 seconds, same coverage.
+
+Original note follows, for the reasoning.
+
+**Trigger fired 2026-08-31: the reply handler is implemented.** The constants were
+DUPLICATED. `RECYCLE_NOT_NOW_DAYS = 90` and
 `RECYCLE_NOT_INTERESTED_DAYS = 180` are stated in `instructions/reply-handling.md` and
 declared again in `scripts/reply_check.py`, so tuning one silently leaves the other
 wrong. The repo pattern that avoids this is elsewhere already: scripts PARSE the config

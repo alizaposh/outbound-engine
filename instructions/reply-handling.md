@@ -66,12 +66,10 @@ A decline is a *wait*, not a suppression. The handler writes a date to
 SOFT eligibility tier skips anyone whose date is still in the future, so the field is
 what actually enforces the wait.
 
-Named constants — **defaults/floors, tunable**:
-
-```
-RECYCLE_NOT_NOW_DAYS        = 90    # not_now, when the reply names no date
-RECYCLE_NOT_INTERESTED_DAYS = 180   # not_interested, always
-```
+The windows live in **`config/reply-defaults.md`**, which is the source of truth;
+`scripts/reply_check.py` parses that file. They are floors, tunable there, and are
+deliberately NOT restated here — this file used to carry its own copy and the handler
+declared a second one, so tuning either left the other wrong.
 
 - **`not_now`** → the **date named in the reply** if there is one ("circle back after
   the summer", "ask me in Q1") — use it. Otherwise `reply_date + RECYCLE_NOT_NOW_DAYS`.
