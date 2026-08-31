@@ -70,7 +70,12 @@ GATED = {
 # once someone becomes a Posh organizer -- so reading `company` and finding it blank
 # looked like "no data to personalize with" when the name was sitting on the contact
 # the whole time. 34 emails were generated without it.
-CARRY = ["firstname", "lastname", "jobtitle", "company", "prospect_org", "city"]
+CARRY = ["firstname", "lastname", "jobtitle", "company", "prospect_org", "city",
+         # The generation signals. Fetched here so a lead source that is just a HubSpot
+         # list works end to end: CLAUDE.md allows "HubSpot list" as a lead source, but
+         # these three used to come from the input CSV only, so a list export had to be
+         # hand-assembled with them first.
+         "current_competitor", "vertical", "estimated_gmv_usd"]
 
 OUT_COLUMNS = ["email", "hubspot_contact_id", "decision", "reason", "exclusion_tier",
                "notes_last_updated", "notes_last_contacted",
@@ -441,9 +446,13 @@ def main(argv=None) -> int:
                 # org name, and the contact property is populated and per-contact unique.
                 "prospect_org": p.get("prospect_org") or lead.get("prospect_org", ""),
                 "city": p.get("city") or lead.get("city", ""),
-                "current_competitor": lead.get("current_competitor", ""),
-                "estimated_gmv_usd": lead.get("estimated_gmv_usd", ""),
-                "vertical": lead.get("vertical", ""),
+                # Input CSV wins when present (a sales-provided list may carry better
+                # values than the CRM); HubSpot fills the gaps.
+                "current_competitor": (lead.get("current_competitor")
+                                       or p.get("current_competitor", "")),
+                "estimated_gmv_usd": (lead.get("estimated_gmv_usd")
+                                      or p.get("estimated_gmv_usd", "")),
+                "vertical": lead.get("vertical") or p.get("vertical", ""),
             })
 
     stamp = now.date().isoformat()

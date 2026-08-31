@@ -525,6 +525,36 @@ Rewrite the stages accordingly:
 
 ---
 
+## Eligibility filter: first real run 2026-08-31
+Ran against **HubSpot list 1764**, a sales-provided segment of 35 ("starter email engine
+test list", SNAPSHOT type so membership is frozen and the run is reproducible).
+
+**35 in, 34 ELIGIBLE, 1 EXCLUDED** (soft: owned by Dani Edelstein, an excluded owner),
+0 hard, 0 errors, 15 API calls.
+
+**A gap this closed:** the filter carried `prospect_org` and `city` from HubSpot but
+expected `current_competitor`, `vertical` and `estimated_gmv_usd` from the input CSV, so a
+lead source that is *just a HubSpot list* arrived with no generation signals and had to be
+hand-assembled first. `CLAUDE.md` allows "HubSpot list" as a lead source, so that was a
+real hole. Those three are now fetched too, with the input CSV winning when it has better
+values. Result: a two-column list (id + email) goes in and a fully-populated eligible list
+comes out. Coverage on this run: `prospect_org` 34/34, `city` 34/34, competitor 34/34,
+vertical 34/34, `estimated_gmv_usd` 25/34, `job_title` 26/34, `first_name` 27/34.
+
+**Two things this run does NOT prove:**
+- **The hard tier still has not fired on live data.** This list contains no opt-outs and
+  no bounces, so gate 1 has never excluded a real contact. It stays proven by offline
+  cases only.
+- **A 97% eligible rate is not representative.** This is a hand-curated test list. An
+  earlier sample drawn straight from HubSpot came back 5 of 21 eligible, because real
+  records carry customers, CSMs and recent rep activity. Do not plan list sizes off 97%.
+
+Also noted: a **fourth vertical** appeared, `Festival` (1 lead). `config/personas.md`
+treats festival signals as leaning Pro, so routing handles it, but the vertical set is
+now four values rather than three.
+
+---
+
 ## Smartlead campaign creation — BUILT 2026-08-31, never launched
 `scripts/create_campaign.py`. Creates the campaign **DRAFTED**; launching stays a human
 action in the UI. Closes the oldest open question in this project ("confirm Claude can
@@ -704,10 +734,11 @@ dry-run gate:**
   callbacks: the model reached for competitor-disparagement framing. Existing guard
   caught it.
 
-- **Re-run on a real cold list**, not internal records. The `none` tier has still never
-  been produced by live data: every sampled contact had genuine history, so the
-  ignored-outbound-only path (the one that guards against a false "good to reconnect")
-  is proven only by offline cases. That is the remaining gap.
+- ~~Re-run on a real cold list.~~ **DONE 2026-08-31, and the `none` tier finally
+  appeared: 34 of 34** on HubSpot list 1764 ("starter email engine test list"), all with
+  reason "no logged emails on the timeline". The inversion is the proof the earlier sample
+  was unrepresentative: internal `@posh.vip` records gave 11/12 `specific`, a real cold
+  list gives 34/34 `none`. Every lead on this list gets a cold open, which is correct.
 - Cost is now up to **4 cheap-LLM calls per contact** with history, not one, plus a 16k
   window. Still ELIGIBLE-set only, but worth measuring on a real campaign before
   assuming it is cheap.
