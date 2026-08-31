@@ -62,16 +62,40 @@ than intended, and the task only needs it to run one command and read back the r
 
 ## Prerequisites
 
-1. **Slack.** Set `SLACK_BOT_TOKEN` and `SLACK_HEARTBEAT_CHANNEL` in `.env`. The bot
-   needs the `chat:write` scope **and must be invited to the channel** — Slack answers a
-   post from an uninvited bot with `not_in_channel`. Use a channel separate from the
-   review channel: the heartbeat posts on quiet runs by design and would bury approval
-   requests.
+1. **Slack.** Set `SLACK_BOT_TOKEN` and `SLACK_HEARTBEAT_CHANNEL` in `.env`, then run
+   `./.venv/bin/python scripts/heartbeat.py --check-slack` — it tests the token, the
+   channel and the invite separately and posts nothing.
+
+   Creating the app, once:
+   1. **api.slack.com/apps** → **Create New App** → **From scratch**. Name it
+      `Outbound Engine`, choose the workspace.
+   2. **OAuth & Permissions** → **Bot Token Scopes** → add **`chat:write`**. That is the
+      only scope the heartbeat needs. The broader `chat:write.public` (post to any public
+      channel without joining) is deliberately NOT used: `chat:write` plus a one-time
+      invite means the bot can only post where it has been put.
+   3. **Install to Workspace**. If the workspace requires admin approval for apps, this
+      is where it is requested.
+   4. Copy the **Bot User OAuth Token**, which starts **`xoxb-`** → `SLACK_BOT_TOKEN`.
+      The app-level `xapp-` token on the same page is a different thing and will not work.
+   5. **Invite the bot to the channel**: `/invite @Outbound Engine` in the channel itself.
+      This is the step that gets missed — Slack answers a post from an uninvited bot with
+      `not_in_channel`.
+   6. Channel **About** tab → copy the **ID** (starts with `C`) → `SLACK_HEARTBEAT_CHANNEL`.
+      Use the id, not `#name`: it survives a channel rename.
+
+   Use a channel **separate from the review channel**: the heartbeat posts on quiet runs
+   by design and would bury approval requests.
+
+   **Scopes stay minimal on purpose.** The Slack brief/approval flow will later need read
+   scopes (`channels:history`, `channels:read`); add them when that is built, as a
+   re-install. There is no reason to grant read access to channels today for a job that
+   only posts.
 2. **The machine must be awake and Claude Desktop running.** Neither this nor any local
    scheduler wakes a sleeping Mac. A missed slot is invisible from the inside — which is
    precisely what the heartbeat is for.
 3. Test before scheduling:
    ```bash
+   ./.venv/bin/python scripts/heartbeat.py --check-slack               # token/channel/invite
    ./.venv/bin/python scripts/heartbeat.py --slot morning --no-slack   # prints, no post
    ./.venv/bin/python scripts/heartbeat.py --slot morning              # posts for real
    ```

@@ -143,6 +143,64 @@ def post_to_slack(text: str, blocks: list | None = None) -> None:
             "wrong, or the token lacks chat:write.")
 
 
+def check_slack() -> int:
+    """Diagnose the Slack setup without posting into the channel.
+
+    Separates the three things that fail independently -- the token, the channel id, and
+    whether the bot was invited -- because Slack reports all three as a post that simply
+    did not appear, and guessing which one is wrong wastes the most setup time.
+    """
+    token = env_value("SLACK_BOT_TOKEN")
+    channel = env_value("SLACK_HEARTBEAT_CHANNEL") or env_value("SLACK_REVIEW_CHANNEL")
+    print(f"token   : {'set, ' + token[:5] + '...' if token else 'MISSING'}")
+    print(f"channel : {channel or 'MISSING (set SLACK_HEARTBEAT_CHANNEL)'}")
+    if not token:
+        print("\nSet SLACK_BOT_TOKEN in .env. It is the Bot User OAuth Token and starts "
+              "with xoxb-, not the app-level xapp- token.")
+        return 1
+    if not token.startswith("xoxb-"):
+        print(f"\nWARNING: the token starts {token[:5]!r}, not 'xoxb-'. A bot token is "
+              "what chat.postMessage needs; xapp- and xoxp- tokens will not work here.")
+
+    def api(method: str, params: str = ""):
+        req = urllib.request.Request(
+            f"https://slack.com/api/{method}{params}",
+            headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read() or b"{}")
+
+    who = api("auth.test")
+    if not who.get("ok"):
+        print(f"\nTOKEN REJECTED: {who.get('error')!r}")
+        print("  invalid_auth / token_revoked -> the token is wrong or the app was "
+              "uninstalled. Re-copy it from OAuth & Permissions.")
+        return 1
+    print(f"\nauthenticated as {who.get('user')!r} in workspace {who.get('team')!r}")
+
+    if not channel:
+        return 1
+    info = api("conversations.info", f"?channel={channel}")
+    if not info.get("ok"):
+        err = info.get("error")
+        print(f"CHANNEL PROBLEM: {err!r}")
+        if err == "channel_not_found":
+            print("  Either the id is wrong, or it is a private channel the bot cannot "
+                  "see. Use the id from the channel's About tab (starts with C).")
+        return 1
+    ch = info.get("channel") or {}
+    member = ch.get("is_member")
+    print(f"channel #{ch.get('name')} found; bot is "
+          f"{'a member' if member else 'NOT a member'}")
+    if not member:
+        print(f"  Invite it: type  /invite @{who.get('user')}  in #{ch.get('name')}.")
+        print("  Without this every post fails with not_in_channel and the heartbeat "
+              "cannot report anything, including its own failure.")
+        return 1
+    print("\nSlack is ready. Post a real heartbeat with:")
+    print("  ./.venv/bin/python scripts/heartbeat.py --slot morning")
+    return 0
+
+
 def render(slot: str, results: list[dict], apply_changes: bool) -> tuple[str, list]:
     failed = [r for r in results if not r["ok"]]
     attention = [r for r in results if r["ok"] and r["attention"]]
@@ -168,10 +226,16 @@ def main(argv=None) -> int:
                     help="which scheduled run this is; decides which jobs run")
     ap.add_argument("--apply", action="store_true",
                     help="pass --apply to the jobs so they WRITE. Off by default.")
+    ap.add_argument("--check-slack", action="store_true",
+                    help="diagnose the Slack token, channel and bot invite without "
+                         "posting anything. Run this first after setting up the app.")
     ap.add_argument("--no-slack", action="store_true",
                     help="print the report instead of posting it. For setup testing only "
                          "-- never use this in the scheduled task, it disables the heartbeat.")
     a = ap.parse_args(argv)
+
+    if a.check_slack:
+        return check_slack()
 
     results = [run_job(name, a.apply) for name in SLOTS[a.slot]]   # guarantee 2
     text, blocks = render(a.slot, results, a.apply)
