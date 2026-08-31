@@ -489,6 +489,24 @@ deliberately, not a setup step to rush.
    report to the review Sheet. Promote to writing HubSpot only once several runs have
    been observed to make the same decisions a human would have.
 
+### Confirmed 2026-08-31: the cloud option exists today, as Claude Code **Routines**
+Checked against the docs rather than assumed. A **remote routine** runs in the cloud on a
+schedule even when the machine is off, and can also fire on an API call or a GitHub event.
+Minimum interval is 1 hour, which is far finer than the three-times-daily cadence needs.
+So the capability is not the constraint.
+
+**The credentials analysis above is confirmed, and is now the whole blocker.** A remote
+routine runs from a **fresh clone with no access to local files**. `.env` is git-ignored
+and the Google service-account key was deliberately moved outside the repo, so neither
+would exist in a cloud run. Nothing works there until those four secrets are supplied by
+whatever secret mechanism routines offer, which is exactly the deliberate security
+decision described above.
+
+Worth noting the tradeoff runs both ways: cloud routines run **autonomously with no
+permission prompts**, where a local Desktop task can stall on one. That is more reliable
+and less supervised at the same time, which is precisely why the "graduate, do not start,
+at `--apply`" requirement matters more in the cloud than locally.
+
 ### Not the mechanism: this session's cron tool
 Checked 2026-08-31. Claude Code's in-session `CronCreate` is **session-only and
 in-memory**, is gone when the session ends, auto-expires after 7 days, and fires only

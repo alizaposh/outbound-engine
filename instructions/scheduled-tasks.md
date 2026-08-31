@@ -37,8 +37,46 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
 
 ## Setting up the tasks in Claude Desktop
 
-Create **three** scheduled tasks, one per slot, each with the prompt below (swap the slot
-name). Set each to repeat on weekdays at the time in the table.
+Requires Claude Desktop **1.1.5368 or newer**. In the **Code** tab, click **Routines** in
+the sidebar (or under **More**) → **New routine** → choose **Local**. A local routine runs
+on this machine with access to this repo; a remote one runs in the cloud from a fresh
+clone and would not have `.env` (see `BACKLOG.md`).
+
+Create **three** routines, identical except for the slot and time:
+
+| Name | Schedule | Instructions |
+|---|---|---|
+| `outbound-morning` | **Weekdays**, 8:05 AM | prompt below with `morning` |
+| `outbound-midday` | **Weekdays**, 12:05 PM | prompt below with `midday` |
+| `outbound-afternoon` | **Weekdays**, 4:05 PM | prompt below with `afternoon` |
+
+**Weekdays** is a built-in preset (Daily, skipping Sat/Sun) with a time picker — no cron
+needed. Set **working folder** to this repo; Desktop will ask you to trust it. Leave the
+worktree toggle **off**: these jobs read live credentials and write to real systems, so
+an isolated copy of the repo is not wanted.
+
+### Do this immediately after creating each one, or it will silently stall
+
+Click **Run now** and answer the permission prompt with **always allow**. A task in Manual
+permission mode that hits an un-approved tool does not fail — it *stalls*, waiting for a
+human, and the heartbeat never posts. That failure looks exactly like the one the
+heartbeat exists to expose, so approve the Bash command once, up front, on each of the
+three. You can review or revoke these later from the task's detail page.
+
+### Two behaviours worth knowing
+
+- **Runs fire a few minutes late by design.** Desktop adds a small deterministic offset to
+  stagger API traffic, so 8:05 may fire at 8:07. Harmless here.
+- **Missed runs get one catch-up.** On wake or app start, Desktop checks the last seven
+  days and starts a single catch-up for the most recently missed time, discarding older
+  ones. **For these jobs that is a feature, not a hazard**: both are idempotent, so a
+  morning check that actually runs at 11pm simply catches up. It will post a heartbeat
+  labelled `morning` with the real 11pm timestamp, which reads oddly but is accurate. No
+  prompt guardrail is needed — unlike a task that, say, reviews "today's" commits.
+- **Sleep still skips.** Settings → **Desktop app → General** → **Keep computer awake**
+  prevents idle sleep, but closing the lid sleeps regardless.
+
+The prompt for each task:
 
 ```
 Run the outbound engine's scheduled MORNING check.
