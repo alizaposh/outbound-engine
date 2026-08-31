@@ -59,7 +59,9 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
   fields** (Lead Status, Lifecycle Stage) — that mapping is deferred to v2. See
   `config/hubspot-properties.md`.
 - Everything runs **locally**: Claude Code + Claude desktop scheduled tasks. No
-  servers, queues, or webhook infrastructure.
+  servers, queues, or webhook infrastructure. The schedule is three weekday slots
+  running `scripts/heartbeat.py`, which posts to Slack on every run so a missed slot is
+  visible rather than silent — see `instructions/scheduled-tasks.md`.
 
 **v1 scope caveat — campaign creation is not fully hands-off.** Enabling Smartlead's
 HubSpot activity logging is a per-campaign UI toggle with no API endpoint. Every
@@ -132,6 +134,7 @@ instructions/              ← reusable "how to do each job" files
   campaign-creation.md     ← how to build & configure a Smartlead campaign via API
   reply-handling.md        ← classify replies, draft responses, auto-send rules
   campaign-analysis.md     ← what metrics to pull and how to turn them into rules
+  scheduled-tasks.md       ← the v1 scheduler: Claude Desktop tasks + Slack heartbeat
   lead-qualification.DEFERRED.md  ← out of v1 scope; kept for later
 
 config/                    ← company-specific facts Claude relies on
@@ -158,6 +161,8 @@ scripts/                   ← Python (stdlib + anthropic only)
   reply_check.py           ← WORKFLOW B. Polls Smartlead for replies, classifies,
                              updates outbound_* in HubSpot, resumes auto-responders,
                              queues the rest. DRY RUN BY DEFAULT; never sends a reply
+  heartbeat.py             ← THE SCHEDULED RUN. Shells the two polling jobs and posts
+                             to Slack EVERY run, so silence means broken
   sync_unsubscribes.py     ← Smartlead unsubscribes -> HubSpot outbound_suppressed.
                              DRY RUN BY DEFAULT. Scoped suppression only, never the
                              native global opt-out
