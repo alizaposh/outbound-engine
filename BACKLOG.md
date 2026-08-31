@@ -444,7 +444,60 @@ need only that one function changed.
 
 ---
 
-## Sync Smartlead unsubscribes to HubSpot
+## Sync Smartlead unsubscribes to HubSpot — BUILT 2026-08-31 (`scripts/sync_unsubscribes.py`)
+Stage 2, as rewritten by the cascade policy. Dry run by default; `--apply` writes
+`outbound_suppressed` + `outbound_opt_out_date` (+ `outbound_status=opted_out`). Native
+`hs_email_optout` is never written and the Communication Preferences endpoint is never
+called, per the policy below.
+
+**Stages 1 and 2 collapsed into one script deliberately.** Stage 1 existed because the
+original Stage 2 wrote the GLOBAL opt-out, where a bad email match is close to
+irreversible. Retargeting to `outbound_suppressed` removed that asymmetry: the write is
+scoped and reversible, so a separate Sheet-based staging pass buys a surface to maintain
+rather than safety. The dry-run default does Stage 1's actual job — print every match and
+decision, write nothing — and is the same shape as every other script here.
+
+### What the API allows, verified live 2026-08-31 by unsubscribing a throwaway lead
+- **`statistics?email_status=unsubscribed` returns NOTHING** after a confirmed
+  unsubscribe. The obvious enumeration path does not work.
+- **`status` goes to `BLOCKED`, and keying on that would have been a real bug.** BLOCKED
+  is coarse and also covers bounces, so a bounce would have been written into HubSpot as
+  an opt-out, with an opt-out date, as a false compliance record. The precise signal is
+  the explicit boolean **`lead.is_unsubscribed`**, and `lead.unsubscribed_client_id_map`
+  carries the actual unsubscribe **timestamp** — so the opt-out date is the real date,
+  never the date the job happened to run.
+- **No reachable account-wide block list.** Every route variant tried
+  (`/email-accounts/global-block-list`, `/leads/global-block-list`,
+  `/email-accounts/{id}/global-block-list`) returns 400 or 404. Enumeration is therefore
+  campaign-scoped.
+
+### The limitation that follows, and it is not obvious
+**Deleting a Smartlead campaign hides its unsubscribes from this job**, because
+enumeration walks campaigns and there is no account-wide list to fall back on. Observed
+directly: unsubscribes from earlier probe campaigns vanished once those campaigns were
+deleted. Smartlead still suppresses those people on its own side, so there is no re-send
+risk, but HubSpot can never learn about them. **Run the sync before deleting a campaign**,
+or do not delete campaigns that have sent.
+
+### Verified
+- Pure rules: 18 cases (timestamp extraction, earliest-wins in both directions,
+  idempotence, the no-timestamp case, the meeting_booked case).
+- Live enumeration: a real Smartlead unsubscribe on a throwaway `.invalid` lead, picked
+  out correctly from a 2-lead campaign, real timestamp read, reported as UNMATCHED
+  because no HubSpot contact exists. Campaign deleted after.
+- Matched path: a real HubSpot contact via an injected unsubscribe dated 2026-08-14,
+  dry run, resolved to the right three properties using the real date and not today's.
+
+**Two things it deliberately does NOT do.** It never writes native `hs_email_optout`
+(scope-matched suppression only). And it does not overwrite
+`outbound_status=meeting_booked`: suppression is carried by `outbound_suppressed`, which
+is what the gate reads, so the status write is informational and yields rather than
+destroying the record of a booked meeting.
+
+**Still open: nothing schedules this.** It and `reply_check.py` are both cron-shaped and
+neither is wired to a schedule yet.
+
+### Original item, for the reasoning
 **Trigger:** Stage 1 once reply retrieval via the Smartlead API is running (Phase 6);
 Stage 2 only after Stage 1 has run several cycles and the email matching is trusted.
 

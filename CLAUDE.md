@@ -158,6 +158,9 @@ scripts/                   ← Python (stdlib + anthropic only)
   reply_check.py           ← WORKFLOW B. Polls Smartlead for replies, classifies,
                              updates outbound_* in HubSpot, resumes auto-responders,
                              queues the rest. DRY RUN BY DEFAULT; never sends a reply
+  sync_unsubscribes.py     ← Smartlead unsubscribes -> HubSpot outbound_suppressed.
+                             DRY RUN BY DEFAULT. Scoped suppression only, never the
+                             native global opt-out
   review_queue.py          ← appends replies needing a human decision to the review
                              Sheet. Never writes the decision/notes columns
   export_review.py         ← pushes a generation run to the review Sheet, one tab per run
