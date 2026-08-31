@@ -239,11 +239,12 @@ python scripts/reply_check.py --campaign 123 --limit 5
   expensive one.
 - **`objection` vs `not_now` on a contract lock** ("we're signed with Tixr through next
   summer") is a genuine judgement call and the precedence table settles it as
-  `objection`, since a constraint you could answer outranks timing. **Consequence worth
-  a decision from whoever runs outbound:** `objection` sets NO recycle date, so a
-  contract expiry does not automatically schedule a return. If the preference is for
-  those to come back on their own, that intent needs a recycle date of its own; today
-  the human in the queue has to set the return manually.
+  `objection`, since a constraint you could answer outranks timing. Note the consequence:
+  `objection` sets NO recycle date, so a contract expiry does not schedule its own
+  return, and the human in the queue has to set one manually. **Accepted for v1 and
+  deferred to v2 by decision on 2026-08-31** — see "V2: give `objection` a recycle date
+  of its own" in `BACKLOG.md`. Do not quietly add one here; the wait behaviour needs
+  deciding first.
 
 ### What this script deliberately does not do
 

@@ -905,9 +905,45 @@ Findings measured on `reviews/draft-run-34-20260819-cta-opener.csv` (7 PASS / 13
 
 ---
 
+## V2: give `objection` a recycle date of its own
+**Deferred out of v1 by explicit decision 2026-08-31.** Not a bug; v1 matches the spec.
+
+A contract lock ("we're signed with Tixr through next summer") classifies as `objection`,
+because the precedence table puts a constraint you could answer above one you can only
+wait out. `objection` sets no `outbound_recycle_after`, so **a known contract expiry does
+not schedule its own return.** The reply sits in the queue, a human reads it, and if
+nobody manually sets a return date the lead is simply not picked up again — the engine has
+no other memory of "come back in June".
+
+That is the actual cost: the highest-intent kind of decline, one that names when it stops
+being true, is the only one that gets no automatic recycle. `not_now` and
+`not_interested` both do.
+
+**What v2 would do:** let `objection` carry an optional recycle date when the reply names
+a resolvable expiry, reusing `recycle_date` in `scripts/reply_check.py` — it already
+honours a named date and never shortens an existing one, so the change is adding
+`objection` to the intent check plus a `named_return_date` for it in the classifier
+prompt, which already extracts one for `not_now`. An objection with no date named stays
+as it is today.
+
+**Do not make this automatic without a decision on the wait.** `not_now` has a 90-day
+floor precisely because a vague "later" needs one. A named contract expiry is different:
+the date is the answer and a floor would override it. Worth confirming which behaviour is
+wanted before wiring it.
+
+---
+
 ## Move the recycle constants into config
-**Trigger:** low priority; do it if the windows get tuned more than once, or when the
-reply handler is implemented.
+**Trigger fired 2026-08-31: the reply handler is implemented.** Now more than a tidiness
+item, because the constants are DUPLICATED. `RECYCLE_NOT_NOW_DAYS = 90` and
+`RECYCLE_NOT_INTERESTED_DAYS = 180` are stated in `instructions/reply-handling.md` and
+declared again in `scripts/reply_check.py`, so tuning one silently leaves the other
+wrong. The repo pattern that avoids this is elsewhere already: scripts PARSE the config
+markdown rather than restating it (`eligibility.py` reads
+`config/pre-send-defaults.md`). A `config/reply-defaults.md` parsed by `reply_check.py`
+would remove the second copy.
+
+Original note follows.
 
 `RECYCLE_NOT_NOW_DAYS = 90` and `RECYCLE_NOT_INTERESTED_DAYS = 180` currently live in
 `instructions/reply-handling.md`. Repo convention puts tunable values in `config/`
