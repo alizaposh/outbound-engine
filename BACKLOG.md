@@ -444,6 +444,62 @@ need only that one function changed.
 
 ---
 
+## V2 option: run the scheduled jobs as Claude Code cloud tasks
+**Raised 2026-08-31. Not a v1 decision — recorded as the option to evaluate when v1's
+local schedule proves annoying.**
+
+### The problem it solves
+A local schedule only fires when the laptop is awake. macOS schedulers do not wake the
+machine, so a missed morning is silent. A cloud-hosted runner is always available, and
+unlike webhooks it needs **no public HTTPS receiver**, because it still polls outward.
+That makes it the "always-on" half of the webhook argument without the receiver half —
+strictly simpler than the webhook path in "Why polling and not Smartlead webhooks".
+
+It does NOT make anything event-driven. Still polling, still not real time. Per that same
+note, latency is not the binding constraint anyway: every reply goes to a human, so the
+human's next look dominates.
+
+### The engine is already shaped for this, which is the good news
+Nothing here needs redesigning to run unattended somewhere else:
+- **Both jobs are idempotent.** `reply_check.py` dedupes on the Smartlead message id;
+  `sync_unsubscribes.py` skips contacts already current. A cloud run and a local run can
+  both fire, or either can be missed, with no double-handling and no lost work.
+- **Both are dry run by default.** A misconfigured cloud task writes nothing.
+- **Nothing auto-sends.** The auto-send allowlist is empty AND asserted at startup, and
+  `create_campaign.py` never launches. The worst an unattended run can do is read.
+- **No local state to carry.** No database by design, so a cloud runner needs no state
+  transfer — HubSpot, Smartlead and the Sheets are the state.
+
+### The blocker, and it is a real decision not a config step
+**Credentials.** Four secrets, and today two of them are deliberately un-portable:
+`HUBSPOT_ACCESS_TOKEN`, `SMARTLEAD_API_KEY` and `AWS_BEARER_TOKEN_BEDROCK` live in a
+git-ignored `.env`, and the Google service-account key was deliberately MOVED OUT of the
+repo to `~/.config/outbound-engine/sheets-key.json` (600). A cloud runner can read
+neither. Making this work means putting production HubSpot **write** access and the
+sending-platform key into a cloud secret store. That is a security decision to take
+deliberately, not a setup step to rush.
+
+### Requirements any cloud scheduler must clear before it gets `--apply`
+1. Durable across sessions. Must survive Claude exiting, indefinitely.
+2. Fires on wall clock, not on a session being open or idle.
+3. Secrets from a real secret store, never committed, never in a prompt.
+4. Failures are visible. A cloud job that silently stops is worse than a local one that
+   visibly did not run.
+5. **Graduate, do not start, at `--apply`.** Run dry-run-only in the cloud first and
+   report to the review Sheet. Promote to writing HubSpot only once several runs have
+   been observed to make the same decisions a human would have.
+
+### Not the mechanism: this session's cron tool
+Checked 2026-08-31. Claude Code's in-session `CronCreate` is **session-only and
+in-memory**, is gone when the session ends, auto-expires after 7 days, and fires only
+while the REPL is idle; its `durable` flag explicitly has no effect. It is fine for a
+reminder inside one working session and unusable as this engine's scheduler. Recorded so
+nobody tries it and quietly loses a morning's replies. Cloud-hosted scheduled tasks are a
+different capability and are the thing to evaluate here — confirm what is actually
+available at the time, against the five requirements above.
+
+---
+
 ## Why polling and not Smartlead webhooks — asked and settled 2026-08-31
 Recorded because it is a reasonable question that will be asked again.
 
