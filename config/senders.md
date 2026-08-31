@@ -71,10 +71,13 @@ name in 18 of 34 emails, signing "Carl" while the body said "I'm Brooke".
   own emails, and every meeting books with Zach regardless
   (`config/meeting-routing.md`). Carl and Brooke are correspondents, not meeting owners.
 
-## Open: when the mailbox is assigned
-`instructions/campaign-creation.md` currently assigns mailboxes at campaign-creation
-time, which happens *after* generation and approval. Assembly needs the mailbox
-*during* generation, to know whose name to sign. The recommended fix is to assign the
-mailbox at generation time, store it with the prospect, and have campaign creation
-honor that assignment rather than re-deciding. Not yet implemented, so for now the
-caller passes the mailbox explicitly.
+## Resolved 2026-08-31: when the mailbox is assigned
+The mailbox is assigned at **generation** time (the caller passes `--mailbox`), and
+`scripts/run_generation.py` now records `sender` and `mailbox` on every output row.
+`scripts/create_campaign.py` **honors** that assignment rather than re-deciding it: it
+refuses a CSV that mixes senders and refuses mailboxes belonging to anyone but the person
+who signed the copy.
+
+This matters more than it looked. A Smartlead campaign **rotates across its assigned
+mailboxes**, so one campaign holding copy from three senders would send an email signed
+"Carl" from Brooke's mailbox. Run campaign creation once per sender.

@@ -525,6 +525,64 @@ Rewrite the stages accordingly:
 
 ---
 
+## Smartlead campaign creation — BUILT 2026-08-31, never launched
+`scripts/create_campaign.py`. Creates the campaign **DRAFTED**; launching stays a human
+action in the UI. Closes the oldest open question in this project ("confirm Claude can
+CREATE/manage campaigns via API").
+
+**Write-access test first, before writing the script.** A test campaign was created,
+every endpoint probed, every value read back rather than trusted, then deleted. What is
+API-capable: create, schedule, mailbox assignment, the 3-step sequence, per-lead custom
+fields, `unsubscribe_text`, `stop_lead_settings`, `track_settings`, and delete (the
+delete endpoint works but is undocumented).
+
+**Findings that changed the runbook:**
+- **`unsubscribe_text` IS settable by API and persists.** It had been recorded as a
+  manual UI step. The text is now set programmatically; whether that also enables the
+  one-click header tag still needs a real send, which was always true.
+- **The manual gates drop from three to two.** Only HubSpot activity logging and
+  "Optimize Email Delivery" are unreachable, both rejected with `"is not allowed"`. There
+  is **no HubSpot field on the campaign object at all**, which independently confirms the
+  earlier finding.
+- **Stop-on-reply is Smartlead's own default** (`REPLY_TO_AN_EMAIL`) on a fresh campaign,
+  so that golden rule needs verifying rather than setting.
+- **`subject: ""` on steps 2 and 3 persisted**, confirming the threaded-reply design.
+- **Per-prospect copy as per-lead custom fields works end to end**, newlines intact
+  through the round trip. The sequence body is literally `{{message_1_body}}`.
+- **`GET /campaigns/{id}/schedule` returns 404.** The schedule can be written but not
+  read back, so it cannot be verified programmatically. Check it in the UI before launch.
+
+**A design bug the dry run caught, and it was one level up from a bug already fixed.** A
+Smartlead campaign **rotates across its assigned mailboxes**, so a campaign built from a
+CSV containing copy signed by three senders would send an email signed "Carl" from
+Brooke's mailbox. That is the same misrepresented-sender fault that once put the wrong
+name in 18 of 34 emails. Fixed on both sides: `run_generation.py` now records `sender` and
+`mailbox` per row, and campaign creation refuses a mixed-sender CSV and refuses mailboxes
+belonging to anyone but the signer. **Run it once per sender.** This also resolves the
+long-standing "when is the mailbox assigned" question in `config/senders.md`.
+
+**Guards, all exercised:** never launches (no status call exists in the client, and the
+run asserts DRAFTED at the end); approval required via `--approved-by` / `--approval-note`;
+a batch with any FAIL row is refused (`--skip-failed` to drop them); a failure after
+creation deletes the partial campaign rather than leaving it; the two manual UI gates are
+printed at the end.
+
+**Also fixed:** bodies are converted to HTML before upload, because campaigns send as
+HTML and plain newlines collapse there, so a four-paragraph email would have arrived as
+one block. Apostrophes are left unescaped so a lead inspected in the Smartlead UI reads
+as `I'm Carl` rather than `I&#x27;m Carl`.
+
+### Still to do here
+- **Never run against real prospects.** The end-to-end test used `.invalid` addresses on
+  purpose. The first real campaign is the first time real leads enter Smartlead.
+- **`--dry-run` output is the review surface** for a campaign before it exists. Worth a
+  human reading one before the first real creation.
+- The **schedule values are `[CONFIRM]`** in `config/smartlead-defaults.md`: timezone
+  `America/New_York` is a real decision, since leads span LA to NY and Smartlead schedules
+  per campaign rather than per recipient.
+
+---
+
 ## Prior-interaction callbacks — EMAIL ONLY, dry-run passed 2026-08-26
 
 **Narrowed to previous email conversations (2026-08-26).** Calls and meetings are no

@@ -4,6 +4,49 @@
 API. **Never run this without a recorded approval.** Read
 `config/smartlead-defaults.md` for the default settings.
 
+## How to run it
+
+`scripts/create_campaign.py` implements the steps below. It creates the campaign
+**DRAFTED and never launches**: launching stays a human action in the Smartlead UI.
+
+```
+./.venv/bin/python scripts/create_campaign.py \
+  --csv reviews/<approved-generation-output>.csv \
+  --audience ra-premium --usecase switch \
+  --mailboxes carl.newmark@vibeposhvip.com,carl.newmark@coreposhvip.com \
+  --approved-by "<name>" --approval-note "<slack permalink>" \
+  --dry-run          # drop this to actually create
+```
+
+**ONE SENDER PER CAMPAIGN, and the script enforces it.** A Smartlead campaign rotates
+across its assigned mailboxes, so a campaign holding copy signed by three people would
+send an email signed "Carl" from Brooke's mailbox. That is the misrepresented-sender
+fault that once put the wrong name in 18 of 34 emails, one level up. Generation records
+`sender` and `mailbox` on every row; this script refuses a CSV that mixes senders, and
+refuses mailboxes that belong to anyone but the one who signed the copy. **Run it once
+per sender.**
+
+It also refuses a batch containing any row that failed validation (`--skip-failed` drops
+those rows instead), requires `--approved-by` and `--approval-note` so the approval is
+recorded, and deletes the campaign if any step after creation fails rather than leaving a
+half-configured campaign for someone to trust later.
+
+**What was confirmed possible by API on 2026-08-31** (write-access test, every value read
+back rather than trusted): create, schedule, mailbox assignment, the 3-step sequence,
+per-lead custom fields, `unsubscribe_text`, `stop_lead_settings`, `track_settings`, and
+delete. Two things are **not** reachable and stay manual, both rejected with
+`"is not allowed"`: HubSpot activity logging and "Optimize Email Delivery".
+
+Three details worth keeping in mind:
+- **Per-prospect copy rides as per-lead custom fields.** The sequence body is literally
+  `{{message_1_body}}`; each lead carries its own text. Steps 2 and 3 have `subject: ""`,
+  which is what makes them threaded replies.
+- **Bodies are converted to HTML** before upload. Campaigns send as HTML, where plain
+  newlines collapse, so a four-paragraph email would arrive as one block.
+- **The schedule cannot be read back:** `GET /campaigns/{id}/schedule` returns 404. The
+  write returns `ok: true` and the UI shows the result, but nothing can verify it
+  programmatically, so check the schedule in the UI before launching.
+
 ## Preconditions (all required)
 - Explicit approval recorded in Slack. The Slack thread **is** the record — there is no
   local approvals store.

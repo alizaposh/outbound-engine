@@ -614,6 +614,11 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
 
 COLUMNS = ["hs_object_id", "first_name", "last_name", "email", "job_title", "company",
            "prospect_org", "city",
+           # Who signed this copy, and from which mailbox. Written so campaign creation
+           # can HONOR the assignment instead of re-deciding it: a Smartlead campaign
+           # rotates across its assigned mailboxes, so copy signed "Carl" could otherwise
+           # send from Brooke's mailbox, which misrepresents the sender.
+           "sender", "mailbox",
            "persona", "persona_basis", "platform_known", "current_competitor",
            "estimated_gmv_usd", "vertical", "validation", "generation_error",
            "attempts", "repairs_applied", "sequence_findings", "shape", "bedrock_message_id",
@@ -622,7 +627,7 @@ COLUMNS = ["hs_object_id", "first_name", "last_name", "email", "job_title", "com
            "message_3_subject", "message_3_body"]
 
 
-def to_row(r: ContactResult) -> dict:
+def to_row(r: ContactResult, sender_name: str = "", mailbox: str = "") -> dict:
     c = r.contact
     row = {
         "hs_object_id": c.hs_object_id, "first_name": c.first_name or "",
@@ -633,6 +638,7 @@ def to_row(r: ContactResult) -> dict:
         "current_competitor": c.current_competitor or "",
         "estimated_gmv_usd": "" if c.estimated_gmv_usd is None else c.estimated_gmv_usd,
         "prospect_org": c.prospect_org or "", "city": c.city or "",
+        "sender": sender_name, "mailbox": mailbox,
         "vertical": c.vertical or "", "validation": r.status,
         "generation_error": r.error, "attempts": r.attempts,
         "repairs_applied": sum(len(m.repairs) for m in r.messages),
@@ -738,7 +744,7 @@ def main(argv=None) -> int:
     with a.out.open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=COLUMNS)
         w.writeheader()
-        w.writerows(to_row(r) for r in results)
+        w.writerows(to_row(r, sender_name, a.mailbox) for r in results)
 
     n_err = sum(1 for r in results if r.error)
     n_fallback = sum(1 for r in results if r.used_fallback)

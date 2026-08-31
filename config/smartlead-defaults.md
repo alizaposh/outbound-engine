@@ -8,21 +8,48 @@ Lock these once the Smartlead account exists (Phase 1).
 - Ramp: start low, increase gradually as mailboxes build sending history.
 - Scaling rule: add domains/mailboxes to grow volume. Never spike an existing mailbox.
 
-## Schedule  [FILL IN]
-- Sending window / timezone: `[FILL IN]`
-- Sending days: `[FILL IN, e.g. weekdays only]`
+## Canonical values
+
+Read by `scripts/create_campaign.py`. Confirmed settable via the Smartlead API on
+2026-08-31 (write-access test); every value below was written and read back.
+
+```
+campaign_name_format: {date}_{audience}_{usecase}   # e.g. 2026-09_ra-premium_switch
+timezone: America/New_York          # [CONFIRM] leads span LA to NY; Smartlead schedules
+                                    # per campaign, not per recipient, so this is the
+                                    # window everyone gets. Eastern favours the coasts
+                                    # least badly, but it is a real decision.
+days_of_the_week: [1, 2, 3, 4, 5]   # weekdays only, Monday = 1
+start_hour: "09:00"
+end_hour: "17:00"
+min_time_btw_emails: 10             # minutes, spreads sends inside the window
+max_new_leads_per_day: 15           # per mailbox, matching the Smartlead account setting
+seq_delay_days: [0, 3, 4]           # email 1 immediately, 2 after 3 days, 3 after 4 more
+stop_lead_settings: REPLY_TO_AN_EMAIL   # stop-on-reply; already the Smartlead default
+track_settings: [DONT_EMAIL_OPEN]   # open tracking off: a tracking pixel is a
+                                    # deliverability cost on cold mail
+send_as_plain_text: false
+```
 
 ## Sequence
 - 3 emails per prospect.
-- Inter-email delays: `[FILL IN, e.g. 3 to 4 business days between steps]`
-- Stop-on-reply: **ON** (follow-ups halt when a prospect replies).
+- **Inter-email delays: 3 days to email 2, then 4 more to email 3** (`seq_delay_days`).
+- Stop-on-reply: **ON** (follow-ups halt when a prospect replies). This is Smartlead's own
+  default (`REPLY_TO_AN_EMAIL`), confirmed on a created campaign, so it needs verifying
+  rather than setting.
+- **Per-prospect copy rides as per-lead custom fields.** The sequence step body is
+  literally `{{message_1_body}}` and each lead carries its own text. Verified end to end
+  on 2026-08-31: newlines survive the round trip. Steps 2 and 3 carry `subject: ""`,
+  which is what makes them threaded replies.
 
 ## Mailboxes
 - Only warmed, healthy secondary/brand-adjacent mailboxes. Never the primary domain.
 - Distribute each campaign across multiple mailboxes.
 
-## Naming convention  [FILL IN]
-- Campaign name format: `[FILL IN, e.g. YYYY-MM_audience_usecase]`
+## Naming convention
+- Format: `{date}_{audience}_{usecase}`, e.g. `2026-09_ra-premium_switch`. Set in the
+  canonical block above; `scripts/create_campaign.py` builds it from `--audience` and
+  `--usecase` so two campaigns cannot collide on name.
 
 ## Warmup
 - Keep warmup running on new mailboxes before launch and continue some after launch.

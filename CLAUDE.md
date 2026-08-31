@@ -155,6 +155,9 @@ scripts/                   ← Python (stdlib + anthropic only)
                              HubSpot-free by design; callbacks arrive on the CSV
   review_queue.py          ← appends replies needing a human decision to the review
                              Sheet. Never writes the decision/notes columns
+  export_review.py         ← pushes a generation run to the review Sheet, one tab per run
+  create_campaign.py       ← builds a DRAFTED Smartlead campaign from approved copy.
+                             NEVER launches; one sender per campaign
   assemble.py / repair.py / validate.py  ← sign-off assembly, repairs, copy checks
 data/                      ← input lead lists / working CSVs (git-ignored)
 reviews/                   ← exported review CSV/Sheet links (git-ignored)

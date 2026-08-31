@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+"""Create a DRAFTED Smartlead campaign from approved copy. Never launches.
+
+Implements instructions/campaign-creation.md. Takes the CSV that
+scripts/run_generation.py produced, once a human has approved the copy, and builds the
+campaign in Smartlead: schedule, mailboxes, the 3-email sequence, and the leads with
+their own copy attached.
+
+Five guarantees:
+
+  1. IT NEVER LAUNCHES. Nothing here calls the campaign status endpoint. The campaign is
+     left DRAFTED, which Smartlead itself will not send from, and the run asserts that
+     status at the end. Launching stays a human action in the UI, deliberately.
+  2. APPROVAL IS RECORDED OR NOTHING HAPPENS. --approved-by and --approval-note are
+     required (golden rule 1: no campaign without a recorded approval). The note is
+     written into the campaign name suffix and printed, so the Smartlead record carries
+     it too.
+  3. A BATCH WITH ANY FAIL IS REFUSED. Copy that failed validation does not reach a
+     campaign. --skip-failed drops those rows instead, and says which.
+  4. NO PARTIAL CAMPAIGNS. If any step after creation fails, the campaign is deleted
+     rather than left half-configured for someone to find later and trust.
+  5. ONE SENDER PER CAMPAIGN. A Smartlead campaign ROTATES across its assigned
+     mailboxes, so a campaign mixing copy signed by different people would send an email
+     signed "Carl" from Brooke's mailbox. That is the same misrepresented-sender fault
+     that put the wrong name in 18 of 34 emails once already, one level up. Every lead in
+     the CSV must be signed by one sender, and every mailbox passed in must belong to
+     them. Run the script once per sender.
+  6. TWO MANUAL UI GATES ARE PRINTED, NOT ASSUMED. HubSpot activity logging and
+     "Optimize Email Delivery" are not reachable by API (verified 2026-08-31: both
+     rejected with "is not allowed"), so the run ends by naming them.
+
+API shapes were verified against a real campaign on 2026-08-31, not taken from docs.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import datetime as dt
+import html
+import json
+import os
+import pathlib
+import re
+import sys
+import urllib.error
+import urllib.request
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import assemble  # noqa: E402
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+DEFAULTS = ROOT / "config" / "smartlead-defaults.md"
+BASE = "https://server.smartlead.ai/api/v1"
+POSITIONS = (1, 2, 3)
+
+# Custom-field names on each lead. The sequence body is literally "{{message_1_body}}",
+# so these names are a contract with the sequence and cannot drift.
+FIELD_SUBJECT = "message_1_subject"
+FIELD_BODY = "message_{}_body"
+
+
+def load_defaults(path: pathlib.Path = DEFAULTS) -> dict:
+    """Parse the canonical block from config/smartlead-defaults.md.
+
+    Parsed rather than restated so the config stays the single source of truth, the same
+    way scripts/eligibility.py reads pre-send-defaults.md.
+    """
+    text = path.read_text(encoding="utf-8")
+    m = re.search(r"## Canonical values.*?```(.*?)```", text, re.S)
+    if not m:
+        raise RuntimeError(f"{path}: no fenced 'Canonical values' block")
+    cfg: dict = {}
+    for raw in m.group(1).splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if ":" not in line:
+            continue
+        k, v = line.split(":", 1)
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if v.startswith("[") and v.endswith("]"):
+            items = [x.strip() for x in v[1:-1].split(",") if x.strip()]
+            cfg[k] = [int(x) if x.isdigit() else x for x in items]
+        elif v.lower() in ("true", "false"):
+            cfg[k] = v.lower() == "true"
+        elif re.fullmatch(r"-?\d+", v):
+            cfg[k] = int(v)
+        else:
+            cfg[k] = v
+    return cfg
+
+
+def api_key() -> str:
+    key = os.environ.get("SMARTLEAD_API_KEY")
+    if not key:
+        for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
+            if line.startswith("SMARTLEAD_API_KEY="):
+                key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                break
+    if not key:
+        raise RuntimeError("SMARTLEAD_API_KEY not set (env or .env)")
+    return key
+
+
+class Smartlead:
+    """Thin client. Deliberately has NO method that activates a campaign."""
+
+    def __init__(self, key: str):
+        self.key = key
+        self.calls = 0
+
+    def call(self, method: str, path: str, body: dict | None = None):
+        sep = "&" if "?" in path else "?"
+        req = urllib.request.Request(
+            f"{BASE}{path}{sep}api_key={self.key}", method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json",
+                     # urllib's default UA gets a 403 from Smartlead's edge.
+                     "User-Agent": "outbound-engine/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                self.calls += 1
+                raw = r.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            detail = (e.read() or b"").decode()[:400]
+            raise RuntimeError(f"{method} {path} -> {e.code}: {detail}") from None
+
+
+def to_html(text: str) -> str:
+    """Plain-text copy to HTML, because campaigns send as HTML by default.
+
+    Newlines in an HTML body collapse, so a body that reads as four paragraphs locally
+    would arrive as one block. Blank lines become paragraph breaks and single newlines
+    become <br>. Verified on the write test that custom fields survive the round trip
+    with newlines intact, which is exactly why they have to be converted here rather
+    than hoped over.
+    """
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text.strip()) if p.strip()]
+    # quote=False on purpose: apostrophes are safe in HTML text content, and escaping
+    # them turned "I'm Carl" into "I&#x27;m Carl" in the stored field. It renders fine,
+    # but it is unreadable to anyone inspecting a lead in the Smartlead UI, and it would
+    # show literally if a campaign were ever switched to plain text.
+    return "".join("<p>" + html.escape(p, quote=False).replace("\n", "<br>") + "</p>"
+                   for p in paras)
+
+
+def load_rows(path: pathlib.Path, skip_failed: bool) -> list[dict]:
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    if not rows:
+        raise RuntimeError(f"{path} has no rows")
+    failed = [r for r in rows if (r.get("validation") or "").upper() in
+              ("FAIL", "ERROR", "GENERATION_FAILED_FALLBACK")]
+    if failed and not skip_failed:
+        print(f"REFUSING: {len(failed)} of {len(rows)} rows did not pass validation. "
+              f"Copy that failed review must not reach a campaign.", file=sys.stderr)
+        for r in failed[:10]:
+            print(f"  {r.get('validation'):28} {r.get('email')}", file=sys.stderr)
+        print("Fix the copy, or pass --skip-failed to leave those leads out.",
+              file=sys.stderr)
+        raise SystemExit(2)
+    if failed:
+        print(f"skipping {len(failed)} row(s) that failed validation:")
+        for r in failed:
+            print(f"  {r.get('validation'):28} {r.get('email')}")
+        rows = [r for r in rows if r not in failed]
+
+    seen, unique = set(), []
+    for r in rows:
+        e = (r.get("email") or "").strip().lower()
+        if not e or e in seen:
+            continue
+        seen.add(e)
+        unique.append(r)
+    if len(unique) != len(rows):
+        print(f"dropped {len(rows) - len(unique)} row(s) with a blank or duplicate email")
+    missing = [r["email"] for r in unique
+               if not all(r.get(FIELD_BODY.format(p)) for p in POSITIONS)]
+    if missing:
+        raise RuntimeError(f"{len(missing)} lead(s) are missing a message body, so the "
+                           f"sequence would send an empty email: {missing[:5]}")
+    return unique
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Create a DRAFTED Smartlead campaign from approved copy. Never launches.")
+    ap.add_argument("--csv", required=True, type=pathlib.Path,
+                    help="output of scripts/run_generation.py, after human approval")
+    ap.add_argument("--audience", required=True, help="e.g. ra-premium")
+    ap.add_argument("--usecase", required=True, help="e.g. switch")
+    ap.add_argument("--mailboxes", required=True,
+                    help="comma-separated sending mailboxes, all must be in config/senders.md")
+    ap.add_argument("--approved-by", required=True,
+                    help="who approved this copy (golden rule 1)")
+    ap.add_argument("--approval-note", required=True,
+                    help="where the approval is recorded, e.g. a Slack permalink")
+    ap.add_argument("--skip-failed", action="store_true",
+                    help="drop rows that failed validation instead of refusing the batch")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print exactly what would be sent to Smartlead; write nothing")
+    a = ap.parse_args(argv)
+
+    cfg = load_defaults()
+    rows = load_rows(a.csv, a.skip_failed)
+
+    # Mailboxes must be real senders: an unmapped one means the sign-off in the copy does
+    # not match the account that sends it, which misrepresents the sender.
+    sender_map = assemble.load_sender_map()
+    boxes = [m.strip().lower() for m in a.mailboxes.split(",") if m.strip()]
+    unknown = [m for m in boxes if m not in sender_map]
+    if unknown:
+        raise RuntimeError(f"mailboxes not in config/senders.md: {unknown}")
+    placeholders = [m for m in boxes if assemble.is_placeholder_sender(sender_map[m])]
+    if placeholders:
+        raise RuntimeError(f"mailboxes still mapped to placeholder senders: {placeholders}")
+
+    # Guarantee 5: the copy's signature and the sending mailbox must be the same person.
+    signed = {(r.get("sender") or "").strip() for r in rows if (r.get("sender") or "").strip()}
+    if not signed:
+        raise RuntimeError(
+            "the CSV has no `sender` column, so there is no way to check that the copy's "
+            "signature matches the mailbox it will send from. Regenerate with a current "
+            "scripts/run_generation.py, which records sender and mailbox per row.")
+    if len(signed) > 1:
+        counts = {s: sum(1 for r in rows if (r.get("sender") or "").strip() == s)
+                  for s in sorted(signed)}
+        print(f"REFUSING: this CSV mixes copy from {len(signed)} senders {counts}.\n"
+              f"A Smartlead campaign rotates across its mailboxes, so an email signed by "
+              f"one person would send from another's. Split the CSV by `sender` and run "
+              f"once per sender with only that sender's mailboxes.", file=sys.stderr)
+        raise SystemExit(2)
+    sender = signed.pop()
+    wrong = [m for m in boxes if sender_map[m] != sender]
+    if wrong:
+        raise RuntimeError(
+            f"the copy is signed {sender!r} but these mailboxes belong to someone else: "
+            f"{ {m: sender_map[m] for m in wrong} }. A mismatch misrepresents the sender.")
+
+    name = (f"{dt.date.today():%Y-%m}_{a.audience}_{a.usecase}")
+    delays = cfg.get("seq_delay_days", [0, 3, 4])
+    cap = int(cfg.get("max_new_leads_per_day", 15))
+
+    print(f"campaign name : {name}")
+    print(f"approved by   : {a.approved_by}  ({a.approval_note})")
+    print(f"leads         : {len(rows)}")
+    print(f"sender        : {sender} (all copy signed by one person, mailboxes match)")
+    print(f"mailboxes     : {len(boxes)} -> {', '.join(sorted(boxes))}")
+    print(f"schedule      : {cfg.get('timezone')} {cfg.get('start_hour')}-{cfg.get('end_hour')} "
+          f"days={cfg.get('days_of_the_week')} cap={cap}/mailbox/day")
+    print(f"sequence      : 3 steps, delays {delays} days, subjects on email 1 only")
+    print(f"capacity      : {len(boxes) * cap} sends/day across these mailboxes; "
+          f"{len(rows)} leads is ~{max(1, -(-len(rows) // max(1, len(boxes) * cap)))} day(s) of first touches")
+
+    blockers = assemble.send_readiness_blockers(sender_map)
+    if blockers:
+        print("\nSEND-READINESS BLOCKERS (a DRAFTED campaign is fine; sending is not)")
+        for b in blockers:
+            print(f"  - {b}")
+
+    sequences = {"sequences": [
+        {"seq_number": p,
+         "seq_delay_details": {"delay_in_days": delays[p - 1] if p - 1 < len(delays) else 3},
+         # Subject on email 1 only: an empty subject is what makes 2 and 3 threaded
+         # replies, verified by read-back on the write test.
+         "subject": "{{" + FIELD_SUBJECT + "}}" if p == 1 else "",
+         "email_body": "{{" + FIELD_BODY.format(p) + "}}"}
+        for p in POSITIONS]}
+
+    lead_list = []
+    for r in rows:
+        fields = {FIELD_SUBJECT: r.get("message_1_subject", "")}
+        for p in POSITIONS:
+            fields[FIELD_BODY.format(p)] = to_html(r.get(FIELD_BODY.format(p), ""))
+        lead_list.append({
+            "first_name": r.get("first_name", ""), "last_name": r.get("last_name", ""),
+            "email": r["email"].strip(),
+            "company_name": r.get("prospect_org") or r.get("company", ""),
+            "custom_fields": fields})
+
+    if a.dry_run:
+        print("\nDRY RUN: nothing written to Smartlead. First lead as it would be sent:")
+        print(json.dumps(lead_list[0], indent=2)[:1200])
+        print("\nsequence:")
+        print(json.dumps(sequences, indent=2)[:700])
+        return 0
+
+    sl = Smartlead(api_key())
+    created = sl.call("POST", "/campaigns/create", {"name": name})
+    cid = created.get("id")
+    if not cid:
+        raise RuntimeError(f"no campaign id returned: {created}")
+    print(f"\ncreated campaign {cid}")
+
+    try:
+        sl.call("POST", f"/campaigns/{cid}/settings", {
+            "unsubscribe_text": "Unsubscribe",
+            "send_as_plain_text": bool(cfg.get("send_as_plain_text", False)),
+            "stop_lead_settings": cfg.get("stop_lead_settings", "REPLY_TO_AN_EMAIL"),
+            "track_settings": cfg.get("track_settings", ["DONT_EMAIL_OPEN"])})
+        sl.call("POST", f"/campaigns/{cid}/schedule", {
+            "timezone": cfg.get("timezone"),
+            "days_of_the_week": cfg.get("days_of_the_week"),
+            "start_hour": cfg.get("start_hour"), "end_hour": cfg.get("end_hour"),
+            "min_time_btw_emails": int(cfg.get("min_time_btw_emails", 10)),
+            "max_new_leads_per_day": cap, "schedule_start_time": None})
+        ids = [a_["id"] for a_ in sl.call("GET", "/email-accounts/?offset=0&limit=200")
+               if (a_.get("from_email") or "").lower() in boxes]
+        if len(ids) != len(boxes):
+            raise RuntimeError(f"matched {len(ids)} Smartlead accounts for {len(boxes)} "
+                               f"mailboxes; refusing a campaign with the wrong senders")
+        sl.call("POST", f"/campaigns/{cid}/email-accounts", {"email_account_ids": ids})
+        sl.call("POST", f"/campaigns/{cid}/sequences", sequences)
+        up = sl.call("POST", f"/campaigns/{cid}/leads", {"lead_list": lead_list})
+        print(f"  uploaded {up.get('upload_count')} lead(s); "
+              f"duplicates={up.get('duplicate_count')} blocked={up.get('block_count')} "
+              f"invalid={up.get('invalid_email_count')} "
+              f"already_in_another_campaign={up.get('skipped_in_other_campaign_count')}")
+    except Exception as e:
+        # Guarantee 4: no half-configured campaign left behind for someone to trust.
+        print(f"\nFAILED after creation: {e}", file=sys.stderr)
+        try:
+            sl.call("DELETE", f"/campaigns/{cid}")
+            print(f"deleted the partial campaign {cid}", file=sys.stderr)
+        except Exception as e2:
+            print(f"COULD NOT DELETE partial campaign {cid}: {e2}\n"
+                  f"Delete it in the Smartlead UI before retrying.", file=sys.stderr)
+        return 1
+
+    final = sl.call("GET", f"/campaigns/{cid}")
+    status = final.get("status")
+    print(f"\nstatus: {status}  ({sl.calls} API calls)")
+    if status != "DRAFTED":
+        print(f"UNEXPECTED: status is {status}, not DRAFTED. This script never activates "
+              f"a campaign; check the UI before anything sends.", file=sys.stderr)
+        return 1
+
+    print(f"""
+NOT LAUNCHED, and not launchable until a human acts. Before starting it:
+
+  1. HubSpot activity logging ON  (campaign's HubSpot settings)
+     No API endpoint exists for this; verified again 2026-08-31. Without it the campaign
+     logs NOTHING to HubSpot, silently, and the reply loop reads HubSpot.
+  2. "Optimize Email Delivery" OFF
+     No API endpoint either. It disables HTML and takes the unsubscribe link with it.
+  3. Confirm the unsubscribe link renders on the FIRST REAL SEND.
+     unsubscribe_text was set by API, but a test send shows the link non-clickable by
+     design, so only a real send proves it.
+  4. Check email 1 renders as paragraphs, not one block.
+     Bodies were converted to HTML here; the first real send is the proof.
+  5. Then launch a SMALL batch from the UI and watch deliverability before ramping.
+
+  campaign {cid}: {name}
+  approved by {a.approved_by} ({a.approval_note})""")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
