@@ -197,3 +197,59 @@ definitions and allowed values: `config/hubspot-properties.md`.
 - Stop → confirm removal, suppress, no further contact.
 
 Corrections from humans become new rules here. Keep this file current.
+
+---
+
+## The implementation: `scripts/reply_check.py`
+
+Workflow B in `CLAUDE.md`. Polling, no webhooks. Dry run by default.
+
+```bash
+python scripts/reply_check.py --self-test        # 9 recycle cases, 5 parse cases, 15 live
+python scripts/reply_check.py                    # DRY RUN: reads and prints, writes nothing
+python scripts/reply_check.py --apply            # writes HubSpot + Smartlead + the Sheet
+python scripts/reply_check.py --campaign 123 --limit 5
+```
+
+### What the API actually allows, verified live 2026-08-31
+
+- **There is no "replies since timestamp" endpoint.** The path is
+  `GET /campaigns/{id}/statistics?email_status=replied` (paginated) to find who replied,
+  then `GET /campaigns/{id}/leads/{lead_id}/message-history` per lead for the thread. So
+  a poll costs 1 + N calls per campaign, not 1.
+- **`POST /campaigns/{id}/leads/{lead_id}/resume` returns 409 "This is the last sequence.
+  You cannot resume this lead."** when no step remains. This is EXPECTED and not an
+  error: an out-of-office arriving after email 3 has nothing to resume. The handler
+  reports it and carries on. Any other non-200 is a real failure and raises.
+- `pause` and both `unsubscribe` endpoints exist and respond. Unsubscribe was NOT
+  probed live, because it would blocklist a real address.
+- **The message body field is UNDOCUMENTED** and could not be observed without a live
+  reply. `BODY_FIELDS` in the script lists the candidate names, and an inbound message
+  matching none of them is a HARD ERROR rather than an empty reply. **First real reply:
+  check this immediately.** If the run aborts naming the fields it saw, add the right
+  one to `BODY_FIELDS`. That failure is the design working, not a bug.
+
+### Two classifier boundaries worth knowing
+
+- **`interested` and `question` are operationally identical** in the action map: same
+  `outbound_status`, no recycle date, sequence stopped, queued for a human. The
+  classifier is not held to the distinction on money-adjacent product questions ("what's
+  the payout timing like?"), because forcing it flipped an actual pricing ask to
+  `not_now`, which parks a warm lead for 90 days. The cheap error is not worth the
+  expensive one.
+- **`objection` vs `not_now` on a contract lock** ("we're signed with Tixr through next
+  summer") is a genuine judgement call and the precedence table settles it as
+  `objection`, since a constraint you could answer outranks timing. **Consequence worth
+  a decision from whoever runs outbound:** `objection` sets NO recycle date, so a
+  contract expiry does not automatically schedule a return. If the preference is for
+  those to come back on their own, that intent needs a recycle date of its own; today
+  the human in the queue has to set the return manually.
+
+### What this script deliberately does not do
+
+- **It never sends.** No call to `reply-email-thread` exists in it. Drafts go in the
+  queue. The auto-send allowlist is empty (above), and this cannot bypass it.
+- **It never creates a contact.** On `wrong_contact` the named replacement is printed and
+  left in the queue row for a human, per the standing decision not to create contacts.
+- **It never writes `hs_email_optout`.** Only `outbound_suppressed` +
+  `outbound_opt_out_date`, plus a Smartlead unsubscribe. Asserted in code.

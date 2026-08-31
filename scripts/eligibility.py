@@ -139,7 +139,10 @@ def env_token() -> str:
         if env.exists():
             for line in env.read_text(encoding="utf-8").splitlines():
                 if line.startswith("HUBSPOT_ACCESS_TOKEN="):
-                    tok = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    # Strip an inline comment before quotes: an added trailing
+                    # "# ..." would otherwise be sent as part of the bearer token.
+                    raw = re.split(r"\s+#", line.split("=", 1)[1], maxsplit=1)[0]
+                    tok = raw.strip().strip('"').strip("'")
                     break
     if not tok:
         raise RuntimeError("HUBSPOT_ACCESS_TOKEN not set (env or .env)")

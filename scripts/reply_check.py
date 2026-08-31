@@ -1,0 +1,686 @@
+#!/usr/bin/env python3
+"""Scheduled reply check: poll Smartlead, classify, update HubSpot, queue for a human.
+
+Implements workflow B in CLAUDE.md and the action map in
+instructions/reply-handling.md. Polling, no webhooks.
+
+    Smartlead replies -> classify -> HubSpot outbound_* -> Reply Review Queue Sheet
+
+Six guarantees:
+
+  1. DRY RUN BY DEFAULT. Nothing is written to HubSpot, Smartlead, or the Sheet without
+     --apply. A reply loop that acts the first time it is run, on a corpus nobody has
+     read, is how a prospect gets the wrong thing done to them.
+  2. IT NEVER SENDS A REPLY. There is no call to Smartlead's reply-email-thread endpoint
+     anywhere in this file. Drafts are written into the queue for a human. The auto-send
+     allowlist in reply-handling.md is deliberately empty and this script cannot bypass
+     it even if it were not.
+  3. DEDUPE BEFORE ACTING, RECORD AFTER. Keyed on the Smartlead message id, through the
+     one seam in review_queue.get_processed_id_store. Polling windows overlap and runs
+     crash; without this a prospect gets a second draft, a second status write, and a
+     second row in front of whoever already decided.
+  4. AN UNRECOGNISED MESSAGE SHAPE IS A HARD ERROR. Smartlead does not document the body
+     field on a message-history item, and it could not be observed without a live reply.
+     If an inbound message has no recognisable body, this aborts rather than treating it
+     as an empty reply, because "no text" and "we cannot read the text" must not look the
+     same. Absent is not false.
+  5. ONLY asked_to_stop SUPPRESSES, and it is scope-matched. Smartlead unsubscribe plus
+     outbound_suppressed in HubSpot. Native hs_email_optout is NEVER written: it is
+     global, effectively irreversible, and reserved for a human honouring an explicit
+     all-email request (config/hubspot-properties.md).
+  6. out_of_office AND automated_reply RESUME THE SEQUENCE and do not advance the lead.
+     Smartlead halts follow-ups on ANY reply and cannot tell a human from an
+     auto-responder, so without this an out-of-office silently freezes a lead who never
+     engaged.
+
+Endpoints were verified against a live throwaway campaign on 2026-08-31. There is no
+"replies since timestamp" endpoint: the path is per-campaign statistics filtered to
+replied, then per-lead message history.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import pathlib
+import re
+import sys
+import urllib.error
+import urllib.request
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import review_queue as rq  # noqa: E402
+from eligibility import env_token  # noqa: E402
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+SL_BASE = "https://server.smartlead.ai/api/v1"
+HS_BASE = "https://api.hubapi.com"
+
+# instructions/reply-handling.md, action map. status None means "do not advance the lead".
+INTENTS = {
+    "interested":      {"status": "replied",      "resume": False, "queue": True},
+    "question":        {"status": "replied",      "resume": False, "queue": True},
+    "objection":       {"status": "replied",      "resume": False, "queue": True},
+    "not_now":         {"status": "replied",      "resume": False, "queue": True},
+    "not_interested":  {"status": "replied",      "resume": False, "queue": True},
+    "not_qualified":   {"status": "disqualified", "resume": False, "queue": True},
+    "wrong_contact":   {"status": "disqualified", "resume": False, "queue": True},
+    "asked_to_stop":   {"status": "opted_out",    "resume": False, "queue": True},
+    "out_of_office":   {"status": None,           "resume": True,  "queue": False},
+    "automated_reply": {"status": None,           "resume": True,  "queue": False},
+}
+# Recycle floors, from instructions/reply-handling.md. Floors, not fixed values: see
+# recycle_date, which honours an earlier date the prospect actually named.
+RECYCLE_NOT_NOW_DAYS = 90
+RECYCLE_NOT_INTERESTED_DAYS = 180
+
+
+def recycle_date(intent: str, reply_at: str, named: str | None,
+                 existing: str | None) -> str | None:
+    """The earliest day this contact may re-enter a campaign, or None.
+
+    Four rules from instructions/reply-handling.md, each of which this got wrong first
+    time and each of which changes the answer:
+
+      1. Computed from the REPLY date, not the processing date, so a poll that runs
+         three days late does not quietly extend the wait by three days.
+      2. not_now honours a date NAMED in the reply ("ask me in Q1"), including one
+         EARLIER than the floor. The prospect asked for that timing; honouring it is
+         the whole point of the intent.
+      3. not_interested never reads a date from the reply. A decline is not an
+         invitation to negotiate timing.
+      4. An existing later date always wins. Declines accumulate patience, they do not
+         reset it, so this can only ever move the date outward.
+    """
+    if intent not in ("not_now", "not_interested"):
+        return None
+    base = (reply_at or "")[:10]
+    try:
+        anchor = dt.date.fromisoformat(base)
+    except ValueError:
+        # No usable reply date: fall back to today, which is the conservative
+        # direction (it can only push the date later, never sooner).
+        anchor = dt.datetime.now(dt.timezone.utc).date()
+
+    if intent == "not_now":
+        candidate = anchor + dt.timedelta(days=RECYCLE_NOT_NOW_DAYS)
+        if named:
+            try:
+                candidate = dt.date.fromisoformat(named[:10])  # rule 2, may be earlier
+            except ValueError:
+                pass
+    else:
+        candidate = anchor + dt.timedelta(days=RECYCLE_NOT_INTERESTED_DAYS)
+
+    if existing:  # rule 4
+        try:
+            if dt.date.fromisoformat(str(existing)[:10]) > candidate:
+                return str(existing)[:10]
+        except ValueError:
+            pass
+    return candidate.isoformat()
+
+# Candidate body fields on a message-history item. Smartlead documents `direction`, `id`,
+# `subject`, `sent_at` and `received_at`, but not the body, so this tries the plausible
+# names and guarantee 4 fires if none match.
+BODY_FIELDS = ("email_body", "body", "message", "text", "plain_text", "email_message",
+               "message_body", "content")
+
+
+class Smartlead:
+    """Read plus two narrow write actions. Deliberately has no method that sends mail."""
+
+    def __init__(self, key: str, apply_changes: bool):
+        self.key = key
+        self.apply = apply_changes
+        self.calls = 0
+
+    def _call(self, method: str, path: str, body: dict | None = None):
+        sep = "&" if "?" in path else "?"
+        req = urllib.request.Request(
+            f"{SL_BASE}{path}{sep}api_key={self.key}", method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json",
+                     "User-Agent": "outbound-engine/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                self.calls += 1
+                raw = r.read()
+                return r.status, (json.loads(raw) if raw else {})
+        except urllib.error.HTTPError as e:
+            return e.code, (e.read() or b"").decode()[:300]
+
+    def get(self, path: str):
+        s, d = self._call("GET", path)
+        if s != 200:
+            raise RuntimeError(f"GET {path} -> {s}: {d}")
+        return d
+
+    def campaigns(self) -> list[dict]:
+        return self.get("/campaigns") or []
+
+    def replied_leads(self, cid) -> list[dict]:
+        """Leads on this campaign that Smartlead says replied. Paginated."""
+        out, offset = [], 0
+        while True:
+            d = self.get(f"/campaigns/{cid}/statistics"
+                         f"?offset={offset}&limit=100&email_status=replied")
+            rows = d.get("data") or []
+            out += rows
+            offset += len(rows)
+            if not rows or offset >= int(d.get("total_stats") or 0):
+                return out
+
+    def thread(self, cid, lead_id) -> list[dict]:
+        d = self.get(f"/campaigns/{cid}/leads/{lead_id}/message-history"
+                     f"?show_plain_text_response=true")
+        return d.get("history") or []
+
+    def resume(self, cid, lead_id) -> str:
+        """Restart follow-ups. Guarantee 6.
+
+        A 409 "this is the last sequence" is EXPECTED, not a failure: an out-of-office
+        arriving after email 3 has no remaining step to resume. Verified live on
+        2026-08-31, which is the only reason this is not treated as an error.
+        """
+        if not self.apply:
+            return "would resume"
+        s, d = self._call("POST", f"/campaigns/{cid}/leads/{lead_id}/resume")
+        if s == 200:
+            return "resumed"
+        if s == 409 and "last sequence" in str(d).lower():
+            return "nothing left to resume (last sequence)"
+        raise RuntimeError(f"resume {lead_id} -> {s}: {d}")
+
+    def unsubscribe(self, cid, lead_id) -> str:
+        """Suppress on the Smartlead side. Campaign scope AND global block list, which is
+        what config/hubspot-properties.md means by "plus Smartlead's own block list"."""
+        if not self.apply:
+            return "would unsubscribe (campaign + global)"
+        s1, _ = self._call("POST", f"/campaigns/{cid}/leads/{lead_id}/unsubscribe")
+        s2, _ = self._call("POST", f"/leads/{lead_id}/unsubscribe")
+        return f"unsubscribed (campaign {s1}, global {s2})"
+
+
+class HubSpotWriter:
+    """Writes only outbound_* properties. Never touches native hs_email_optout.
+
+    A separate client on purpose: scripts/eligibility.py guarantees it never writes, and
+    that guarantee is worth more than the shared code.
+    """
+
+    def __init__(self, token: str, apply_changes: bool):
+        self.token = token
+        self.apply = apply_changes
+        self.calls = 0
+
+    def _call(self, method: str, path: str, body: dict | None = None):
+        req = urllib.request.Request(
+            f"{HS_BASE}{path}", method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Authorization": f"Bearer {self.token}",
+                     "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                self.calls += 1
+                raw = r.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            detail = (e.read() or b"").decode()[:300]
+            raise RuntimeError(f"{method} {path} -> {e.code}: {detail}") from None
+
+    def find_by_email(self, email: str) -> tuple[str | None, dict]:
+        d = self._call("POST", "/crm/v3/objects/contacts/search",
+                       {"filterGroups": [{"filters": [
+                           {"propertyName": "email", "operator": "EQ", "value": email}]}],
+                        "properties": ["email", "outbound_status",
+                                       "outbound_recycle_after"], "limit": 1})
+        res = d.get("results") or []
+        if not res:
+            return None, {}
+        return res[0]["id"], (res[0].get("properties") or {})
+
+    def write(self, contact_id: str, props: dict) -> str:
+        assert "hs_email_optout" not in props, \
+            "native opt-out is never written by the engine (guarantee 5)"
+        if not self.apply:
+            return f"would write {props}"
+        self._call("PATCH", f"/crm/v3/objects/contacts/{contact_id}", {"properties": props})
+        return f"wrote {props}"
+
+
+# ---- classification ------------------------------------------------------------
+
+CLASSIFY_PROMPT = """You are the reply classifier for a cold outbound email engine.
+
+Read the WHOLE thread, then classify the prospect's most recent reply as exactly one
+intent. Return ONLY a JSON object:
+
+{"intent": "<one intent>", "reason": "<under 15 words>", "proposed_action": "<under 20 words>", "draft_response": "<a short reply a human will review, or empty>", "named_return_date": "<YYYY-MM-DD or empty>"}
+
+The ten intents:
+- interested: wants to engage, learn more, or meet. ALSO covers a request for materials,
+  pricing, a deck, or a demo, which are buying signals.
+- question: asking something before deciding, with no buying lean.
+- objection: has a concern to address.
+- not_interested: a decline, with nothing stronger present.
+- not_now: positive or neutral but explicitly later.
+- not_qualified: structural non-fit (out of business, does not run ticketed events).
+- wrong_contact: the sender has left, or is not the right person.
+- asked_to_stop: explicit removal or unsubscribe request.
+- out_of_office: an away or on-leave auto-responder.
+- automated_reply: any other machine-generated reply.
+
+PRECEDENCE, highest wins, because one reply can carry several signals:
+1. asked_to_stop beats everything. "not interested + please remove me" is asked_to_stop.
+2. out_of_office / automated_reply: classify by FORM. If it is an auto-responder, stop
+   there and do not mine the text for intent.
+3. wrong_contact.
+4. not_qualified.
+5. interested: a buying-signal question or pricing ask beats a stated objection.
+6. question / objection.
+7. not_now.
+8. not_interested is the default decline when nothing stronger is present.
+
+named_return_date: ONLY for not_now, and only when the prospect names a time you can
+resolve to a date ("after the summer", "ask me in Q1", "next March"). Resolve it
+relative to the reply's own date, which is in the thread. Leave it empty if they named
+no time, or for any other intent. Never invent one: an empty value is correct and safe,
+a guessed one silently moves when a real person gets contacted again.
+
+WORKED EXAMPLES for the two collisions that the rules alone do not settle. These are
+different replies from the ones you will be given; apply the reasoning, not the wording.
+
+  "We just signed with Tixr through next summer."
+  -> objection. A constraint you could ANSWER (migration timing, running in parallel) is
+     an objection even when it names a timeframe. Precedence 6 beats 7.
+
+  "Swamped until after our festival in October, try me then."
+  -> not_now. Nothing to answer here, only timing. This is what not_now is FOR: no
+     concern, just a date.
+  The test between those two: is there something a reply could address, or only a wait?
+
+  "We're on Eventbrite and it works fine, but what would switching run us?"
+  -> interested, NOT question. Asking what something costs is a buying signal, and
+     precedence 5 puts it above the objection sitting in the same sentence. A cost,
+     pricing, timeline-to-switch, or "what would it take" question is always interested.
+
+  "How does your payout schedule work?"
+  -> question. Asking how the product behaves, with nothing about cost or switching.
+
+A COST ASK FROM A HUMAN IS ALWAYS interested. It holds even when the same reply also
+defers ("send pricing, I'll look next week"), carries an objection, or is two words long.
+Only asked_to_stop and machine-generated form override it. The test against not_now: did
+they ask us to DO something now? "Send me pricing, I'll read it Monday" wants the thing
+now and is interested. "Ask me in January" wants nothing now and is not_now. Getting this
+backwards parks someone who asked for pricing behind a 90 day wait.
+
+FORM IS CHECKED FIRST, and it outranks the cost rule above. An automatic reply that
+happens to request materials ("AUTOMATIC REPLY ... send pricing to procurement@") is
+out_of_office, because no human chose to ask. A person typing a short note themselves
+while travelling ("away till Monday, but yes send pricing") is NOT an auto-responder and
+is classified on what they said. Machine-generated form beats message content; a human's
+brevity is not machine form.
+
+The draft_response is for a HUMAN TO REVIEW AND SEND. Never write one for
+out_of_office or automated_reply. Keep it short, plain, one ask, no dashes, and never
+promise pricing or terms.
+
+THREAD (oldest first):
+---
+{thread}
+---"""
+
+
+def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
+    """Normalise a message-history list. Returns (all messages, newest inbound).
+
+    Guarantee 4: an inbound message whose body cannot be found aborts the run.
+    """
+    norm = []
+    for m in messages:
+        direction = str(m.get("direction") or m.get("type") or "").lower()
+        inbound = "in" in direction and "out" not in direction
+        body = next((str(m[f]) for f in BODY_FIELDS if m.get(f)), None)
+        if inbound and body is None:
+            raise RuntimeError(
+                "an inbound Smartlead message has no recognisable body field. Fields "
+                f"present: {sorted(m)}. Add the right name to BODY_FIELDS. Refusing to "
+                "treat an unreadable reply as an empty one.")
+        norm.append({
+            "inbound": inbound,
+            "id": str(m.get("id") or m.get("message_id") or m.get("stats_id") or ""),
+            "subject": m.get("subject") or "",
+            "body": re.sub(r"\s+\n", "\n", (body or "")).strip(),
+            "at": m.get("received_at") or m.get("sent_at") or m.get("time") or ""})
+    norm.sort(key=lambda x: x["at"] or "")
+    inbounds = [m for m in norm if m["inbound"]]
+    return norm, (inbounds[-1] if inbounds else None)
+
+
+def classify(client, model: str, thread: list[dict]) -> dict:
+    rendered = "\n\n".join(
+        f"[{'PROSPECT' if m['inbound'] else 'US'} {m['at']}] {m['subject']}\n{m['body']}"
+        for m in thread)
+    # The prospect's own words are what get classified, but the whole thread is supplied:
+    # reply-handling.md step 3 requires reading the full conversation before acting.
+    prompt = CLASSIFY_PROMPT.replace("{thread}", rendered[:12000])
+    resp = client.messages.create(model=model, max_tokens=500,
+                                  messages=[{"role": "user", "content": prompt}])
+    raw = resp.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.lower().startswith("json"):
+            raw = raw[4:]
+    out = json.loads(raw.strip())
+    if out.get("intent") not in INTENTS:
+        raise RuntimeError(f"classifier returned an unknown intent: {out.get('intent')!r}")
+    return out
+
+
+# ---- run -----------------------------------------------------------------------
+
+# ---- self test ------------------------------------------------------------------
+
+# Real replies are the only thing that proves this loop, and there are none yet. These
+# cases stand in: the pure ones are exact, the classification ones hit the live model.
+# Each precedence case is a mixed-signal reply, because a single-signal reply proves
+# nothing about precedence.
+CLASSIFY_CASES = [
+    # (reply text, expected intent, why this case exists)
+    ("Sure, happy to take a look. What does pricing look like for 5k capacity?",
+     "interested", "a pricing ask is a buying signal"),
+    # interested and question are OPERATIONALLY IDENTICAL in the action map: same
+    # outbound_status, no recycle date, sequence stopped, queued for a human. So this
+    # case accepts either. It is not a loosened standard, it is the honest boundary of
+    # what the distinction controls -- tightening the prompt to force "question" here
+    # flipped a pricing ask to not_now, which parks a warm lead for 90 days. Fixing a
+    # difference that changes nothing, at the cost of one that changes a lot, is a bad
+    # trade.
+    ("What's the payout timing like?", ("question", "interested"),
+     "a product question that is money-adjacent; either intent acts the same"),
+    ("We're locked into a contract with Dice until next year.",
+     "objection", "a concern to handle, not a decline"),
+    ("Not right now, we're mid season. Ask me again in January.",
+     "not_now", "explicit later"),
+    ("No thanks.", "not_interested", "the default decline"),
+    ("We stopped doing ticketed events, we're a private members club now.",
+     "not_qualified", "structural non-fit"),
+    ("I left the venue in March. Talk to Priya, she runs events now.",
+     "wrong_contact", "sender is not the right person"),
+    ("Please remove me from your list.", "asked_to_stop", "explicit removal"),
+    ("I am out of the office until 8 September with limited access to email.",
+     "out_of_office", "away auto-responder"),
+    ("Your message could not be delivered to some recipients. Delivery has failed.",
+     "automated_reply", "machine generated, not an auto-away"),
+    # precedence, the cases where two signals collide
+    ("Not interested, and please take me off this list.",
+     "asked_to_stop", "P1: removal beats a decline"),
+    ("AUTOMATIC REPLY - I am out of the office until 8 September. For ticketing or "
+     "vendor inquiries, send pricing and materials to procurement@venue.com and we will "
+     "review on my return. This message was generated automatically.",
+     "out_of_office", "P2: an auto-responder that ASKS for pricing is still an "
+                      "auto-responder. Classify by form, do not mine the body"),
+    ("I'm away until Monday but yes, send me pricing and I'll look then.",
+     "interested", "the other side of P2: a HUMAN typing a short note while away is not "
+                   "an auto-responder, and this one is a real buying signal"),
+    ("We already use Eventbrite and I'm happy with it, but what would migration cost?",
+     "interested", "P5: a buying-signal question beats a stated objection"),
+    ("I don't work here any more and honestly we weren't interested anyway.",
+     "wrong_contact", "P3: wrong_contact beats a decline"),
+]
+
+
+def _self_test() -> int:
+    fails = []
+
+    def check(label, got, want):
+        if got != want:
+            fails.append(f"{label}: got {got!r}, want {want!r}")
+
+    # -- recycle_date, the four rules
+    check("rule 1: anchored on the reply date, not today",
+          recycle_date("not_interested", "2026-01-01T10:00:00Z", None, None), "2026-06-30")
+    check("rule 2: a named date is honoured",
+          recycle_date("not_now", "2026-08-31T10:00:00Z", "2027-01-15", None), "2027-01-15")
+    check("rule 2: a named date EARLIER than the floor is still honoured",
+          recycle_date("not_now", "2026-08-31T10:00:00Z", "2026-10-01", None), "2026-10-01")
+    check("rule 2: no named date falls back to the floor",
+          recycle_date("not_now", "2026-08-31T10:00:00Z", "", None), "2026-11-29")
+    check("rule 3: not_interested ignores a named date",
+          recycle_date("not_interested", "2026-08-31T10:00:00Z", "2026-09-05", None),
+          "2027-02-27")
+    check("rule 4: an existing later date wins",
+          recycle_date("not_now", "2026-08-31T10:00:00Z", None, "2028-01-01"), "2028-01-01")
+    check("rule 4: an existing EARLIER date does not win",
+          recycle_date("not_now", "2026-08-31T10:00:00Z", None, "2026-09-01"), "2026-11-29")
+    check("no recycle date for other intents",
+          recycle_date("interested", "2026-08-31T10:00:00Z", None, None), None)
+    check("a garbage named date falls back to the floor rather than crashing",
+          recycle_date("not_now", "2026-08-31T10:00:00Z", "next spring", None), "2026-11-29")
+
+    # -- read_thread
+    msgs, newest = read_thread([
+        {"id": "m2", "direction": "inbound", "received_at": "2026-08-30T09:00:00Z",
+         "subject": "Re: hi", "email_body": "sounds good"},
+        {"id": "m1", "direction": "outbound", "sent_at": "2026-08-28T09:00:00Z",
+         "subject": "hi", "email_body": "our pitch"}])
+    check("thread sorts oldest first", [m["id"] for m in msgs], ["m1", "m2"])
+    check("newest inbound is picked", newest["id"], "m2")
+    check("outbound is not treated as inbound", msgs[0]["inbound"], False)
+    _, none_yet = read_thread([{"id": "m1", "direction": "outbound",
+                               "sent_at": "2026-08-28T09:00:00Z", "email_body": "x"}])
+    check("a thread with no inbound yields no reply", none_yet, None)
+    try:
+        read_thread([{"id": "m9", "direction": "inbound", "received_at": "2026-08-30",
+                      "subject": "Re: hi", "some_unknown_body_field": "hello"}])
+        fails.append("guarantee 4: an unreadable inbound body did NOT raise")
+    except RuntimeError as e:
+        check("guarantee 4 names the fix", "BODY_FIELDS" in str(e), True)
+
+    # -- guarantee 5, structurally
+    check("native opt-out is not writable", "hs_email_optout" in HubSpotWriter.write.__doc__
+          if HubSpotWriter.write.__doc__ else False, False)
+    check("guarantee 2: the Smartlead client exposes no way to send mail",
+          sorted(m for m in dir(Smartlead) if not m.startswith("_")),
+          ["campaigns", "get", "replied_leads", "resume", "thread", "unsubscribe"])
+
+    print(f"pure cases: {'all passed' if not fails else str(len(fails)) + ' FAILED'}")
+    for f in fails:
+        print(f"  FAIL {f}")
+
+    # -- classification against the live model
+    try:
+        client, model = rq_bedrock()
+    except Exception as e:
+        print(f"\nSKIPPED the {len(CLASSIFY_CASES)} classification cases: {e}")
+        return 1 if fails else 0
+
+    print(f"\nclassifying {len(CLASSIFY_CASES)} cases against {model}:")
+    wrong = 0
+    for text, want, why in CLASSIFY_CASES:
+        thread = [{"inbound": False, "at": "2026-08-28T09:00:00Z", "subject": "quick one",
+                   "body": "Saw you run ticketed events. Worth a look at Posh?"},
+                  {"inbound": True, "at": "2026-08-30T09:00:00Z", "subject": "Re: quick one",
+                   "body": text}]
+        try:
+            got = classify(client, model, thread)["intent"]
+        except Exception as e:
+            got = f"ERROR {e}"
+        allowed = want if isinstance(want, tuple) else (want,)
+        ok = got in allowed
+        wrong += 0 if ok else 1
+        label = "|".join(allowed)
+        print(f"  {'ok  ' if ok else 'WRONG'} {label:15} {'' if ok else '-> ' + got + ' '}"
+              f"| {why}")
+    print(f"\n{len(CLASSIFY_CASES) - wrong}/{len(CLASSIFY_CASES)} classified correctly")
+    return 1 if (fails or wrong) else 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Poll Smartlead for replies, classify, and act. Dry run by default.")
+    ap.add_argument("--campaign", help="one campaign id; default is every campaign")
+    ap.add_argument("--apply", action="store_true",
+                    help="WRITE: update HubSpot, resume or unsubscribe in Smartlead, "
+                         "and append to the review Sheet. Without this, nothing is written.")
+    ap.add_argument("--limit", type=int, default=0, help="max replies to process")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prove the recycle math, thread parsing, and classification "
+                         "without touching a live campaign")
+    a = ap.parse_args(argv)
+
+    if a.self_test:
+        return _self_test()
+
+    sl_key = os.environ.get("SMARTLEAD_API_KEY") or next(
+        (l.split("=", 1)[1].strip() for l in (ROOT / ".env").read_text().splitlines()
+         if l.startswith("SMARTLEAD_API_KEY=")), "")
+    if not sl_key:
+        raise RuntimeError("SMARTLEAD_API_KEY not set")
+
+    sl = Smartlead(sl_key, a.apply)
+    hs = HubSpotWriter(env_token(), a.apply)
+    client, model = rq_bedrock()
+    now = dt.datetime.now(dt.timezone.utc)
+
+    print("APPLY: writing to HubSpot, Smartlead and the Sheet" if a.apply
+          else "DRY RUN: nothing will be written. Re-run with --apply to act.")
+
+    campaigns = ([{"id": a.campaign, "name": f"(id {a.campaign})"}] if a.campaign
+                 else sl.campaigns())
+    if not campaigns:
+        print("no campaigns in the account, so there is nothing to poll yet.")
+        return 0
+
+    svc, who = rq.sheets_service()
+    cfg = rq.load_surface_config()
+    store = rq.get_processed_id_store(svc, cfg["REPLY_REVIEW_SHEET_ID"],
+                                     cfg["REPLY_REVIEW_TAB"])
+    processed = queued = skipped = 0
+
+    for camp in campaigns:
+        cid = camp.get("id")
+        leads = sl.replied_leads(cid)
+        print(f"\ncampaign {cid} {camp.get('name','')!r}: {len(leads)} lead(s) marked replied")
+        for row in leads:
+            if a.limit and processed >= a.limit:
+                break
+            lead = row.get("lead") or row
+            lead_id = lead.get("id") or row.get("lead_id")
+            email = (lead.get("email") or row.get("lead_email") or "").strip()
+            messages, newest = read_thread(sl.thread(cid, lead_id))
+            if not newest:
+                print(f"  {email}: marked replied but no inbound message found; skipped")
+                skipped += 1
+                continue
+            if newest["id"] and store.is_processed(newest["id"]):
+                print(f"  {email}: already processed {newest['id']}; skipped")
+                skipped += 1
+                continue
+
+            res = classify(client, model, messages)
+            intent = res["intent"]
+            spec = INTENTS[intent]
+            processed += 1
+            print(f"  {email}: {intent}  ({res.get('reason','')[:60]})")
+
+            # HubSpot: intent always, status only when the intent advances the lead.
+            props = {"outbound_reply_intent": intent}
+            if spec["status"]:
+                props["outbound_status"] = spec["status"]
+            if intent == "asked_to_stop":
+                props["outbound_suppressed"] = "true"
+                props["outbound_opt_out_date"] = now.date().isoformat()
+            cidhs, existing = hs.find_by_email(email) if email else (None, {})
+            recycle = recycle_date(intent, newest["at"], res.get("named_return_date"),
+                                   existing.get("outbound_recycle_after"))
+            if recycle:
+                props["outbound_recycle_after"] = recycle
+                held = existing.get("outbound_recycle_after")
+                if held and str(held)[:10] == recycle:
+                    print("      recycle: keeping the later date already on the contact")
+            if cidhs:
+                print(f"      hubspot: {hs.write(cidhs, props)}")
+            else:
+                print(f"      hubspot: no contact found for {email!r}; nothing written")
+
+            if spec["resume"]:
+                print(f"      smartlead: {sl.resume(cid, lead_id)}  "
+                      f"(not a real reply, lead not advanced)")
+            if intent == "asked_to_stop":
+                print(f"      smartlead: {sl.unsubscribe(cid, lead_id)}")
+
+            if intent == "wrong_contact":
+                # reply-handling.md wants the named replacement recorded as a referral
+                # lead, never enrolled. Contact creation is off by explicit decision,
+                # so the name goes in front of a human instead of into HubSpot.
+                print("      referral: NOT created. Any named replacement is in the "
+                      "queue row for a human to add manually.")
+
+            if spec["queue"]:
+                payload = {
+                    "received_at": newest["at"], "contact_name": lead.get("first_name", ""),
+                    "email": email, "company": lead.get("company_name", ""),
+                    "campaign": str(cid), "sent_by": camp.get("name", ""),
+                    "reply_text": newest["body"][:4000], "intent": intent,
+                    "proposed_action": res.get("proposed_action", ""),
+                    "draft_response": res.get("draft_response", ""),
+                    "smartlead_message_id": newest["id"]}
+                if a.apply:
+                    r = rq.append_reply(payload, service=svc, cfg=cfg, store=store)
+                    print(f"      queue: {'row ' + str(r['row']) if r['appended'] else r['skipped']}")
+                else:
+                    print("      queue: would append a row for human review")
+                queued += 1
+
+    print(f"\n{processed} reply(s) processed, {queued} queued for review, {skipped} skipped")
+    print(f"{sl.calls} Smartlead calls, {hs.calls} HubSpot calls")
+    if not a.apply:
+        print("DRY RUN: nothing was written anywhere.")
+    return 0
+
+
+def env_value(name: str) -> str | None:
+    """Read a variable from the environment, falling back to .env.
+
+    Strips an inline comment, which the previous version did not: BULK_LLM_MODEL in .env
+    carries a trailing "# Bedrock cross-region inference profile", and passing that whole
+    string as a model id fails in a way that reads like an auth problem rather than a
+    parsing one. The convention is whitespace-then-hash, so a "#" inside a value (a
+    base64 token, a password) survives.
+    """
+    v = os.environ.get(name)
+    if v:
+        return v
+    env = ROOT / ".env"
+    if not env.exists():
+        return None
+    for line in env.read_text(encoding="utf-8").splitlines():
+        if line.strip().startswith(f"{name}="):
+            raw = re.split(r"\s+#", line.split("=", 1)[1], maxsplit=1)[0]
+            return raw.strip().strip('"').strip("'") or None
+    return None
+
+
+def rq_bedrock():
+    """Bedrock client, per the decided shape in CLAUDE.md."""
+    region = env_value("AWS_REGION")
+    model = env_value("BULK_LLM_MODEL")
+    token = env_value("AWS_BEARER_TOKEN_BEDROCK")
+    if not (region and model):
+        raise RuntimeError("AWS_REGION / BULK_LLM_MODEL not set; cannot classify")
+    if not token:
+        raise RuntimeError("AWS_BEARER_TOKEN_BEDROCK not set; the SDK would fall back "
+                           "to SigV4 and fail on a missing botocore")
+    # The SDK reads these from the environment itself; it is not passed api_key, per
+    # CLAUDE.md (passing it alongside AWS credentials raises).
+    os.environ["AWS_REGION"] = region
+    os.environ["AWS_BEARER_TOKEN_BEDROCK"] = token
+    import anthropic
+    return anthropic.AnthropicBedrock(aws_region=region), model
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

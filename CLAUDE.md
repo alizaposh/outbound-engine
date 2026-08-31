@@ -153,6 +153,9 @@ scripts/                   ← Python (stdlib + anthropic only)
                              two below
   run_generation.py        ← draft-only generation: CSV in, reviewed CSV out.
                              HubSpot-free by design; callbacks arrive on the CSV
+  reply_check.py           ← WORKFLOW B. Polls Smartlead for replies, classifies,
+                             updates outbound_* in HubSpot, resumes auto-responders,
+                             queues the rest. DRY RUN BY DEFAULT; never sends a reply
   review_queue.py          ← appends replies needing a human decision to the review
                              Sheet. Never writes the decision/notes columns
   export_review.py         ← pushes a generation run to the review Sheet, one tab per run
