@@ -577,9 +577,12 @@ as `I'm Carl` rather than `I&#x27;m Carl`.
   purpose. The first real campaign is the first time real leads enter Smartlead.
 - **`--dry-run` output is the review surface** for a campaign before it exists. Worth a
   human reading one before the first real creation.
-- The **schedule values are `[CONFIRM]`** in `config/smartlead-defaults.md`: timezone
-  `America/New_York` is a real decision, since leads span LA to NY and Smartlead schedules
-  per campaign rather than per recipient.
+- **Timezone decided 2026-08-31: `America/New_York`.** Smartlead schedules per campaign
+  rather than per recipient, so every lead gets the Eastern window and a Los Angeles
+  prospect is mailed from 06:00 local. Accepted knowingly. If West Coast reply rates lag,
+  the fix is a separate campaign per region, not a different timezone on one campaign.
+  Worth checking in the first campaign's reply data, since it is the kind of thing that
+  shows up as "the copy is not working" when it is really send timing.
 
 ---
 

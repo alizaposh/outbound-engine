@@ -15,10 +15,13 @@ Read by `scripts/create_campaign.py`. Confirmed settable via the Smartlead API o
 
 ```
 campaign_name_format: {date}_{audience}_{usecase}   # e.g. 2026-09_ra-premium_switch
-timezone: America/New_York          # [CONFIRM] leads span LA to NY; Smartlead schedules
-                                    # per campaign, not per recipient, so this is the
-                                    # window everyone gets. Eastern favours the coasts
-                                    # least badly, but it is a real decision.
+timezone: America/New_York          # DECIDED 2026-08-31. Smartlead schedules per
+                                    # campaign, not per recipient, so every lead gets the
+                                    # Eastern window: 09:00-17:00 ET means a Los Angeles
+                                    # prospect is mailed from 06:00 local. Accepted
+                                    # knowingly. If West Coast reply rates lag, the fix is
+                                    # a separate campaign per region rather than a
+                                    # different timezone here.
 days_of_the_week: [1, 2, 3, 4, 5]   # weekdays only, Monday = 1
 start_hour: "09:00"
 end_hour: "17:00"
