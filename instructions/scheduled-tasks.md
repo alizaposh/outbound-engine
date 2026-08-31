@@ -86,7 +86,16 @@ three. You can review or revoke these later from the task's detail page.
 - **Sleep still skips.** Settings → **Desktop app → General** → **Keep computer awake**
   prevents idle sleep, but closing the lid sleeps regardless.
 
-The prompt for each task:
+### The three prompts, verbatim
+
+**The `--slot` flag is the part that matters** — it decides which jobs run. The word in
+the first line is only there so the session is readable at a glance. Copy each block
+whole rather than editing one of them, so the flag and the label cannot drift apart: a
+task labelled MIDDAY still running `--slot morning` would run the unsubscribe sync three
+times a day and mislabel every heartbeat. Harmless, since the jobs are idempotent, but
+it makes the report lie about what happened.
+
+`outbound-morning` — Weekdays, 9:45 AM:
 
 ```
 Run the outbound engine's scheduled MORNING check.
@@ -94,6 +103,40 @@ Run the outbound engine's scheduled MORNING check.
 From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
 
     ./.venv/bin/python scripts/heartbeat.py --slot morning
+
+Then stop and report only the summary it printed.
+
+Do not run any other command. Do not edit any file. Do not create, modify, or launch a
+Smartlead campaign. Do not send any email or reply. If the command fails, report the
+error verbatim and do NOT retry it — the heartbeat has already posted the failure to
+Slack, and a retry would post a second time and muddy the signal.
+```
+
+`outbound-midday` — Weekdays, 1:05 PM:
+
+```
+Run the outbound engine's scheduled MIDDAY check.
+
+From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
+
+    ./.venv/bin/python scripts/heartbeat.py --slot midday
+
+Then stop and report only the summary it printed.
+
+Do not run any other command. Do not edit any file. Do not create, modify, or launch a
+Smartlead campaign. Do not send any email or reply. If the command fails, report the
+error verbatim and do NOT retry it — the heartbeat has already posted the failure to
+Slack, and a retry would post a second time and muddy the signal.
+```
+
+`outbound-afternoon` — Weekdays, 4:25 PM:
+
+```
+Run the outbound engine's scheduled AFTERNOON check.
+
+From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
+
+    ./.venv/bin/python scripts/heartbeat.py --slot afternoon
 
 Then stop and report only the summary it printed.
 
