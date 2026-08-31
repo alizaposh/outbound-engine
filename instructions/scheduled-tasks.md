@@ -83,8 +83,18 @@ than intended, and the task only needs it to run one command and read back the r
    6. Channel **About** tab → copy the **ID** (starts with `C`) → `SLACK_HEARTBEAT_CHANNEL`.
       Use the id, not `#name`: it survives a channel rename.
 
-   Use a channel **separate from the review channel**: the heartbeat posts on quiet runs
-   by design and would bury approval requests.
+   **`--check-slack` posts one test message**, and that is deliberate. Inspecting the
+   channel instead would need `channels:read`, which the heartbeat does not use — having
+   a setup check dictate the app's permissions is backwards. With `chat:write` alone the
+   only honest verification is to post, and it exercises the real code path rather than a
+   proxy for it.
+
+   **Current setup (2026-08-31): the heartbeat posts to the REVIEW channel**
+   (`SLACK_REVIEW_CHANNEL`, `C0BU2F84KUL`), because that is the only channel that exists
+   so far. `SLACK_HEARTBEAT_CHANNEL` is unset and the code falls back. That is fine while
+   the approval flow does not exist — there is nothing yet for the heartbeat to bury.
+   **Split them when the Slack brief/approval flow ships**: three heartbeats a day on top
+   of approval requests is how an approval request gets missed.
 
    **Scopes stay minimal on purpose.** The Slack brief/approval flow will later need read
    scopes (`channels:history`, `channels:read`); add them when that is built, as a

@@ -179,25 +179,33 @@ def check_slack() -> int:
 
     if not channel:
         return 1
-    info = api("conversations.info", f"?channel={channel}")
-    if not info.get("ok"):
-        err = info.get("error")
-        print(f"CHANNEL PROBLEM: {err!r}")
-        if err == "channel_not_found":
-            print("  Either the id is wrong, or it is a private channel the bot cannot "
-                  "see. Use the id from the channel's About tab (starts with C).")
+
+    # Inspecting the channel first would be tidier, but conversations.info needs
+    # channels:read and the heartbeat does not. Demanding a read scope purely to run a
+    # setup check would be the diagnostic dictating the app's permissions, which is
+    # backwards. With chat:write alone the only honest verification is to post, so this
+    # posts one clearly-labelled test message. That also tests the real code path rather
+    # than a proxy for it.
+    print("posting a test message (this is the only way to verify the channel and the "
+          "invite with chat:write alone)...")
+    try:
+        post_to_slack(":wrench: Outbound engine setup test — heartbeat can post here. "
+                      "Scheduled runs will report to this channel.")
+    except RuntimeError as e:
+        msg = str(e)
+        print(f"FAILED: {msg}")
+        if "not_in_channel" in msg:
+            print(f"  The bot is not in the channel. Type  /invite @{who.get('user')}  "
+                  "in it. This is the step that is usually missing.")
+        elif "channel_not_found" in msg:
+            print("  Wrong channel id, or a private channel the bot cannot see. Copy the "
+                  "id from the channel's About tab; it starts with C.")
+        elif "missing_scope" in msg:
+            print("  The token lacks chat:write. Add it under Bot Token Scopes, then "
+                  "re-install the app to the workspace.")
         return 1
-    ch = info.get("channel") or {}
-    member = ch.get("is_member")
-    print(f"channel #{ch.get('name')} found; bot is "
-          f"{'a member' if member else 'NOT a member'}")
-    if not member:
-        print(f"  Invite it: type  /invite @{who.get('user')}  in #{ch.get('name')}.")
-        print("  Without this every post fails with not_in_channel and the heartbeat "
-              "cannot report anything, including its own failure.")
-        return 1
-    print("\nSlack is ready. Post a real heartbeat with:")
-    print("  ./.venv/bin/python scripts/heartbeat.py --slot morning")
+    print("\nposted. Slack is ready.")
+    print("  ./.venv/bin/python scripts/heartbeat.py --slot morning   # a real heartbeat")
     return 0
 
 
