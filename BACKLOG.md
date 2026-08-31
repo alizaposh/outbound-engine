@@ -444,6 +444,47 @@ need only that one function changed.
 
 ---
 
+## Why polling and not Smartlead webhooks — asked and settled 2026-08-31
+Recorded because it is a reasonable question that will be asked again.
+
+**Smartlead can push.** Webhooks are real and registerable per campaign via the API,
+confirmed live: `GET /campaigns/{id}/webhooks` returns 200, and the POST validates a body
+taking `webhook_url`, `event_types` and `categories`. `EMAIL_REPLY` and
+`LEAD_UNSUBSCRIBED` are the relevant events. The API is not the blocker.
+
+**The blocker is where the push lands.** A webhook is an HTTP POST to a public HTTPS URL.
+The engine is a local Claude Code process, so there is nothing publicly addressable to
+POST to. The two ways out are a long-running local listener behind a tunnel — the
+always-on local server v1 scope excludes, which silently drops every event while the
+laptop is asleep — or a hosted receiver, which means moving the engine off the laptop.
+
+**The argument that actually settles it: a webhook would not make replies get answered
+faster.** The auto-send allowlist is empty and enforced, so every reply goes to a human
+in the review queue. A webhook only changes how fast a reply lands IN the queue; the
+human's next look at the queue dominates. Minutes of queue-arrival latency are invisible
+next to that.
+
+So the real tradeoff is durability, not latency, and each side fails differently:
+- **Polling** cannot see what it cannot enumerate — the deleted-campaign gap above is
+  exactly that failure.
+- **Webhooks** drop events when the receiver is down, with no visibility into what was
+  missed.
+
+**Three things would flip this decision**, and none is true yet:
+1. The engine moves off the laptop to hosted infrastructure.
+2. Auto-send becomes real for some intent, at which point latency starts mattering.
+3. Volume growth. Note WHICH job scales badly: `sync_unsubscribes.py` walks every lead on
+   every campaign, so its cost is proportional to total leads. `reply_check.py` only
+   pulls message history for leads already marked replied, so it stays cheap.
+
+**The shape to build if it ever flips: webhook -> durable sink -> local drain.** A small
+serverless function receives the event and appends it to a Sheet; the local job reads the
+Sheet instead of interrogating Smartlead. That captures events exactly even while the
+laptop is closed and is strictly better than polling, but it still has a scheduled drain
+— it makes the scheduler cheap and lossless rather than removing it.
+
+---
+
 ## Sync Smartlead unsubscribes to HubSpot — BUILT 2026-08-31 (`scripts/sync_unsubscribes.py`)
 Stage 2, as rewritten by the cascade policy. Dry run by default; `--apply` writes
 `outbound_suppressed` + `outbound_opt_out_date` (+ `outbound_status=opted_out`). Native
