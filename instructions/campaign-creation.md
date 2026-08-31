@@ -96,6 +96,14 @@ Three details worth keeping in mind:
    campaign itself; email is the join key. No local mapping store.
 
 ## Launch
+- **Un-pause the three scheduled routines** (`outbound-morning`, `outbound-midday`,
+  `outbound-afternoon`) in Claude Desktop → Code → Routines. They were created and
+  verified on 2026-08-31 and then left **Paused** deliberately, to avoid three
+  "nothing to do" heartbeats a day while there were no campaigns. **The moment a
+  campaign sends, that reasoning inverts:** replies start arriving and nothing is
+  watching for them. Paused routines fail silently by definition — there is no heartbeat
+  to be missing, so the Slack channel looks the same as a healthy quiet day. See
+  `instructions/scheduled-tasks.md`.
 - Start with a **small batch** (per your plan, ~100 contacts) across multiple warmed
   mailboxes. Watch deliverability + reply quality, then ramp gradually.
 - **Confirm the unsubscribe link rendered** on the very first real send, before any

@@ -63,6 +63,18 @@ needed. Set **working folder** to this repo; Desktop will ask you to trust it. L
 worktree toggle **off**: these jobs read live credentials and write to real systems, so
 an isolated copy of the repo is not wanted.
 
+### Current state: created, verified, PAUSED (2026-08-31)
+
+All three routines exist and all three have been run once via **Run now**, green, with
+their permissions approved. They are deliberately **Paused** until closer to the first
+campaign launch, to avoid three "nothing to do" heartbeats a day while there is nothing
+to poll.
+
+**Un-pausing is a step in the launch procedure** (`instructions/campaign-creation.md`,
+Launch section), not something to remember. A paused routine is the one failure mode the
+heartbeat cannot report: there is no missing message, because there is no message —
+the channel looks identical to a healthy quiet day.
+
 ### Do this immediately after creating each one, or it will silently stall
 
 Click **Run now** and answer the permission prompt with **always allow**. A task in Manual
