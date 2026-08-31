@@ -12,12 +12,20 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
 
 | Slot | Time (America/New_York) | Days | Jobs |
 |---|---|---|---|
-| `morning` | 08:05 | Mon–Fri | reply check **+ unsubscribe sync** |
-| `midday` | 12:05 | Mon–Fri | reply check |
-| `afternoon` | 16:05 | Mon–Fri | reply check |
+| `morning` | 09:45 | Mon–Fri | reply check **+ unsubscribe sync** |
+| `midday` | 13:05 | Mon–Fri | reply check |
+| `afternoon` | 16:25 | Mon–Fri | reply check |
 
 **Why this shape:**
 
+- **The times are set around the laptop being open, not around the working day.** A local
+  Desktop task only fires while the app is running and the machine is awake. An earlier
+  slot (the first draft said 08:05) would be asleep every morning and would survive only
+  on the catch-up mechanism — which works, but makes the schedule fiction and fills the
+  task history with a skip every single day, so a REAL failure would be invisible among
+  the expected ones. 09:45 assumes the laptop is open by ~09:30; move all three if that
+  changes. The three are spaced about 3h20 apart, and the last lands with enough of the
+  day left to act on what it finds.
 - **Three slots, not one.** Cadence should match when a human will look at the queue,
   not be optimised on its own — every reply goes to a person, so polling more often than
   you review buys nothing. But a morning-only check means a reply landing at 08:15 waits
@@ -46,9 +54,9 @@ Create **three** routines, identical except for the slot and time:
 
 | Name | Schedule | Instructions |
 |---|---|---|
-| `outbound-morning` | **Weekdays**, 8:05 AM | prompt below with `morning` |
-| `outbound-midday` | **Weekdays**, 12:05 PM | prompt below with `midday` |
-| `outbound-afternoon` | **Weekdays**, 4:05 PM | prompt below with `afternoon` |
+| `outbound-morning` | **Weekdays**, 9:45 AM | prompt below with `morning` |
+| `outbound-midday` | **Weekdays**, 1:05 PM | prompt below with `midday` |
+| `outbound-afternoon` | **Weekdays**, 4:25 PM | prompt below with `afternoon` |
 
 **Weekdays** is a built-in preset (Daily, skipping Sat/Sun) with a time picker — no cron
 needed. Set **working folder** to this repo; Desktop will ask you to trust it. Leave the
@@ -70,7 +78,9 @@ three. You can review or revoke these later from the task's detail page.
 - **Missed runs get one catch-up.** On wake or app start, Desktop checks the last seven
   days and starts a single catch-up for the most recently missed time, discarding older
   ones. **For these jobs that is a feature, not a hazard**: both are idempotent, so a
-  morning check that actually runs at 11pm simply catches up. It will post a heartbeat
+  morning check that actually runs at 11pm simply catches up. It is the safety net for an
+  unusual day, though, not the mechanism the schedule should lean on daily — which is why
+  the slots are set for hours the machine is actually awake. It will post a heartbeat
   labelled `morning` with the real 11pm timestamp, which reads oddly but is accurate. No
   prompt guardrail is needed — unlike a task that, say, reviews "today's" commits.
 - **Sleep still skips.** Settings → **Desktop app → General** → **Keep computer awake**
