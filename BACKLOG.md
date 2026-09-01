@@ -518,46 +518,46 @@ available at the time, against the five requirements above.
 
 ---
 
-## BLOCKER: warmup reports ACTIVE but has sent 0 emails — found 2026-09-01
-The rehearsal email landed in spam, which surfaced two separate things. Keep them apart:
-one invalidates the test, the other blocks launch.
+## Why the rehearsal landed in spam — RESOLVED 2026-09-01
+Two hypotheses, one wrong. Both recorded, because the wrong one is the more useful note.
 
-### 1. The rehearsal is not a valid deliverability test (test-design flaw, mine)
+### The cause: the test was invalid as a deliverability read (test-design flaw)
 It sent from `carl.newmark@vibeposhvip.com` to `aliza@posh.vip`, with a body reading
 "I'm Carl, I run partnerships at Posh". That is a lookalike of the recipient's own brand,
 claiming to represent the recipient's own company, with an employee-style sign-off — close
 to a textbook cousin-domain phishing signature, and Google Workspace has specific
-protections for exactly it. **Do not read this spam placement as a signal about real
-prospect deliverability, and do not change copy because of it.** A valid read needs a
-recipient on an unrelated domain (a personal Gmail, a non-Posh colleague).
+protections for exactly it. **Do not read this placement as a signal about prospect
+deliverability, and do not change copy because of it.**
 
-Authentication was ruled out first and is correct on all four sending domains: SPF
-`include:_spf.google.com`, DKIM present on the `google` selector, and DMARC at
-**`p=reject`**, which is stricter than most senders. Not the cause.
+**A valid deliverability read needs a recipient on an unrelated domain** — a personal
+Gmail, or a colleague on a non-Posh domain. Never test cold-outbound placement by sending
+to the company's own domain from a brand-adjacent one; the result says more about
+anti-spoofing than about the mail.
 
-### 2. Warmup has apparently never run — this DOES block launch
-All 12 mailboxes: `warmup status = ACTIVE`, `warmup_created_at = 2026-08-24`, and
-`total_sent_count = 0`. Combined warmup volume across the account is **zero** over 8 days.
-`warmup_reputation` reads 99–100%, which is 100% of nothing rather than evidence of
-health. Mailboxes were created 2026-08-17, so the domains are ~15 days old with
-effectively no sending history.
+### Ruled out: authentication. Correct on all four sending domains.
+SPF `include:_spf.google.com`, DKIM present on the `google` selector, DMARC at
+**`p=reject`** — stricter than most senders. Checked before blaming anything else.
 
-**Verify in the Smartlead UI before acting**, because this is read from
-`GET /email-accounts` and `total_sent_count` may simply not be populated there. Two
-mailboxes reading 99% rather than 100% hints something is being computed, which is the one
-piece of evidence against the plain reading. The UI's warmup tab shows a per-day sent
-graph and settles it.
+### Ruled out: warmup. It is healthy, and my API reading was WRONG.
+I read `warmup_details.total_sent_count = 0` on all 12 mailboxes from
+`GET /email-accounts` and called it a launch blocker. The UI shows **~200 warmup emails
+sent and landing in inbox across the mailboxes.** Warmup is running normally.
 
-**If confirmed, it is a launch blocker, not a wait.** ACTIVE with zero sends for 8 days is
-a misconfiguration, not insufficient time, and no amount of waiting fixes it. Cold sending
-from 15-day-old domains with no history lands in spam for real prospects too — which is
-the one deliverability fact this rehearsal could NOT test, given flaw 1 above.
+**The API gotcha, recorded so nobody re-derives the same false blocker:**
+`warmup_details.total_sent_count` from `GET /email-accounts` reads **0 even when warmup
+has sent hundreds**. It is not populated by that endpoint. `warmup_reputation` on the same
+object is populated and meaningful. **The warmup tab in the UI is the source of truth for
+warmup volume; the API is not.**
 
-### What is still valid in the rehearsal
-Spam placement does not block the mechanical tests, which are the reason the rehearsal
-exists. Mark the message "not spam" and continue: the unsubscribe link rendering, HTML
-paragraph rendering, `BODY_FIELDS` on a real reply, and the reply loop are all unaffected
-by which folder it landed in.
+The one clue that pointed the right way, and was noted at the time rather than after: two
+mailboxes read 99% rather than 100%, which cannot happen if literally nothing had been
+sent. When a computed field disagrees with a counter, trust the computed field and go
+looking.
+
+**Current sending posture:** domains ~15 days old (created 2026-08-17), warmup active
+since 2026-08-24 with ~200 inboxed, authentication correct at `p=reject`. That is a
+reasonable base for a small, slow first batch — not for volume. Ramp gradually per the
+guardrails in `CLAUDE.md`.
 
 ---
 
