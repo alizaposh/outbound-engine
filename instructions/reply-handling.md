@@ -221,11 +221,25 @@ python scripts/reply_check.py --campaign 123 --limit 5
   reports it and carries on. Any other non-200 is a real failure and raises.
 - `pause` and both `unsubscribe` endpoints exist and respond. Unsubscribe was NOT
   probed live, because it would blocklist a real address.
-- **The message body field is UNDOCUMENTED** and could not be observed without a live
-  reply. `BODY_FIELDS` in the script lists the candidate names, and an inbound message
-  matching none of them is a HARD ERROR rather than an empty reply. **First real reply:
-  check this immediately.** If the run aborts naming the fields it saw, add the right
-  one to `BODY_FIELDS`. That failure is the design working, not a bug.
+- **The message-history shape, CONFIRMED against a real reply 2026-09-01.** The docs
+  were wrong or incomplete on three of four points:
+  | What the docs said | What the API actually sends |
+  |---|---|
+  | `direction`: `"inbound"` / `"outbound"` | **`type`: `SENT` / `REPLY`** |
+  | body field undocumented | **`email_body`** |
+  | `id` | **`message_id`** (an RFC id, `<...@mail.gmail.com>`) |
+  | `sent_at` / `received_at` | **`time`** |
+
+  Both direction spellings are handled and an unrecognised one is a HARD ERROR, because
+  a wrong guess feeds OUR OWN email to the classifier as though the prospect wrote it.
+- **Dedupe on `message_id`, never `stats_id`.** They look interchangeable and are not:
+  in the verified thread **both messages carried the SAME `stats_id`** (it identifies the
+  send, not the message), so keying on it would treat a reply as already-processed the
+  moment the outbound email was recorded.
+- **Inbound bodies are quote-stripped before they are classified or queued.** A reply
+  carries the whole thread beneath it, including our own copy. Unstripped, that reaches
+  the classifier as though the prospect wrote it and lands in the review Sheet as the
+  "reply".
 
 ### Two classifier boundaries worth knowing
 

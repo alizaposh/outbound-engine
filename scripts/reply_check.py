@@ -52,6 +52,7 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import review_queue as rq  # noqa: E402
+from enrich_callbacks import strip_quoted  # noqa: E402
 from eligibility import env_token, env_value, load_config  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -154,8 +155,16 @@ def recycle_date(intent: str, reply_at: str, named: str | None,
 # Candidate body fields on a message-history item. Smartlead documents `direction`, `id`,
 # `subject`, `sent_at` and `received_at`, but not the body, so this tries the plausible
 # names and guarantee 4 fires if none match.
+# CONFIRMED 2026-09-01 against a real reply: the field is `email_body`. The rest are
+# kept as fallbacks in case the shape differs elsewhere, and an inbound message matching
+# none of them is still a hard error.
 BODY_FIELDS = ("email_body", "body", "message", "text", "plain_text", "email_message",
                "message_body", "content")
+
+# Smartlead's `type` on a message-history item. SENT and REPLY are confirmed live; the
+# others are defensive. Anything unlisted raises rather than being assumed a direction.
+INBOUND_TYPES = {"REPLY", "INBOUND", "RECEIVED"}
+OUTBOUND_TYPES = {"SENT", "OUTBOUND", "FOLLOWUP", "SENT_FOLLOWUP"}
 
 
 class Smartlead:
@@ -200,6 +209,32 @@ class Smartlead:
             out += rows
             offset += len(rows)
             if not rows or offset >= int(d.get("total_stats") or 0):
+                return out
+
+    def lead_ids_by_email(self, cid) -> dict[str, int]:
+        """email -> Smartlead lead id, for the whole campaign.
+
+        Needed because the statistics row that tells us someone replied carries
+        `lead_email` but NO lead id, while message-history is addressed by id. Verified
+        against a real reply on 2026-09-01. Built once per campaign rather than looked up
+        per reply, so the cost is pagination over the lead list, not N calls.
+
+        Email is the join key everywhere else in this system (CLAUDE.md), so joining here
+        is consistent rather than a special case.
+        """
+        out, offset = {}, 0
+        while True:
+            d = self.get(f"/campaigns/{cid}/leads?offset={offset}&limit=100")
+            rows = d.get("data") or []
+            if not rows:
+                return out
+            for row in rows:
+                lead = row.get("lead") or {}
+                email = (lead.get("email") or "").strip().lower()
+                if email and lead.get("id"):
+                    out[email] = lead["id"]
+            offset += len(rows)
+            if offset >= int(d.get("total_leads") or 0):
                 return out
 
     def thread(self, cid, lead_id) -> list[dict]:
@@ -370,14 +405,37 @@ def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
     """
     norm = []
     for m in messages:
-        direction = str(m.get("direction") or m.get("type") or "").lower()
-        inbound = "in" in direction and "out" not in direction
+        # VERIFIED against a real thread 2026-09-01. Smartlead's docs describe a
+        # `direction` field of "inbound"/"outbound"; the API actually sends `type` with
+        # SENT / REPLY. Both are handled, and an unrecognised value is a HARD ERROR
+        # rather than a guess: getting direction wrong would feed OUR OWN email to the
+        # classifier as though the prospect had written it.
+        raw_dir = str(m.get("direction") or "").lower()
+        raw_type = str(m.get("type") or "").upper()
+        if raw_dir in ("inbound", "outbound"):
+            inbound = raw_dir == "inbound"
+        elif raw_type in INBOUND_TYPES:
+            inbound = True
+        elif raw_type in OUTBOUND_TYPES:
+            inbound = False
+        else:
+            raise RuntimeError(
+                f"cannot tell which way a Smartlead message went: direction={raw_dir!r} "
+                f"type={raw_type!r}. Add it to INBOUND_TYPES or OUTBOUND_TYPES. Refusing "
+                "to guess, because a wrong guess classifies our own email as theirs.")
         body = next((str(m[f]) for f in BODY_FIELDS if m.get(f)), None)
         if inbound and body is None:
             raise RuntimeError(
                 "an inbound Smartlead message has no recognisable body field. Fields "
                 f"present: {sorted(m)}. Add the right name to BODY_FIELDS. Refusing to "
                 "treat an unreadable reply as an empty one.")
+        # A reply quotes everything above it, so the prospect's actual words are a
+        # fraction of the payload. enrich_callbacks learned this the expensive way: a
+        # 7741-char reply whose prospect content was 105 chars, the rest being OUR OWN
+        # quoted pricing. Unstripped, that lands in the review Sheet as the "reply" and
+        # goes to the classifier as though they wrote it.
+        if inbound and body:
+            body = strip_quoted(body)
         norm.append({
             "inbound": inbound,
             "id": str(m.get("id") or m.get("message_id") or m.get("stats_id") or ""),
@@ -671,12 +729,21 @@ def main(argv=None) -> int:
         cid = camp.get("id")
         leads = sl.replied_leads(cid)
         print(f"\ncampaign {cid} {camp.get('name','')!r}: {len(leads)} lead(s) marked replied")
+        id_by_email = sl.lead_ids_by_email(cid) if leads else {}
         for row in leads:
             if a.limit and processed >= a.limit:
                 break
             lead = row.get("lead") or row
-            lead_id = lead.get("id") or row.get("lead_id")
             email = (lead.get("email") or row.get("lead_email") or "").strip()
+            lead_id = (lead.get("id") or row.get("lead_id")
+                       or id_by_email.get(email.lower()))
+            if not lead_id:
+                # Never guess an id: the wrong one reads a stranger's thread and could
+                # classify, suppress, or draft a reply against the wrong person.
+                print(f"  {email}: replied, but no Smartlead lead id on this campaign; "
+                      "skipped rather than risk reading the wrong thread")
+                skipped += 1
+                continue
             messages, newest = read_thread(sl.thread(cid, lead_id))
             if not newest:
                 print(f"  {email}: marked replied but no inbound message found; skipped")

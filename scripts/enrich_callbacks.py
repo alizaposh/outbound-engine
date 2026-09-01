@@ -166,6 +166,14 @@ HTML_TAG = re.compile(r"<[^>]+>")
 # marker onward is discarded, so only their new words survive.
 QUOTE_MARKERS = [
     re.compile(r"^\s*On .{4,80}\bwrote:\s*$", re.M | re.I),   # Gmail / Apple Mail
+    # The same attribution when it WRAPS, so "wrote:" is on a later line, or is
+    # truncated away entirely. Seen on a real reply 2026-09-01:
+    #   "On Tue, Sep 1, 2026 at 11:12 AM Carl Newmark <carl@..."
+    # Deliberately anchored on the full date-and-time shape rather than a bare "On ",
+    # because over-cutting deletes the prospect's own words -- the failure that matters
+    # more than leaving a stray quoted line behind.
+    re.compile(r"^\s*On\s+(?:\w{3,9},?\s+)?\w{3,9}\s+\d{1,2},?\s+\d{4}[,]?\s+at\s+"
+               r"[\d:]+\s*[AP]?\.?M?\.?", re.M | re.I),
     re.compile(r"^\s*-{2,}\s*Original Message\s*-{2,}", re.M | re.I),
     re.compile(r"^\s*_{5,}\s*$", re.M),                        # Outlook divider
     re.compile(r"^\s*From:\s.+$", re.M),                       # Outlook header block

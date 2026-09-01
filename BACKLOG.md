@@ -587,7 +587,34 @@ and prints the three UI-only settings it cannot check so they get eyeballed.
 
 ---
 
-## Dress rehearsal: single-recipient end-to-end test — IN PROGRESS 2026-09-01
+## Dress rehearsal: single-recipient end-to-end test — PASSED 2026-09-01
+Campaign 3887546, sent to `aliza@posh.vip`, replied to, loop run in dry run. **All four
+unknowns settled, and it landed in the INBOX**, not spam — the earlier spam hit was the
+Smartlead *test email* path, not a campaign send, so it said less about the lookalike
+domain than assumed.
+
+| Unknown | Result |
+|---|---|
+| Unsubscribe link renders | **YES**, resolved to a real clickable `<a href="https://open.sleadtrack.com/unsubscribe?...">Unsubscribe</a>`. The compliance requirement is verified. |
+| HTML paragraphs | **YES**, `<p>` per paragraph, no wall of text |
+| `BODY_FIELDS` | **`email_body`** — the first candidate, so the guess was right |
+| Reply loop end to end | **Works.** Detected, parsed, classified `interested`, queued |
+
+**Four bugs it caught that no test could have**, all now fixed:
+1. The statistics row that reports a reply carries `lead_email` but **no lead id**, while
+   message-history is addressed by id. Now joined on email, one lookup per campaign.
+2. Direction is `type` (`SENT`/`REPLY`), not the documented `direction`. Nothing read as
+   inbound, so a real reply was silently invisible.
+3. **Both messages in the thread share one `stats_id`.** Deduping on it would mark a
+   reply processed as soon as the outbound send was recorded.
+4. Quote stripping missed a wrapped Gmail attribution, leaving our own address in the
+   text a human reads as "the reply".
+
+**Still untested: threading.** Replying stopped the sequence, as designed, so emails 2
+and 3 never sent and `subject: ""` remains unproven in a real inbox. That needs a
+separate campaign nobody replies to.
+
+## Dress rehearsal — original plan
 **Smartlead campaign 3887546**, `2026-09_rehearsal_dress-rehearsal`, DRAFTED, 1 lead
 (`aliza@posh.vip`), sender `carl.newmark@vibeposhvip.com`, copy generated and 3/3 PASS.
 
