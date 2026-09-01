@@ -518,6 +518,49 @@ available at the time, against the five requirements above.
 
 ---
 
+## BLOCKER: warmup reports ACTIVE but has sent 0 emails — found 2026-09-01
+The rehearsal email landed in spam, which surfaced two separate things. Keep them apart:
+one invalidates the test, the other blocks launch.
+
+### 1. The rehearsal is not a valid deliverability test (test-design flaw, mine)
+It sent from `carl.newmark@vibeposhvip.com` to `aliza@posh.vip`, with a body reading
+"I'm Carl, I run partnerships at Posh". That is a lookalike of the recipient's own brand,
+claiming to represent the recipient's own company, with an employee-style sign-off — close
+to a textbook cousin-domain phishing signature, and Google Workspace has specific
+protections for exactly it. **Do not read this spam placement as a signal about real
+prospect deliverability, and do not change copy because of it.** A valid read needs a
+recipient on an unrelated domain (a personal Gmail, a non-Posh colleague).
+
+Authentication was ruled out first and is correct on all four sending domains: SPF
+`include:_spf.google.com`, DKIM present on the `google` selector, and DMARC at
+**`p=reject`**, which is stricter than most senders. Not the cause.
+
+### 2. Warmup has apparently never run — this DOES block launch
+All 12 mailboxes: `warmup status = ACTIVE`, `warmup_created_at = 2026-08-24`, and
+`total_sent_count = 0`. Combined warmup volume across the account is **zero** over 8 days.
+`warmup_reputation` reads 99–100%, which is 100% of nothing rather than evidence of
+health. Mailboxes were created 2026-08-17, so the domains are ~15 days old with
+effectively no sending history.
+
+**Verify in the Smartlead UI before acting**, because this is read from
+`GET /email-accounts` and `total_sent_count` may simply not be populated there. Two
+mailboxes reading 99% rather than 100% hints something is being computed, which is the one
+piece of evidence against the plain reading. The UI's warmup tab shows a per-day sent
+graph and settles it.
+
+**If confirmed, it is a launch blocker, not a wait.** ACTIVE with zero sends for 8 days is
+a misconfiguration, not insufficient time, and no amount of waiting fixes it. Cold sending
+from 15-day-old domains with no history lands in spam for real prospects too — which is
+the one deliverability fact this rehearsal could NOT test, given flaw 1 above.
+
+### What is still valid in the rehearsal
+Spam placement does not block the mechanical tests, which are the reason the rehearsal
+exists. Mark the message "not spam" and continue: the unsubscribe link rendering, HTML
+paragraph rendering, `BODY_FIELDS` on a real reply, and the reply loop are all unaffected
+by which folder it landed in.
+
+---
+
 ## Dress rehearsal: single-recipient end-to-end test — IN PROGRESS 2026-09-01
 **Smartlead campaign 3887546**, `2026-09_rehearsal_dress-rehearsal`, DRAFTED, 1 lead
 (`aliza@posh.vip`), sender `carl.newmark@vibeposhvip.com`, copy generated and 3/3 PASS.
