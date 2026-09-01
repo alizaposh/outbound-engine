@@ -587,6 +587,29 @@ and prints the three UI-only settings it cannot check so they get eyeballed.
 
 ---
 
+## Rehearsal 2: threading + Gmail deliverability — STAGED 2026-09-01
+**Campaign 3888067**, DRAFTED, 1 lead (`aliza.mayer@gmail.com`), sender
+`brooke.carrobis@poshviphub.com`, 3/3 PASS.
+
+**DO NOT REPLY TO THIS ONE.** Replying stops the sequence, which is exactly what ended
+rehearsal 1 before emails 2 and 3 could send. The whole point is to let the sequence run:
+email 2 lands ~3 days after launch, email 3 four days after that.
+
+**What it proves that rehearsal 1 could not:**
+1. **Threading.** Emails 2 and 3 send with `subject: ""` so they inherit the thread and
+   arrive as `Re:`. Never observed in a real inbox. If it fails they arrive as blank or
+   duplicate subjects, which is very visible to a prospect.
+2. **Deliverability to an unrelated consumer domain.** posh.vip is a poor test target
+   because a brand-adjacent sender to the company's own domain trips anti-spoofing.
+   gmail.com has no such relationship, so wherever this lands is a real signal.
+3. A **second sender and domain** (Brooke / poshviphub.com), where rehearsal 1 used
+   Carl / vibeposhvip.com.
+
+**Not covered, and deliberately:** the HubSpot write path with `--apply`. That needs a
+HubSpot contact carrying the recipient's email, and standing instruction is not to create
+contacts. The write is already covered by verified property options and dry runs; if it
+is worth proving live later, it costs one throwaway HubSpot contact and a deletion.
+
 ## Dress rehearsal: single-recipient end-to-end test — PASSED 2026-09-01
 Campaign 3887546, sent to `aliza@posh.vip`, replied to, loop run in dry run. **All four
 unknowns settled, and it landed in the INBOX**, not spam — the earlier spam hit was the
