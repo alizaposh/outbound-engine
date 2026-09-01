@@ -518,6 +518,44 @@ available at the time, against the five requirements above.
 
 ---
 
+## Dress rehearsal: single-recipient end-to-end test — IN PROGRESS 2026-09-01
+**Smartlead campaign 3887546**, `2026-09_rehearsal_dress-rehearsal`, DRAFTED, 1 lead
+(`aliza@posh.vip`), sender `carl.newmark@vibeposhvip.com`, copy generated and 3/3 PASS.
+
+**Why a rehearsal at all.** Four things cannot be learned any other way than a real send,
+and all four were stacked up waiting for the first real prospect campaign:
+
+1. **`BODY_FIELDS` is a guess.** Smartlead does not document the body field on a
+   message-history item, so `reply_check.py` hard-errors rather than treat an unreadable
+   reply as empty. Without a rehearsal, the first REAL prospect reply is also the first
+   test of the parser.
+2. **The unsubscribe link can only be proven by a real send.** Smartlead renders it
+   non-clickable in test emails, so it looks present and dead. It is a legal requirement
+   and it is currently unverified.
+3. **HTML paragraph rendering** — bodies are converted by `to_html()`; nothing has
+   confirmed they do not arrive as one block.
+4. **Threading** — emails 2 and 3 send with `subject: ""`. Never seen in a real inbox.
+
+**It already paid for itself before sending anything**, by surfacing three bugs: the
+`token` shadowing that fed the AWS bearer token into `validate_email`, the `STAT_MENTION`
+regex reading the footer's ZIP plus `%unsubscribe-text%` as a percentage stat on every
+email ever generated, and `run_generation.py` never loading `.env` at all.
+
+### The one tradeoff to decide when the mail arrives
+**Replying to email 1 stops the sequence**, so emails 2 and 3 never send and threading (4)
+stays untested. Two options, and they cannot both be had from one campaign:
+- **Reply now** — proves the reply loop and settles `BODY_FIELDS`, which is the blocking
+  unknown. Threading needs a separate no-reply campaign later. **Recommended.**
+- **Wait ~3 days** for email 2 to arrive, confirm threading, then reply.
+
+### Do NOT click the unsubscribe link
+It would globally block `aliza@posh.vip` in Smartlead, permanently, making the address
+useless for future tests. Confirming the link is PRESENT with a real URL is the actual
+test: the failure mode being guarded against is it going missing because "Optimize Email
+Delivery" stripped the HTML.
+
+---
+
 ## Why polling and not Smartlead webhooks — asked and settled 2026-08-31
 Recorded because it is a reasonable question that will be asked again.
 
