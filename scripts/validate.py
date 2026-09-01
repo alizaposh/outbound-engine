@@ -226,7 +226,20 @@ def _name_tokens(names) -> set[str]:
     for n in names or ():
         for w in re.findall(r"[\w'&-]+", str(n)):
             out.add(w.lower().removesuffix("'s"))
+        # Also the whole chunk with punctuation removed, so a name carrying internal
+        # punctuation matches as one word. "Mic.RO" tokenises to {mic, ro} above, which
+        # never matches the subject word "Mic.RO"; this adds "micro", and _norm_token
+        # normalises the subject word the same way.
+        for chunk in str(n).split():
+            flat = re.sub(r"[^0-9A-Za-z]", "", chunk).lower()
+            if flat:
+                out.add(flat)
     return out
+
+
+def _norm_token(word: str) -> str:
+    """A subject word reduced to the same shape as _name_tokens entries."""
+    return re.sub(r"[^0-9A-Za-z']", "", word).lower().removesuffix("'s")
 
 
 def check_subject_shape(subject: str, body: str, *, position: int = 1,
@@ -251,9 +264,17 @@ def check_subject_shape(subject: str, body: str, *, position: int = 1,
     if not words and position in (2, 3):
         return out
     lo, hi = SUBJECT_WORDS
-    if not lo <= len(words) <= hi:
-        out.append(Finding("subject_shape", FAIL,
-            f"subject is {len(words)} words, rule is {lo} to {hi}: {subject!r}"))
+    # The prospect's own name counts as ONE word however long it is. "If You Know You
+    # Know" is a five-word organization, and counting each token made a tight subject
+    # read as nine words and FAIL. The cap exists to stop rambling subjects, not to
+    # penalise a contact for their band name.
+    billable = [w for w in words if _norm_token(w) not in known]
+    effective = len(billable) + (1 if len(billable) < len(words) else 0)
+    if not lo <= effective <= hi:
+        detail = (f"subject is {effective} words, rule is {lo} to {hi}"
+                  + (f" (the prospect's name counted as one)" if effective != len(words) else "")
+                  + f": {subject!r}")
+        out.append(Finding("subject_shape", FAIL, detail))
     bad = []
     capitalized = []          # words starting uppercase, for the Title Case check below
     alpha_words = []
@@ -264,7 +285,8 @@ def check_subject_shape(subject: str, body: str, *, position: int = 1,
         alpha_words.append(stripped)
         # A word from this contact's own name or organization is a proper noun by
         # definition, whatever its casing. Possessives normalise: LAB's -> lab.
-        if stripped.lower().removesuffix("'s") in known:
+        if (stripped.lower().removesuffix("'s") in known
+                or _norm_token(stripped) in known):
             if stripped[0].isupper():
                 capitalized.append(stripped)
             continue
@@ -444,12 +466,18 @@ def check_gmv_leak(subject: str, body: str) -> list[Finding]:
     return out
 
 
-def check_case_studies(subject: str, body: str) -> list[Finding]:
+def check_case_studies(subject: str, body: str, *, allowed_names=()) -> list[Finding]:
     out = []
     # Masked first: "we run ticketing for Caché Life, and just closed a $37M Series B"
     # otherwise reads as a figure attached to Caché Life, when it is OUR funding sitting
     # in a neighbouring clause.
     hay = _mask_approved(f"{subject}\n{body}")
+    # Blank the prospect's own name before looking for numerals. "90s Til Dawn" carries a
+    # digit, and sitting near a no-figure customer it read as a fabricated statistic about
+    # that customer. Their band name is not a claim about Caché Life.
+    for n in allowed_names or ():
+        if str(n).strip():
+            hay = re.sub(re.escape(str(n)), "PROSPECT", hay, flags=re.I)
     named = {c for c in CLEARED_CUSTOMERS if c.lower() in hay.lower()}
     # Treat "NARC" and "NARC Run Club" as one customer.
     canonical = {("NARC Run Club" if n.startswith("NARC") else
@@ -553,7 +581,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_links(subject, body, position=position)
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
     res.findings += check_gmv_leak(subject, body)
-    res.findings += check_case_studies(subject, body)
+    res.findings += check_case_studies(subject, body, allowed_names=allowed_names)
     res.findings += check_no_invented_platform(subject, body,
                                                competitor_known=competitor_known)
     res.findings += check_commercial_terms(subject, body)

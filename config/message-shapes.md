@@ -37,7 +37,13 @@ Worth 15 minutes to see what we could bring to the table?
 - **Name both levers out loud** — marketing support AND financial incentives. Never
   compress them into "value" or "what we could do for you".
 - **Ask for a reply, not a booking.** No calendar link anywhere in the cold sequence.
-- **≤ 75 words**, intro line included.
+- **≤ 75 words**, intro line included. **The opener's budget is about 21 words.** The
+  fixed beats cost roughly 54 (intro 8, question 11, offer 20, ask 15), so anything
+  longer than two short sentences cannot fit. This is arithmetic, not taste: shapes with
+  three-sentence openers ran 97 words and went over the cap in 8 of 8 emails.
+- **Write NOTHING beyond these paragraphs.** No extra middle paragraph explaining the
+  problem, no "Posh pulls that into one spot" line. A run produced a 113-word email 1 by
+  inserting exactly that, and it is the bloat the spec exists to remove.
 - **The sender's self-introduction stays**, near the top. The SDR draft omitted it; the
   person running outbound kept it by explicit decision on 2026-09-01, as they had in
   August. Without it email 1 never says what Posh is.
@@ -74,18 +80,17 @@ argue yet.
 Known competitor, and the contact is large enough that operations are the live problem.
 
 **Opening variants (code picks one; use it as the opening move):**
-- Saw {prospect_org} is running ticketing through {competitor}. Most {vertical} organizers we work with in {city} end up with guest lists, payouts and promotion in three different places.
-- Noticed {prospect_org} is on {competitor}. The {vertical} organizers we work with in {city} usually have guest lists, payouts and promotion sitting in three separate tools.
-- Saw you're running {prospect_org} ticketing on {competitor}. Most {city} {vertical} organizers we talk to are stitching guest lists, payouts and promotion together by hand.
+- Saw {prospect_org} is on {competitor}. Most {vertical} organizers in {city} end up juggling guest lists, payouts and promotion separately.
+- Noticed {prospect_org} runs ticketing on {competitor}. Guest lists, payouts and promotion usually end up in three places.
+- Saw you're on {competitor}. Most {city} {vertical} organizers stitch guest lists, payouts and promotion together by hand.
 
 
 > Hey {first_name},
 >
 > {sender.intro_line}
 >
-> Saw {prospect_org} is running ticketing through {competitor}. Most {vertical}
-> organizers we work with in {city} end up with guest lists, payouts and promotion in
-> three different places.
+> Saw {prospect_org} is on {competitor}. Most {vertical} organizers in {city} end up
+> juggling guest lists, payouts and promotion separately.
 >
 > Are you locked in on your ticketing platform right now?
 >
@@ -134,19 +139,17 @@ named anywhere in this shape** — that is the gate.
 The opener the person running outbound wrote themselves, kept as the tone reference.
 
 **Opening variants (code picks one; use it as the opening move):**
-- Saw {prospect_org} is running ticketing through {competitor}. We work with a lot of {vertical} organizers in {city}, and I often notice that organizers on {competitor} face operational challenges, such as having your guest lists, payouts and promotion all living in three different places.
-- Saw {prospect_org} is on {competitor}. We work with a lot of {vertical} organizers in {city}, and I often notice that guest lists, payouts and promotion end up living in three different places.
-- Noticed {prospect_org} runs ticketing on {competitor}. Working with {vertical} organizers around {city}, I often see guest lists, payouts and promotion all sitting apart.
+- Saw {prospect_org} is on {competitor}. Working with {vertical} organizers in {city}, I often see guest lists, payouts and promotion living apart.
+- Saw {prospect_org} runs ticketing on {competitor}. With {city} {vertical} organizers I often see guest lists, payouts and promotion in three places.
+- Noticed {prospect_org} is on {competitor}. I often see {vertical} organizers in {city} keeping guest lists, payouts and promotion apart.
 
 
 > Hey {first_name},
 >
 > {sender.intro_line}
 >
-> Saw {prospect_org} is running ticketing through {competitor}. We work with a lot of
-> {vertical} organizers in {city}, and I often notice that organizers on {competitor}
-> face operational challenges, such as having your guest lists, payouts and promotion
-> all living in three different places.
+> Saw {prospect_org} is on {competitor}. Working with {vertical} organizers in {city},
+> I often see guest lists, payouts and promotion living apart.
 >
 > Are you locked in on your ticketing platform right now?
 >
@@ -158,7 +161,11 @@ The opener the person running outbound wrote themselves, kept as the tone refere
 at the end of this file, picked per contact by code. The question, the offer, and the ask
 are the three things the sequence exists to say. **≤ 75 words.**
 
-**Trim the opener to fit 75 words with the intro line.** If it will not fit, use 1B.
+**Trimmed 2026-09-01 from the originally endorsed wording**, which ran ~55 words in the
+opener alone and put every email using this shape over the cap (median 97 words, 8 of 8
+over). The original phrasing is preserved in git history and in the "CONCRETE, NOT VAGUE"
+rule below, which is what it was really teaching. The cap wins: it is the newer decision
+and it is the one the SDR asked for.
 
 ## Email 2 shapes (threaded reply, no greeting, no re-introduction)
 
