@@ -45,11 +45,20 @@ mailbox's line); the model must never pick one. It used to live as a three-row t
 the rulebook, which the model read as a menu: a 34-contact run came back with the wrong
 name in 18 of 34 emails, signing "Carl" while the body said "I'm Brooke".
 
+**A sender may have SEVERAL rows.** One is picked per contact, so the same mailbox does
+not open every email with the identical sentence. **Every row for a sender must name that
+sender**, and `assemble.py` asserts it: when these lived as a free menu in the rulebook, a
+34-contact run signed "Carl" while the body said "I'm Brooke" in 18 of 34 emails. Variety
+is allowed inside a sender's own lines and nowhere else.
+
 | first name | intro line |
 |------------|------------|
 | Carl       | I'm Carl, I run partnerships at Posh. |
+| Carl       | I'm Carl, I manage partnerships at Posh. |
 | Brooke     | I'm Brooke, I run partnerships at Posh. |
+| Brooke     | I'm Brooke, I manage partnerships at Posh. |
 | Zach       | I'm Zach, I help organizers get set up on Posh. |
+| Zach       | I'm Zach, I manage partnerships at Posh. |
 
 - **It belongs at the OPENING of email 1**, not the end. Placement is set by the voice
   anchor in `instructions/message-generation.md`.

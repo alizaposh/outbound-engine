@@ -59,14 +59,13 @@ For a contact whose `current_competitor` is known and usable.
 >
 > Are you locked in on your ticketing platform right now?
 >
-> If there's room, I'd like to put a custom offer together for you: marketing support
-> and financial incentives.
+> %OFFER%
 >
-> Worth 15 minutes to see what we could bring to the table?
+> %CTA%
 
-**Every line above is required.** The question, the offer with BOTH levers named, and the
-15-minute ask are the three things the sequence exists to say; only the opener varies.
-**≤ 75 words.**
+**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
+at the end of this file, picked per contact by code. The question, the offer, and the ask
+are the three things the sequence exists to say. **≤ 75 words.**
 
 Nothing evaluative about the platform. The observation earns the email; it does not
 argue yet.
@@ -90,14 +89,13 @@ Known competitor, and the contact is large enough that operations are the live p
 >
 > Are you locked in on your ticketing platform right now?
 >
-> If there's room, I'd like to put a custom offer together for you: marketing support
-> and financial incentives.
+> %OFFER%
 >
-> Worth 15 minutes to see what we could bring to the table?
+> %CTA%
 
-**Every line above is required.** The question, the offer with BOTH levers named, and the
-15-minute ask are the three things the sequence exists to say; only the opener varies.
-**≤ 75 words.**
+**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
+at the end of this file, picked per contact by code. The question, the offer, and the ask
+are the three things the sequence exists to say. **≤ 75 words.**
 
 Two sentences maximum in the opener. It is the longest permitted and the cap must
 absorb it.
@@ -121,14 +119,13 @@ worse than any amount of sameness.
 >
 > Are you locked in on your ticketing platform right now?
 >
-> If there's room, I'd like to put a custom offer together for you: marketing support
-> and financial incentives.
+> %OFFER%
 >
-> Worth 15 minutes to see what we could bring to the table?
+> %CTA%
 
-**Every line above is required.** The question, the offer with BOTH levers named, and the
-15-minute ask are the three things the sequence exists to say; only the opener varies.
-**≤ 75 words.**
+**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
+at the end of this file, picked per contact by code. The question, the offer, and the ask
+are the three things the sequence exists to say. **≤ 75 words.**
 
 Says only what the lead data supports: their vertical and their city. **No platform is
 named anywhere in this shape** — that is the gate.
@@ -153,14 +150,13 @@ The opener the person running outbound wrote themselves, kept as the tone refere
 >
 > Are you locked in on your ticketing platform right now?
 >
-> If there's room, I'd like to put a custom offer together for you: marketing support
-> and financial incentives.
+> %OFFER%
 >
-> Worth 15 minutes to see what we could bring to the table?
+> %CTA%
 
-**Every line above is required.** The question, the offer with BOTH levers named, and the
-15-minute ask are the three things the sequence exists to say; only the opener varies.
-**≤ 75 words.**
+**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
+at the end of this file, picked per contact by code. The question, the offer, and the ask
+are the three things the sequence exists to say. **≤ 75 words.**
 
 **Trim the opener to fit 75 words with the intro line.** If it will not fit, use 1B.
 
@@ -272,3 +268,31 @@ no urgency. Close the loop and stop.
 - **A warm open replaces the opener beat, never adds to it.** When `callback_tier` is not
   `none`, the callback *is* the opener (`message-generation.md` §9) and the rest of the
   skeleton is unchanged. Running both would double the opening and break the cap.
+
+## Offer variants (code picks one)
+
+Declarative: they NAME the offer. The ask is the CTA's job, so these do not end in a
+question. **Do not use a colon before the list** — the bundle is what the proposal
+contains, not a definition of it, and a colon reads as the latter.
+
+The wording follows the approved bundle in `config/positioning.md`: dedicated account
+support, financial incentives, marketing push, and more. **Bundled and unquantified** —
+naming a rate, a share or a figure is a FAIL.
+
+- I'd like to put a custom offer together for you with dedicated account support, financial incentives, marketing push and more.
+- If there's room, I'd like to put a custom proposal together for you with dedicated account support, financial incentives and a marketing push.
+- Happy to put something custom together for you, with dedicated account support, financial incentives and marketing behind it.
+
+## CTA variants (code picks one)
+
+One ask, reply-based. **Never a booking link** — the calendar goes out in the reply, after
+they say yes.
+
+- Worth 15 minutes to see what we could bring to the table?
+- Let me know if you're open to connecting to see what we can bring to the table.
+- Any opportunity to compare what Posh could put together in a custom proposal?
+- Open to 15 minutes to see what this could look like for you?
+
+The third was banned in August on AE feedback and **un-banned by explicit decision**,
+because it appears in the sales team's own live email. Kept for the record so the
+reversal is visible.

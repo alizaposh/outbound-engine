@@ -349,6 +349,36 @@ def shape_openings(path: str = SHAPES_FILE) -> dict[str, list[str]]:
     return out
 
 
+OFFER_VARIANTS: list[str] = []
+CTA_VARIANTS: list[str] = []
+
+
+def load_variants(label: str, path: str = SHAPES_FILE) -> list[str]:
+    """The "- " lines under a "## <label> variants (code picks one)" heading.
+
+    Global rather than per-shape: the offer and the CTA are identical across shapes by
+    design (the spec fixes those beats), so the variation that stops them reading
+    identically belongs to the contact, not the shape.
+    """
+    text = (ROOT / path).read_text(encoding="utf-8")
+    m = re.search(rf"^## {re.escape(label)} variants.*?$(.*?)(?=^## |\Z)",
+                  text, re.M | re.S)
+    if not m:
+        return []
+    return [mv.group(1).strip()
+            for line in m.group(1).splitlines()
+            if (mv := re.match(r"^-\s+(.*\S)\s*$", line))]
+
+
+def pick_variant(c: Contact, variants: list[str], salt: str = "") -> str:
+    """One variant per contact, stable across runs. Salted so the offer and the CTA do
+    not correlate -- without it every contact drawing offer #2 also draws CTA #2."""
+    if not variants:
+        return ""
+    seed = f"{salt}:{(c.email or c.prospect_org or '').strip().lower()}"
+    return variants[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(variants)]
+
+
 def pick_opening(c: Contact, shape_key: str,
                  openings: dict[str, list[str]]) -> str:
     """One opening variant per contact, within the assigned shape.
@@ -563,6 +593,18 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
 
     keys = assign_shapes(c, shapes, platform_known)
     specs = {pos: shapes[pos][k] for pos, k in keys.items() if k}
+
+    # Offer and CTA are fixed beats by design, so the only thing stopping them reading
+    # identically across a batch is a per-contact pick. Substituted into the exemplar
+    # rather than described, because the exemplar is what the model actually follows.
+    offer = pick_variant(c, OFFER_VARIANTS, "offer")
+    cta = pick_variant(c, CTA_VARIANTS, "cta")
+    specs = {pos: s.replace("%OFFER%", offer).replace("%CTA%", cta)
+             for pos, s in specs.items()}
+    # This sender's own approved intro lines, picked per contact. resolve_sender_intro
+    # asserts every variant names its own sender, so variety here cannot reintroduce the
+    # signed-Carl-introduced-Brooke bug.
+    sender_intro = assemble.resolve_sender_intro(mailbox, seed=c.email or "")
     opening = pick_opening(c, f"1{keys[1]}", openings)
     note = research_note(c, persona, basis, platform_known, sender_name, sender_intro,
                          keys, specs, opening)
@@ -705,6 +747,8 @@ def main(argv=None) -> int:
     # Resolve the sending identity once, up front: an unmapped mailbox or a missing
     # intro line must stop the run before a single email is generated with the wrong name.
     sender_name = assemble.resolve_sender_name(a.mailbox, sender_map)
+    # Resolved per contact inside process_contact now; this is the run-level default
+    # used only for the printed header and the failure-fallback path.
     sender_intro = assemble.resolve_sender_intro(a.mailbox)
 
     print("SEND-READINESS BLOCKERS (drafting is fine; sending is not)")
@@ -717,6 +761,13 @@ def main(argv=None) -> int:
     failure_fallback = load_failure_fallback()
     shapes = load_shapes()
     openings = shape_openings()
+    global OFFER_VARIANTS, CTA_VARIANTS
+    OFFER_VARIANTS, CTA_VARIANTS = load_variants("Offer"), load_variants("CTA")
+    if not OFFER_VARIANTS or not CTA_VARIANTS:
+        raise SystemExit("no Offer/CTA variants parsed from config/message-shapes.md; "
+                         "email 1's offer and ask would come out blank")
+    print(f"variants: {len(OFFER_VARIANTS)} offer, {len(CTA_VARIANTS)} CTA, "
+          f"{sum(len(v) for v in assemble.load_sender_intros().values())} sender intro")
     print("shapes: " + "; ".join(f"m{p}={','.join(sorted(shapes[p]))}"
                                  for p in POSITIONS) + " (assigned per contact)")
     rulebook, instruction = build_system_prompt()

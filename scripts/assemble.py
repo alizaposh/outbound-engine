@@ -10,6 +10,7 @@ shippable while missing the sender identity or opt-out that make it legal to sen
 """
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import re
 from dataclasses import dataclass
@@ -131,15 +132,27 @@ def load_sender_map(path: pathlib.Path = SENDERS) -> dict[str, str]:
     return mapping
 
 
-def load_sender_intros(path: pathlib.Path = SENDERS) -> dict[str, str]:
-    """first name -> the email-1 self-introduction line for that sender.
+def load_sender_intros(path: pathlib.Path = SENDERS) -> dict[str, list[str]]:
+    """first name -> that sender's approved email-1 self-introduction lines.
 
-    Passed to the generator per run so the model never chooses. When these lived as a
-    menu in the rulebook, a 34-contact run put the wrong name in 18 of 34 emails: the
-    email signed "Carl" while the body said "I'm Brooke".
+    A LIST per sender since 2026-09-01, so the same mailbox does not open every email
+    with the identical sentence. The model still never chooses: code picks one and passes
+    it in. When these lived as a menu in the rulebook, a 34-contact run put the wrong name
+    in 18 of 34 emails, signing "Carl" over a body saying "I'm Brooke".
+
+    Every line is asserted to name its own sender, which is what keeps added variety from
+    reopening that bug.
     """
     rows = _tables_by_section(path).get(INTRO_SECTION, [])
-    intros = {n: line for n, line in rows if n.lower() not in ("first name", "sender")}
+    intros: dict[str, list[str]] = {}
+    for n, line in rows:
+        if n.lower() in ("first name", "sender"):
+            continue
+        if n.lower() not in line.lower():
+            raise AssemblyError(
+                f"intro line for {n!r} does not name {n!r}: {line!r}. Every variant must "
+                f"name its own sender, or an email signs one person and introduces another.")
+        intros.setdefault(n, []).append(line)
     if not intros:
         raise AssemblyError(
             f"No intro lines parsed from {path.name}. Expected a two-column table "
@@ -147,16 +160,23 @@ def load_sender_intros(path: pathlib.Path = SENDERS) -> dict[str, str]:
     return intros
 
 
-def resolve_sender_intro(mailbox: str) -> str:
-    """The intro line for whoever sends from this mailbox. Hard failure if absent:
-    a missing intro is how an email ends up introducing the wrong person."""
+def resolve_sender_intro(mailbox: str, seed: str = "") -> str:
+    """One approved intro line for whoever sends from this mailbox.
+
+    Hard failure if absent: a missing intro is how an email ends up introducing the wrong
+    person. `seed` (the contact's email) picks among that sender's own variants, so the
+    choice is stable per contact and never crosses senders.
+    """
     name = resolve_sender_name(mailbox)
     intros = load_sender_intros()
     if name not in intros:
         raise AssemblyError(
             f"No email-1 intro line for sender {name!r} in {SENDERS.name}. "
             f"Known: {', '.join(sorted(intros)) or '(none)'}")
-    return intros[name]
+    lines = intros[name]
+    if not seed:
+        return lines[0]
+    return lines[int(hashlib.sha256(seed.strip().lower().encode()).hexdigest(), 16) % len(lines)]
 
 
 def resolve_sender_name(mailbox: str, sender_map: dict[str, str] | None = None) -> str:
