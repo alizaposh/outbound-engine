@@ -50,10 +50,26 @@ For a contact whose `current_competitor` is known and usable.
 - Noticed {prospect_org} is on {competitor} for ticketing at the moment.
 - Came across {prospect_org} and saw you're running ticketing on {competitor}.
 
-> Saw {prospect_org} is running ticketing through {competitor}.
 
-Nothing evaluative about the platform. The observation earns the email; it does not argue
-yet.
+> Hey {first_name},
+>
+> {sender.intro_line}
+>
+> Saw {prospect_org} is running ticketing through {competitor}.
+>
+> Are you locked in on your ticketing platform right now?
+>
+> If there's room, I'd like to put a custom offer together for you: marketing support
+> and financial incentives.
+>
+> Worth 15 minutes to see what we could bring to the table?
+
+**Every line above is required.** The question, the offer with BOTH levers named, and the
+15-minute ask are the three things the sequence exists to say; only the opener varies.
+**≤ 75 words.**
+
+Nothing evaluative about the platform. The observation earns the email; it does not
+argue yet.
 
 ## Shape 1B: the competitor plus the operational consequence
 Known competitor, and the contact is large enough that operations are the live problem.
@@ -63,11 +79,27 @@ Known competitor, and the contact is large enough that operations are the live p
 - Noticed {prospect_org} is on {competitor}. The {vertical} organizers we work with in {city} usually have guest lists, payouts and promotion sitting in three separate tools.
 - Saw you're running {prospect_org} ticketing on {competitor}. Most {city} {vertical} organizers we talk to are stitching guest lists, payouts and promotion together by hand.
 
+
+> Hey {first_name},
+>
+> {sender.intro_line}
+>
 > Saw {prospect_org} is running ticketing through {competitor}. Most {vertical}
 > organizers we work with in {city} end up with guest lists, payouts and promotion in
 > three different places.
+>
+> Are you locked in on your ticketing platform right now?
+>
+> If there's room, I'd like to put a custom offer together for you: marketing support
+> and financial incentives.
+>
+> Worth 15 minutes to see what we could bring to the table?
 
-Two sentences maximum. This is the longest opener permitted and the 75-word cap has to
+**Every line above is required.** The question, the offer with BOTH levers named, and the
+15-minute ask are the three things the sequence exists to say; only the opener varies.
+**≤ 75 words.**
+
+Two sentences maximum in the opener. It is the longest permitted and the cap must
 absorb it.
 
 ## Shape 1C: no platform named
@@ -80,8 +112,26 @@ worse than any amount of sameness.
 - Most of who we work with in {city} are {vertical} organizers, so {prospect_org} caught my eye.
 - We do a lot of work with {vertical} organizers around {city}.
 
+
+> Hey {first_name},
+>
+> {sender.intro_line}
+>
+> We work with a lot of {vertical} organizers in {city}.
+>
+> Are you locked in on your ticketing platform right now?
+>
+> If there's room, I'd like to put a custom offer together for you: marketing support
+> and financial incentives.
+>
+> Worth 15 minutes to see what we could bring to the table?
+
+**Every line above is required.** The question, the offer with BOTH levers named, and the
+15-minute ask are the three things the sequence exists to say; only the opener varies.
+**≤ 75 words.**
+
 Says only what the lead data supports: their vertical and their city. **No platform is
-named in any variant** — that is the gate.
+named anywhere in this shape** — that is the gate.
 
 ## Shape 1D: the endorsed shape
 The opener the person running outbound wrote themselves, kept as the tone reference.
@@ -91,12 +141,28 @@ The opener the person running outbound wrote themselves, kept as the tone refere
 - Saw {prospect_org} is on {competitor}. We work with a lot of {vertical} organizers in {city}, and I often notice that guest lists, payouts and promotion end up living in three different places.
 - Noticed {prospect_org} runs ticketing on {competitor}. Working with {vertical} organizers around {city}, I often see guest lists, payouts and promotion all sitting apart.
 
+
+> Hey {first_name},
+>
+> {sender.intro_line}
+>
 > Saw {prospect_org} is running ticketing through {competitor}. We work with a lot of
 > {vertical} organizers in {city}, and I often notice that organizers on {competitor}
-> face operational challenges, such as having your guest lists, payouts and promotion all
-> living in three different places.
+> face operational challenges, such as having your guest lists, payouts and promotion
+> all living in three different places.
+>
+> Are you locked in on your ticketing platform right now?
+>
+> If there's room, I'd like to put a custom offer together for you: marketing support
+> and financial incentives.
+>
+> Worth 15 minutes to see what we could bring to the table?
 
-**Trim to fit 75 words with the intro line.** If it will not fit, use 1B.
+**Every line above is required.** The question, the offer with BOTH levers named, and the
+15-minute ask are the three things the sequence exists to say; only the opener varies.
+**≤ 75 words.**
+
+**Trim the opener to fit 75 words with the intro line.** If it will not fit, use 1B.
 
 ## Email 2 shapes (threaded reply, no greeting, no re-introduction)
 

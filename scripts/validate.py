@@ -423,9 +423,22 @@ def check_banned(subject: str, body: str, *, literals, regexes) -> list[Finding]
     return out
 
 
+# The ONE approved currency figure: Posh's own Series B, cleared 2026-09-01 for email 2.
+# Everything else that looks like money is still a FAIL, because the check exists to stop
+# a prospect's estimated_gmv_usd leaking into copy they can read. Exempting one exact
+# string keeps that guarantee; loosening the pattern would not.
+APPROVED_FIGURE = re.compile(r"\$\s?37\s?(m\b|million)", re.I)
+
+
+def _mask_approved(text: str) -> str:
+    """Blank the approved Series B figure so money checks cannot trip on it."""
+    return APPROVED_FIGURE.sub("SERIESB", text)
+
+
 def check_gmv_leak(subject: str, body: str) -> list[Finding]:
     out = []
-    for m in re.finditer(r"\$\s?\d[\d,.]*\s*(k|m|million|thousand)?", f"{subject} {body}", re.I):
+    hay = _mask_approved(f"{subject} {body}")
+    for m in re.finditer(r"\$\s?\d[\d,.]*\s*(k|m|million|thousand)?", hay, re.I):
         out.append(Finding("gmv_leak", FAIL,
             f"currency figure in copy; estimated_gmv_usd must never be written: {m.group(0)!r}"))
     return out
@@ -433,7 +446,10 @@ def check_gmv_leak(subject: str, body: str) -> list[Finding]:
 
 def check_case_studies(subject: str, body: str) -> list[Finding]:
     out = []
-    hay = f"{subject}\n{body}"
+    # Masked first: "we run ticketing for Caché Life, and just closed a $37M Series B"
+    # otherwise reads as a figure attached to Caché Life, when it is OUR funding sitting
+    # in a neighbouring clause.
+    hay = _mask_approved(f"{subject}\n{body}")
     named = {c for c in CLEARED_CUSTOMERS if c.lower() in hay.lower()}
     # Treat "NARC" and "NARC Run Club" as one customer.
     canonical = {("NARC Run Club" if n.startswith("NARC") else
