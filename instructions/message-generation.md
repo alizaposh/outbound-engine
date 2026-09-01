@@ -19,9 +19,9 @@ been through it.
 > `config/positioning.md`, **it wins** — the older text was written before that
 > feedback existed.
 >
-> Four conflicts are real and still live in **code**, so the rules below are not yet
-> fully enforced. They are listed in "Conflicts with code" at the end of that section.
-> Read them before trusting a generated batch.
+> **One conflict is still live** (re-audited 2026-09-01), and it is between two sections
+> of THIS file rather than with the code: see "Conflicts" at the end of that section.
+> The other three are resolved and the code now matches the rules.
 
 ---
 
@@ -188,29 +188,32 @@ style anchor.
 2. **Series B link.** Decide whether the generator inserts the Series B announcement link (and whether that long tracking URL is templatized) or leaves it out.
 3. **Intro variation.** Confirm one intro line per sender is fine across all verticals, or whether it should shift by persona.
 
-## Conflicts with code: NOT yet enforced
+## Conflicts: one still live
 
-Four rules above contradict what the pipeline currently does. Until these are fixed in
-code, a generated batch will not match this rulebook.
+**Re-audited 2026-09-01.** This section listed four blockers and warned against trusting
+a generated batch until they were fixed. Three had in fact been fixed and the warning had
+gone stale, which is worse than no warning: it invites someone to "fix" code that is
+already correct, and the obvious repair for item 1 would have REINTRODUCED the stat
+machinery that was deliberately deleted. Verify before trusting an entry here.
 
-1. **The 13% stat is banned here, but the code forces it.** `repair.py.snap_stats()`
-   rewrites any 13% mention into the approved sentence, `CANON_13` is a constant there,
-   `validate.py.APPROVED_STAT_PATTERNS` accepts it, and `repair.py.verify_canon()`
-   asserts at startup that `config/positioning.md` still contains that exact wording.
-   Deleting the stat from positioning.md without touching the code **breaks startup**.
-   Needs: remove the 13% path from `repair.py` and `validate.py`, then from
-   `config/positioning.md`. The 40% conversion stat is untouched by this feedback.
+1. ~~**The 13% stat is banned here, but the code forces it.**~~ **RESOLVED 2026-08-25/26.**
+   Verified 2026-09-01: `snap_stats()` and `verify_canon()` are gone from `repair.py`
+   (only a comment recording their removal remains), `CANON_13` no longer exists anywhere,
+   and `validate.py.APPROVED_STAT_PATTERNS` is now `[]`, so no stat is accepted rather
+   than one being forced. `STAT_MENTION` flags any `N%` for the stat budget instead.
 2. ~~**Subject lines for emails 2 and 3.**~~ **RESOLVED 2026-08-25.** `check_subject_shape`
    now skips an empty subject at positions 2 and 3, still FAILs an empty one at
    position 1, and still shape-checks a stray non-empty subject on 2 or 3. The
    generation contract asks for a subject on `message_1` only. Casing was relaxed in the
    same pass to allow proper nouns, while ALL CAPS and Title Case still FAIL.
-3. **The banned CTA is still the documented default.** §5 bans "any opportunity to
-   compare what Posh could put together in a custom proposal", which is exactly the
-   default CTA in "CTA rules" below and the **preferred CTA for both personas** in
-   `config/personas.md`. Those need rewriting to the plain-question style, and the
-   phrase belongs in `config/banned-phrases.md`.
-4. **Email 2 continuation vs. stand-alone.** §1 says email 2 opens as a bump on a
+3. ~~**The banned CTA is still the documented default.**~~ **RESOLVED 2026-08-26 by
+   reversal**, not by rewriting. Both CTA entries were un-banned by explicit decision, so
+   "any opportunity to compare what Posh could put together" is allowed — it appears in
+   the sales team's own live email. §5 above now records this, and `banned-phrases.md`
+   keeps it only as a record of the removal. Nothing to reconcile: the rule moved, not
+   the code.
+4. **STILL LIVE — and it is a doc-vs-doc contradiction, not a code one.**
+   Email 2 continuation vs. stand-alone. §1 says email 2 opens as a bump on a
    thread. "Structure of the 3-email sequence" below says the opposite: email 2 must
    read as if email 1 never happened, with "no 'just circling back'". Threading makes
    §1 correct; that older rule needs replacing, and `banned-phrases.md` should be

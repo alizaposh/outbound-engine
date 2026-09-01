@@ -118,6 +118,10 @@ Three details worth keeping in mind:
 - Pause any mailbox/domain showing deliverability problems.
 
 ## TODO / [FILL IN]
-- Confirm the exact Smartlead API endpoints/fields once the account exists (Phase 1
-  tracker task: "Confirm Claude can CREATE/manage campaigns via API").
-- Lock the campaign-naming convention and default delays in `config/smartlead-defaults.md`.
+Both original items are **DONE** (verified 2026-09-01) and are kept only so the closure
+is visible:
+- ~~Confirm the exact Smartlead API endpoints/fields once the account exists.~~ Confirmed
+  against the live API and implemented in `scripts/create_campaign.py`, which has created,
+  read back and deleted real campaigns.
+- ~~Lock the campaign-naming convention and default delays.~~ Locked in
+  `config/smartlead-defaults.md`; that file has no `[FILL IN]` markers left.
