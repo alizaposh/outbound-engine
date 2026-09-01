@@ -154,11 +154,27 @@ engagement. Every other intent correctly leaves the sequence stopped.
   live conversations to the meeting owner** (human review) — he decides per thread
   whether to introduce himself. Never make that introduction automatically.
 
-### Auto-send allowlist  [FILL IN: start empty / conservative]
-Begin with an empty allowlist (everything reviewed), then add safe categories over
-time as trust builds. Candidate first additions:
-- `[FILL IN: e.g. simple opt-out acknowledgements]`
-- `[FILL IN: e.g. "sending the one-pager you asked for"]`
+### Auto-send allowlist — SETTLED 2026-09-01: empty, and enforced
+**The allowlist is empty. Nothing is auto-sent.** The `[FILL IN]` markers here were
+closed rather than answered: "start empty" was always the answer, and leaving them open
+made a settled decision read as an unfinished one.
+
+Three independent things hold this, so it cannot drift by accident:
+1. **No send code exists.** `scripts/reply_check.py` never calls Smartlead's
+   `reply-email-thread` endpoint; the only mention of it in the repo is the docstring
+   saying so.
+2. **`auto_send_intents: []` in `config/reply-defaults.md` is ASSERTED at startup**, not
+   merely read. A non-empty list makes the script refuse to run and name this gate, so
+   turning auto-send on is a deliberate act with review attached, never a config edit
+   nobody noticed.
+3. Golden rule 1 in `CLAUDE.md`.
+
+**Known gap, deliberately left open (2026-09-01):** the review Sheet offers `Approve` and
+`Edit & send` as decisions and **nothing consumes that column.** No code reads it. The
+real flow today is: engine drafts → a human reads the Sheet → **a human sends by hand.**
+The dropdown records a decision that no machine acts on. Scheduled to be closed after the
+copy pass — see "Automate sending an approved reply" in `BACKLOG.md`. Until then, do not
+read `Approve` as meaning anything was sent.
 
 ## HubSpot updates
 

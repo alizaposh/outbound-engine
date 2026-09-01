@@ -587,6 +587,40 @@ and prints the three UI-only settings it cannot check so they get eyeballed.
 
 ---
 
+## Automate sending an approved reply — AGREED 2026-09-01, after the copy pass
+**Priority: after the copy work.** A reply loop that drafts well is worth more than one
+that sends fast, and copy is what blocks launch.
+
+**The gap.** The engine classifies a reply, drafts a response, and queues it with a
+`decision` dropdown offering `Approve` and `Edit & send`. **Nothing reads that column.**
+The real flow is engine drafts → human reads Sheet → human sends by hand from the mailbox.
+That is safe but the Sheet implies an automation that does not exist, which is the kind of
+thing discovered at the worst possible moment.
+
+**What to build.** A job that reads rows marked `Approve` / `Edit & send`, sends the
+`draft_response` (as edited in the Sheet, so the human's edit is what goes out, not the
+model's original) via `POST /campaigns/{id}/reply-email-thread`, and stamps the row so it
+cannot send twice. The endpoint needs `lead_id`, `email_body`, `reply_message_id` and
+`reply_email_time` — and note `reply_message_id` must be the **`message_id`** from
+message-history, not `stats_id`, which is shared across a thread (see the rehearsal
+findings).
+
+**This stays inside golden rule 1**: a human approved that specific text. It is not the
+same as adding an intent to `auto_send_intents`, which would send with no human at all and
+must remain a separate, deliberate decision.
+
+**Design requirements, learned from the loop already built:**
+- **Idempotent, and provably so.** Sending twice is worse than not sending: the prospect
+  sees a duplicate from a "person". Stamp the row before or atomically with the send, and
+  treat an ambiguous outcome as sent rather than retrying.
+- **Send the edited text.** Read the Sheet cell at send time. A human who fixes a draft
+  and sees the model's original go out will never trust the queue again.
+- **Dry run by default**, like everything else here.
+- **Never send to a suppressed contact.** Re-check `outbound_suppressed` and the Smartlead
+  block at send time: a reply queued on Monday and approved on Thursday may have opted out
+  in between.
+- **One reply per thread per run**, so a Sheet edited twice cannot fan out.
+
 ## Rehearsal 2: threading + Gmail deliverability — STAGED 2026-09-01
 **Campaign 3888067**, DRAFTED, 1 lead (`aliza.mayer@gmail.com`), sender
 `brooke.carrobis@poshviphub.com`, 3/3 PASS.
