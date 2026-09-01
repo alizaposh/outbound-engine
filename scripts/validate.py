@@ -26,7 +26,11 @@ APPROVED_STAT_PATTERNS: list = []
 # Deliberately ANY percentage, not just the two retired figures. The rule is "no numeric
 # stats", so a future invented "converts 30% better" must fail too: matching only 13|40
 # would let anything else through because nothing would be looking for it.
-STAT_MENTION = re.compile(r"\b\d+\s*%")
+# [ \t]* not \s*, so it cannot span a newline, and a negative lookahead for the
+# unsubscribe tag. Without both, the footer's ZIP code followed by
+# "%unsubscribe-text%" on the next line was read as a percentage stat, so every
+# email reported a phantom stat mention.
+STAT_MENTION = re.compile(r"\b\d+[ \t]*%(?!unsubscribe)")
 
 # Cleared customers, from config/positioning.md.
 CLEARED_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here", "NARC Run Club", "NARC"]

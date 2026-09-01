@@ -132,6 +132,30 @@ def load_config(path: pathlib.Path = CONFIG) -> dict:
     return cfg
 
 
+def env_value(name: str) -> str | None:
+    """Read a variable from the environment, falling back to .env (git-ignored).
+
+    Strips an inline comment: BULK_LLM_MODEL in .env carries a trailing
+    "# Bedrock cross-region inference profile", and passing that whole string as a model
+    id fails in a way that reads like an auth problem rather than a parsing one. The
+    convention is whitespace-then-hash, so a "#" inside a value survives.
+
+    Lives here because it is the one module both the generation path and the reply path
+    already import; the alternative was generation depending on the reply loop.
+    """
+    v = os.environ.get(name)
+    if v:
+        return v
+    env = ROOT / ".env"
+    if not env.exists():
+        return None
+    for line in env.read_text(encoding="utf-8").splitlines():
+        if line.strip().startswith(f"{name}="):
+            raw = re.split(r"\s+#", line.split("=", 1)[1], maxsplit=1)[0]
+            return raw.strip().strip('"').strip("'") or None
+    return None
+
+
 def env_token() -> str:
     tok = os.environ.get("HUBSPOT_ACCESS_TOKEN")
     if not tok:                                   # fall back to .env (git-ignored)

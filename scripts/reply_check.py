@@ -52,7 +52,7 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import review_queue as rq  # noqa: E402
-from eligibility import env_token, load_config  # noqa: E402
+from eligibility import env_token, env_value, load_config  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SL_BASE = "https://server.smartlead.ai/api/v1"
@@ -747,28 +747,6 @@ def main(argv=None) -> int:
     if not a.apply:
         print("DRY RUN: nothing was written anywhere.")
     return 0
-
-
-def env_value(name: str) -> str | None:
-    """Read a variable from the environment, falling back to .env.
-
-    Strips an inline comment, which the previous version did not: BULK_LLM_MODEL in .env
-    carries a trailing "# Bedrock cross-region inference profile", and passing that whole
-    string as a model id fails in a way that reads like an auth problem rather than a
-    parsing one. The convention is whitespace-then-hash, so a "#" inside a value (a
-    base64 token, a password) survives.
-    """
-    v = os.environ.get(name)
-    if v:
-        return v
-    env = ROOT / ".env"
-    if not env.exists():
-        return None
-    for line in env.read_text(encoding="utf-8").splitlines():
-        if line.strip().startswith(f"{name}="):
-            raw = re.split(r"\s+#", line.split("=", 1)[1], maxsplit=1)[0]
-            return raw.strip().strip('"').strip("'") or None
-    return None
 
 
 def rq_bedrock():

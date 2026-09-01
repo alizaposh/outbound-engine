@@ -28,7 +28,10 @@ import sys
 from dataclasses import dataclass, field
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import anthropic  # noqa: E402
+import anthropic
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from eligibility import env_value  # noqa: E402  # noqa: E402
 
 import assemble  # noqa: E402
 import repair  # noqa: E402
@@ -717,8 +720,21 @@ def main(argv=None) -> int:
     print("shapes: " + "; ".join(f"m{p}={','.join(sorted(shapes[p]))}"
                                  for p in POSITIONS) + " (assigned per contact)")
     rulebook, instruction = build_system_prompt()
-    client = anthropic.AnthropicBedrock(aws_region=os.environ["AWS_REGION"])
-    model = os.environ["BULK_LLM_MODEL"]
+    region, model = env_value("AWS_REGION"), env_value("BULK_LLM_MODEL")
+    # NOT named `token`: that name is already bound above to the unsubscribe merge tag,
+    # and shadowing it here passed the AWS bearer token into validate_email as the
+    # unsubscribe token, failing every email on footer_present.
+    bedrock_token = env_value("AWS_BEARER_TOKEN_BEDROCK")
+    missing = [n for n, v in (("AWS_REGION", region), ("BULK_LLM_MODEL", model),
+                              ("AWS_BEARER_TOKEN_BEDROCK", bedrock_token)) if not v]
+    if missing:
+        raise SystemExit(f"missing credential(s): {', '.join(missing)}. Set them in .env "
+                         "(git-ignored) or the environment.")
+    # The SDK reads these from the environment itself and must not be passed api_key
+    # alongside AWS credentials -- see CLAUDE.md.
+    os.environ["AWS_REGION"] = region
+    os.environ["AWS_BEARER_TOKEN_BEDROCK"] = bedrock_token
+    client = anthropic.AnthropicBedrock(aws_region=region)
     print(f"\n{len(contacts)} contacts | model {model} | mailbox {a.mailbox}\n")
 
     results, every_email = [], []
