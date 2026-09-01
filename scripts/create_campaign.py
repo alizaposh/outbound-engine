@@ -89,12 +89,10 @@ def load_defaults(path: pathlib.Path = DEFAULTS) -> dict:
 
 
 def api_key() -> str:
-    key = os.environ.get("SMARTLEAD_API_KEY")
-    if not key:
-        for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
-            if line.startswith("SMARTLEAD_API_KEY="):
-                key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                break
+    """Uses the shared loader so an inline comment in .env cannot corrupt the key."""
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    from eligibility import env_value
+    key = env_value("SMARTLEAD_API_KEY")
     if not key:
         raise RuntimeError("SMARTLEAD_API_KEY not set (env or .env)")
     return key
@@ -180,26 +178,100 @@ def load_rows(path: pathlib.Path, skip_failed: bool) -> list[dict]:
     return unique
 
 
+def verify_campaign(sl, cid, cfg, repair: bool = False) -> int:
+    """Read a campaign back and check the API-set settings still match config.
+
+    Exists because the UI silently overwrites them. Campaign 3887546 was created with
+    track_settings ["DONT_EMAIL_OPEN"] and later read back as ["DONT_LINK_CLICK"]: saving
+    the settings panel in the Smartlead UI, while doing the two mandatory manual toggles,
+    replaced what the API had set. The enum round-trips correctly when set by API, so the
+    call was never wrong -- the UI just wins last.
+
+    That failure is silent and consequential: open tracking back ON means a tracking
+    pixel on cold mail from a young domain, which is both a deliverability cost the
+    config deliberately avoids and a spam signal.
+    """
+    c = sl.call("GET", f"/campaigns/{cid}")
+    print(f"campaign {cid}: {c.get('name')!r}  status={c.get('status')}")
+
+    want_track = cfg.get("track_settings", ["DONT_EMAIL_OPEN"])
+    want_stop = cfg.get("stop_lead_settings", "REPLY_TO_AN_EMAIL")
+    checks = [
+        ("track_settings", c.get("track_settings"), want_track),
+        ("stop_lead_settings", c.get("stop_lead_settings"), want_stop),
+    ]
+    sched = c.get("scheduler_cron_value") or {}
+    checks += [
+        ("schedule timezone", sched.get("tz"), cfg.get("timezone", "America/New_York")),
+        ("schedule days", sched.get("days"), cfg.get("days", [1, 2, 3, 4, 5])),
+    ]
+    bad = []
+    for label, got, want in checks:
+        ok = got == want
+        if not ok:
+            bad.append(label)
+        print(f"  {'ok  ' if ok else 'DRIFT'} {label:22} {got!r}"
+              f"{'' if ok else f'   expected {want!r}'}")
+
+    if bad and repair:
+        print(f"\nre-applying {', '.join(bad)} from config...")
+        sl.call("POST", f"/campaigns/{cid}/settings", {
+            "track_settings": want_track,
+            "stop_lead_settings": want_stop,
+            "send_as_plain_text": cfg.get("send_as_plain_text", False)})
+        c = sl.call("GET", f"/campaigns/{cid}")
+        print(f"  track_settings now {c.get('track_settings')!r}, "
+              f"stop_lead_settings now {c.get('stop_lead_settings')!r}")
+        bad = [b for b in bad if b not in ("track_settings", "stop_lead_settings")]
+
+    print("\nCANNOT be checked from the API -- confirm by eye in the UI every time:")
+    print("  - HubSpot activity logging ON")
+    print("  - 'Add unsubscribe message in all emails' ON")
+    print("  - 'Optimize Email Delivery' OFF")
+    if bad:
+        print(f"\nSTILL DRIFTED: {', '.join(bad)}. Re-run with --repair, or fix in the UI.")
+        return 1
+    print("\nAPI-set settings match config.")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Create a DRAFTED Smartlead campaign from approved copy. Never launches.")
-    ap.add_argument("--csv", required=True, type=pathlib.Path,
+    ap.add_argument("--verify", metavar="CAMPAIGN_ID",
+                    help="read an existing campaign back and check the API-set settings "
+                         "still match config. The UI overwrites them; run this after any "
+                         "manual toggling and before launching.")
+    ap.add_argument("--repair", action="store_true",
+                    help="with --verify, re-apply the config values that have drifted")
+    ap.add_argument("--csv", required=False, type=pathlib.Path,
                     help="output of scripts/run_generation.py, after human approval")
-    ap.add_argument("--audience", required=True, help="e.g. ra-premium")
-    ap.add_argument("--usecase", required=True, help="e.g. switch")
-    ap.add_argument("--mailboxes", required=True,
+    ap.add_argument("--audience", help="e.g. ra-premium")
+    ap.add_argument("--usecase", help="e.g. switch")
+    ap.add_argument("--mailboxes",
                     help="comma-separated sending mailboxes, all must be in config/senders.md")
-    ap.add_argument("--approved-by", required=True,
+    ap.add_argument("--approved-by",
                     help="who approved this copy (golden rule 1)")
-    ap.add_argument("--approval-note", required=True,
+    ap.add_argument("--approval-note",
                     help="where the approval is recorded, e.g. a Slack permalink")
     ap.add_argument("--skip-failed", action="store_true",
                     help="drop rows that failed validation instead of refusing the batch")
     ap.add_argument("--dry-run", action="store_true",
                     help="print exactly what would be sent to Smartlead; write nothing")
     a = ap.parse_args(argv)
-
     cfg = load_defaults()
+
+    if a.verify:
+        return verify_campaign(Smartlead(api_key()), a.verify, cfg, repair=a.repair)
+    needed = [n for n, v in (("--csv", a.csv), ("--audience", a.audience),
+                             ("--usecase", a.usecase), ("--mailboxes", a.mailboxes),
+                             ("--approved-by", a.approved_by),
+                             ("--approval-note", a.approval_note)) if not v]
+    if needed:
+        # Creation still requires all of them, approval included -- guarantee 2 is
+        # unchanged. Only --verify is exempt, and it writes no copy and enrolls nobody.
+        ap.error(f"required for creating a campaign: {', '.join(needed)}")
+
     rows = load_rows(a.csv, a.skip_failed)
 
     # Mailboxes must be real senders: an unmapped one means the sign-off in the copy does

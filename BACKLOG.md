@@ -561,6 +561,32 @@ guardrails in `CLAUDE.md`.
 
 ---
 
+## Finding: the Smartlead UI silently overwrites API-set campaign settings
+Found 2026-09-01 on campaign 3887546. Created with `track_settings: ["DONT_EMAIL_OPEN"]`;
+read back afterwards as `["DONT_LINK_CLICK"]`.
+
+Probed the enum on a throwaway campaign before blaming the code: `["DONT_EMAIL_OPEN"]`,
+`["DONT_LINK_CLICK"]`, both together and `[]` all round-trip exactly as sent, and an
+unknown value (`["DONT_TRACK_EMAIL_OPEN"]`) is normalised to `["DONT_EMAIL_OPEN"]`. So the
+API call was correct and the UI overwrote it — saving the campaign settings panel rewrites
+the tracking flags.
+
+**Why it matters:** the drifted state has open tracking ON, so a tracking pixel rides on
+cold mail from a 15-day-old domain. That is exactly the deliverability cost
+`smartlead-defaults.md` sets out to avoid, and a spam signal.
+
+**Why it will keep happening:** the two mandatory pre-launch toggles (HubSpot activity
+logging, unsubscribe/Optimize) have no API and REQUIRE the UI. So every campaign gets
+hand-edited in the UI before launch, which means every campaign is exposed to this. The
+drift is the expected case.
+
+**Guard:** `create_campaign.py --verify <id> [--repair]`, now a step in the Launch
+section of `instructions/campaign-creation.md`. It checks track_settings,
+stop_lead_settings, schedule timezone and days, re-applies config values with `--repair`,
+and prints the three UI-only settings it cannot check so they get eyeballed.
+
+---
+
 ## Dress rehearsal: single-recipient end-to-end test — IN PROGRESS 2026-09-01
 **Smartlead campaign 3887546**, `2026-09_rehearsal_dress-rehearsal`, DRAFTED, 1 lead
 (`aliza@posh.vip`), sender `carl.newmark@vibeposhvip.com`, copy generated and 3/3 PASS.

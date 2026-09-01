@@ -96,6 +96,19 @@ Three details worth keeping in mind:
    campaign itself; email is the join key. No local mapping store.
 
 ## Launch
+- **After any manual UI toggling, and BEFORE launching, re-verify the API-set settings:**
+  ```bash
+  python scripts/create_campaign.py --verify <campaign_id> --repair
+  ```
+  **The UI overwrites what the API set, silently.** Observed on campaign 3887546: created
+  with `track_settings: ["DONT_EMAIL_OPEN"]`, read back as `["DONT_LINK_CLICK"]` after the
+  manual toggles were done in the UI. The enum round-trips correctly when set by API, so
+  the call was never wrong — the UI simply wins last, and saving its settings panel
+  rewrites the tracking flags. The consequence is not cosmetic: open tracking back ON
+  means a tracking pixel on cold mail from a young domain, which is the deliverability
+  cost `config/smartlead-defaults.md` deliberately avoids and a spam signal besides.
+  Since the mandatory toggles in steps 3–4 REQUIRE going into the UI, this drift is the
+  expected case, not an edge case.
 - **Un-pause the three scheduled routines** (`outbound-morning`, `outbound-midday`,
   `outbound-afternoon`) in Claude Desktop → Code → Routines. They were created and
   verified on 2026-08-31 and then left **Paused** deliberately, to avoid three
