@@ -29,8 +29,14 @@ min_time_btw_emails: 10             # minutes, spreads sends inside the window
 max_new_leads_per_day: 15           # per mailbox, matching the Smartlead account setting
 seq_delay_days: [0, 3, 4]           # email 1 immediately, 2 after 3 days, 3 after 4 more
 stop_lead_settings: REPLY_TO_AN_EMAIL   # stop-on-reply; already the Smartlead default
-track_settings: [DONT_EMAIL_OPEN]   # open tracking off: a tracking pixel is a
-                                    # deliverability cost on cold mail
+track_settings: [DONT_EMAIL_OPEN, DONT_LINK_CLICK]   # BOTH off. Open tracking off
+                                    # because a tracking pixel is a
+                                    # deliverability cost on cold mail. Click tracking
+                                    # off added 2026-09-01 per the SDR spec: the cold
+                                    # sequence carries at most one link, so click
+                                    # tracking buys nothing and costs a rewrite of every
+                                    # URL through a tracking domain we would then have
+                                    # to maintain and warm.
 send_as_plain_text: false
 ```
 

@@ -33,9 +33,21 @@ APPROVED_STAT_PATTERNS: list = []
 STAT_MENTION = re.compile(r"\b\d+[ \t]*%(?!unsubscribe)")
 
 # Cleared customers, from config/positioning.md.
-CLEARED_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here", "NARC Run Club", "NARC"]
-# Only NARC has cleared figures; a numeral next to the other two means invention.
-NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
+# Cleared to name in cold outbound. Extended 2026-09-01 on explicit sign-off from the
+# person running outbound: We Met IRL, Palm Tree Festival and VibeApple were added, the
+# original three kept.
+#
+# DELIBERATELY ABSENT: Lamborghini, Adidas, NBA, Celsius, HBO, Complex. The SDR's copy
+# spec listed them as comparables for brand/sponsorship-led prospects, and they were NOT
+# cleared. Naming a real company as a customer is a permissions question, not a copy
+# preference, so they FAIL until someone confirms otherwise. Recorded here rather than
+# quietly dropped, because the spec still asks for them.
+CLEARED_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here", "NARC Run Club", "NARC",
+                     "We Met IRL", "Palm Tree Festival", "VibeApple"]
+# Only NARC has cleared figures; a numeral next to any other named customer means
+# invention. The three added in 2026-09 have no cleared figures either.
+NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here",
+                       "We Met IRL", "Palm Tree Festival", "VibeApple"]
 
 # Length is a target, never a gate: check_length only ever emits WARN.
 # Positional: messages 1 and 2 carry one angle each; message 3 is a breakup.
@@ -50,7 +62,10 @@ NO_FIGURE_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here"]
 # city, lists the three things that scatter (guest lists, payouts, promotion), and closes
 # with a "so ..." consequence. Length was never the real problem; vagueness was. A longer
 # concrete email beats a short choppy one, so the ceiling is set around that email.
-LENGTH_TARGETS = {1: (50, 95), 2: (35, 70), 3: (18, 45)}
+#   2026-09-01    {1: (35,75), 2: (40,90), 3: (10,30)}  SDR spec caps
+# Note email 2's ceiling went UP, the only one that did: it now carries the company
+# proof and both levers, which email 1 deliberately withholds.
+LENGTH_TARGETS = {1: (35, 75), 2: (40, 90), 3: (10, 30)}
 
 # Subject word count. Widened 2-5 -> 2-6 -> 2-7 as the warmer SDR voice settled, then to
 # 2-8 on 2026-08-26: organization names on this list run long ("If You Know You Know" is
@@ -361,11 +376,35 @@ def check_footer(subject: str, body: str, *, footer: str, token: str) -> list[Fi
     return out
 
 
-def check_no_real_optout_url(subject: str, body: str) -> list[Finding]:
+ANCHOR_TAG = re.compile(r"<a\s[^>]*href=", re.I)
+
+
+def check_links(subject: str, body: str, *, position: int) -> list[Finding]:
+    """Link policy from the SDR spec, section 3.
+
+    No link of any kind in email 1 or email 3. Email 2 may carry ONE plain visible URL
+    (the Fortune Series B piece), never as anchor text where the display string hides
+    the destination -- that is the shape phishing uses, and it is what makes a link a
+    deliverability risk rather than a credibility one.
+
+    mailto: stays banned everywhere: the opt-out is the merge tag, never a literal
+    address.
+    """
     out = []
-    for m in re.finditer(r"(https?://\S+|mailto:\S+)", body):
-        out.append(Finding("no_real_optout_url", FAIL,
-            f"literal URL or mailto in body, opt-out must be the merge tag: {m.group(0)!r}"))
+    hay = f"{subject}\n{body}"
+    if ANCHOR_TAG.search(hay):
+        out.append(Finding("links", FAIL,
+            "hyperlinked anchor text; a link must be a visible plain URL"))
+    for m in re.finditer(r"mailto:\S+", hay):
+        out.append(Finding("links", FAIL,
+            f"literal mailto {m.group(0)!r}; the opt-out is the merge tag"))
+    urls = [m.group(0) for m in re.finditer(r"https?://\S+", hay)]
+    if urls and position != 2:
+        out.append(Finding("links", FAIL,
+            f"no links are allowed in email {position}: {urls!r}"))
+    elif len(urls) > 1:
+        out.append(Finding("links", FAIL,
+            f"email 2 may carry at most one link: {urls!r}"))
     return out
 
 
@@ -495,7 +534,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
                                         allowed_names=allowed_names)
     res.findings += check_middle_paragraph(subject, body, footer=footer)
     res.findings += check_footer(subject, body, footer=footer, token=token)
-    res.findings += check_no_real_optout_url(subject, body)
+    res.findings += check_links(subject, body, position=position)
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
     res.findings += check_gmv_leak(subject, body)
     res.findings += check_case_studies(subject, body)

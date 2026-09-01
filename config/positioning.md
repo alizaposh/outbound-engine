@@ -131,12 +131,41 @@ one.
 - No invented customers, logos, metrics, or results.
 - **No specific or quantified commercial terms.** See "Commercial terms" above. The
   offer's existence is approved; its contents are not.
-- **Only Caché Life, We Belong Here, and NARC Run Club may be named.** Their approved
-  outcomes are in "Proof" above. Any other customer requires explicit approval first.
+- **Nameable customers, cleared as of 2026-09-01 — six, and only these six:**
+  Caché Life, We Belong Here, NARC Run Club, **We Met IRL**, **Palm Tree Festival**,
+  **VibeApple**. The last three were cleared by the person running outbound on
+  2026-09-01. Any other customer requires explicit approval first, and the validator
+  (`CLEARED_CUSTOMERS` in `scripts/validate.py`) FAILs an unlisted name.
+
+  Match the name to the prospect's world rather than reaching for the biggest one:
+
+  | Prospect type | Name to use |
+  |---|---|
+  | Nightlife venue | VibeApple, Caché Life |
+  | Festival / large-scale music | Palm Tree Festival, We Belong Here |
+  | Dating, in-person networking, community | We Met IRL |
+  | Run club / recurring community events | NARC Run Club |
+
+- **NOT cleared, and asked for anyway: Lamborghini, Adidas, NBA, Celsius, HBO, Complex.**
+  The SDR copy spec of 2026-09-01 lists these as comparables for brand and
+  sponsorship-led prospects. They were **not** cleared, so they FAIL validation and must
+  not appear. Recorded explicitly rather than quietly omitted, because the spec still
+  asks for them and someone will otherwise assume it was an oversight. Naming a real
+  company as a customer in cold outbound is a permissions question, not a copy
+  preference. **Consequence: there is no cleared comparable for a brand-led prospect** —
+  route those to the closest cleared name by event type instead.
 - **Never invent or extrapolate a customer figure.** The only cleared customer figures
   are NARC Run Club's (34 events on Posh, 6 months on Posh, 500+ total attendees),
-  cited exactly as written. Caché Life and We Belong Here have no cleared figures, so
-  attaching a number to either one means inventing it.
+  cited exactly as written. **Every other nameable customer has no cleared figures** —
+  Caché Life, We Belong Here, We Met IRL, Palm Tree Festival and VibeApple — so
+  attaching a number to any of them means inventing it. Name them, do not quantify them.
+
+- **The $37M Series B is an APPROVED claim (cleared 2026-09-01).** It may be stated in
+  email 2 only, where the company proof belongs. It is company funding, not a
+  performance metric, so it is exempt from the "no numeric stats" rule below — that rule
+  governs marketplace share, conversion and results claims. The Fortune article covering
+  it may be linked in email 2 **only as a visible plain URL**, never as anchor text, and
+  the default is no link at all: the sentence carries the credibility on its own.
 - **Never use a case study that doesn't fit the prospect, and never more than one per
   email.** See "Using a case study" above.
 - **No numeric performance stats in copy:** no percentage or figure for marketplace

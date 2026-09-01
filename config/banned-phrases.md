@@ -57,6 +57,35 @@ enforcement that no longer exists.
   The voice anchor's closing clause is illustrative only. Prospecting is national and
   no local-community claim is approved anywhere.
 
+### Added 2026-09-01 from the SDR copy spec
+
+Marketing polish, §2. Each is named in the spec as the register we are trying to leave.
+
+- `excited to`
+  Marketing voice. The spec's test is whether you would say it on the phone.
+- `reaching out because i was impressed by`
+  Flattery with no specific object, which §2 bans outright.
+- `in today's competitive landscape`
+  Filler that says nothing about this prospect.
+- `love what you're building`
+  The spec's own example of a generic compliment. A compliment must name a specific
+  thing: the room, the city, a booked act.
+
+Softeners, §9. These exist to apologise for the ask, and the spec bans the whole family.
+
+- `no worries if not`
+- `totally understand if this isn't a priority`
+- `if this isn't a priority`
+- `sorry to bother`
+- `apologies for the interruption`
+
+Breakup theatrics, §8. Email 3 is one line and closes the loop; it does not perform.
+
+- `before i close your file`
+- `one last time`
+- `last attempt`
+- `i'll stop reaching out`
+
 ## Regex
 
 - `unlike\s+(eventbrite|dice|tixr|shotgun|resident\s+advisor|ra|plots|ticketfairy|eventeny|eventnoire)`
@@ -73,3 +102,19 @@ enforcement that no longer exists.
 - `(will|guaranteed to)\s+sell\s+out`
   Outcome promise. "help sell out your next event?" as a question is approved; a
   statement that it will happen is not.
+
+### Regex added 2026-09-01 from the SDR copy spec
+
+- `\b(next|following|upcoming)\s+(season|year)\b`
+  §4: the cold sequence never proposes a conversation about a future season, a renewal
+  window, or next year's calendar. It asks one present-tense question. Timing talk is
+  **reply-triggered only** — when a prospect says they are locked in, that is where the
+  future-planning thread starts, and it lives in the reply handler, not here.
+- `\brenewal\s+(window|date|period)\b`
+  Same rule, the other phrasing.
+- `\b(rev(enue)?[- ]?share|take[- ]?rate|per[- ]?ticket fee)\b`
+  §5: incentives stay qualitative. We may signal there is real room to go beyond
+  standard terms; we may never name a rate. Overlaps `check_commercial_terms`, kept
+  because a phrase ban is legible to a human reading this file.
+- `\b(guarantee|minimum)\s+(of\s+)?\$?\d`
+  A quantified floor is a commercial term, which belongs on the call.
