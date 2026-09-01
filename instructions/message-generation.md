@@ -11,17 +11,172 @@ Always read `config/positioning.md` and `config/personas.md` before generating.
 decides who we are allowed to enroll at all; never generate from a list that has not
 been through it.
 
-> ## ⚠️ PRECEDENCE: the sales-team rules below win
+> ## ⚠️ PRECEDENCE
 >
-> **"Sales-team messaging rules (2026-08-25)" is authoritative.** It came from the AE
-> team's own scoring of real drafts, and each rule cites the reviewer it came from.
-> Where it conflicts with anything later in this file, in `config/personas.md`, or in
-> `config/positioning.md`, **it wins** — the older text was written before that
-> feedback existed.
+> **"SDR copy spec (2026-09-01)" immediately below is authoritative.** It supersedes the
+> 2026-08-25 sales-team rules wherever the two disagree, and both supersede everything
+> further down the file, `config/personas.md`, and `config/positioning.md` on matters of
+> copy. Older text was written before the newer feedback existed.
 >
-> **One conflict is still live** (re-audited 2026-09-01), and it is between two sections
-> of THIS file rather than with the code: see "Conflicts" at the end of that section.
-> The other three are resolved and the code now matches the rules.
+> The 2026-08-25 section is kept because most of it still holds and it carries the AE
+> attributions; read it after the spec, not instead of it.
+
+---
+
+# SDR copy spec (2026-09-01)
+
+*Source: SDR feedback on copy round 2, plus follow-up decisions from the person running
+outbound. Update this section when feedback comes in; do not hand-fix individual emails.*
+
+## 1. The whole sequence only has to say three things
+
+If a sentence does not serve one of these, cut it.
+
+1. **Are you locked in with your current ticketing platform?**
+2. **I want to put a custom offer in front of you.**
+3. **Will you give me 15 minutes?**
+
+Email 1 says all three. Emails 2 and 3 re-ask #3 with escalating context.
+
+## 2. Voice (every email)
+
+- Short sentences. Plain words. Write it the way you would say it on the phone.
+- One idea per sentence, one ask per email.
+- No marketing polish, no stacked adjectives. `config/banned-phrases.md` carries the
+  specific bans: "excited to", "reaching out because I was impressed by", "in today's
+  competitive landscape", "love what you're building".
+- **Cut the last sentence.** The final line of a draft is almost always throat-clearing —
+  a summary of what was already said, or a soft apology for emailing. Delete it and check
+  whether the email still works. It usually does, and reads better.
+- **Use their real function verb.** They *manage* partnerships. Do not upgrade it to
+  "run", "lead", "head up" or "own".
+- **A compliment must name a specific thing** or be cut.
+
+**Length caps, enforced in `scripts/validate.py`:** email 1 ≤ 75 words · email 2 ≤ 90 ·
+email 3 ≤ 30.
+
+## 3. Links and tracking
+
+- **No links in email 1 or email 3.** No booking link, no press link, no site link.
+- **No booking link anywhere in the cold sequence.** The calendar link goes out in the
+  *reply*, after the prospect says they are interested — that rule lives in
+  `instructions/reply-handling.md`.
+- The **Fortune Series B article** may be linked **in email 2 only**, as a **visible plain
+  URL**, never as anchor text where the display string hides the destination. Default is
+  no link: the sentence carries the credibility on its own.
+- **Click tracking is off** for the sequence (`config/smartlead-defaults.md` now sets
+  `DONT_LINK_CLICK` alongside `DONT_EMAIL_OPEN`). With at most one link, click tracking
+  buys nothing and costs a rewrite of every URL through a tracking domain.
+
+## 4. Timing and future-season talk — not in the cold sequence
+
+The cold sequence asks one **present-tense** question and offers one call. It never
+proposes a conversation about a future season, a renewal window, or next year's calendar.
+
+**Timing talk is reply-triggered only.** If a prospect answers that they are locked in, or
+that they want to revisit later, *that* is where the future-planning thread starts: ask
+when the contract is up and when they plan the next season, and work backward.
+
+> **Note for the reply classifier:** "we're locked in through X" is a **successful answer
+> to email 1, not a rejection.** It is the exact information the email was designed to
+> get. It routes to timing/nurture with the renewal date written back to HubSpot — never
+> to a closed-lost reading. Implemented in `scripts/reply_check.py`.
+
+## 5. Financial incentives — how far we may go
+
+- **Stay qualitative.** Never a rate, a rev-share, a guarantee, a minimum, or a dollar
+  figure in a cold email. Enforced by `check_commercial_terms`.
+- We **may** signal there is meaningful room on incentives — that we can go beyond
+  standard terms — without quantifying it.
+- Marketing support is described the same way: named as a lever, not spec'd out.
+- Specifics happen on the call.
+
+## 6. Email 1 — the question
+
+**Job:** establish who we are, ask the qualifying question, name the offer, ask for 15
+minutes. Structure and opener variants are in `config/message-shapes.md`.
+
+Beats, in order:
+1. **The sender's self-introduction**, near the top — the exact `sender.intro_line`.
+2. **A specific observation** about them, drawn from `prospect_org`, `current_competitor`,
+   `city` and `vertical`.
+3. **The question, flat and present-tense:** are you locked in on your ticketing platform?
+   No year, no season.
+4. **The offer, named concretely:** a custom proposal built around **marketing support and
+   financial incentives**. Say both out loud; do not hint at "value".
+5. **CTA:** 15 minutes, exploratory, low pressure. **Ask for a reply, not a booking.**
+
+**No company proof in email 1** — no funding, no customer names, no case studies. That is
+email 2's job, and holding it back is what gives email 2 a reason to exist.
+
+### Two deliberate departures from the SDR draft, both decided 2026-09-01
+
+- **The self-introduction is KEPT.** The SDR's draft has none, so a cold recipient would
+  learn what Posh is only from the signature. The person running outbound kept it, as they
+  had in August.
+- **Beat 2 is a specific OBSERVATION, not "earned flattery".** The SDR's beat 1 was a
+  compliment naming a booked act, via a `recent_or_upcoming_act` field. **That field has no
+  data source and was dropped.** Our per-lead data — org, competitor, city, vertical, GMV —
+  cannot support a compliment; forcing one produces exactly the generic flattery §2 bans.
+  A specific observation is true, sourced, and earns the email by giving a reason for it.
+
+## 7. Email 2 — the context
+
+**Job:** casual re-open, then the proof and the timing reason held back from email 1.
+
+Beats: light human re-open ("Hope you had a good weekend — circling back on this") →
+company proof → both levers restated with more weight → the season reason → the same
+15-minute ask.
+
+- **The $37M Series B is approved here and only here** (cleared 2026-09-01).
+- **One cleared customer name, matched to their world.** The full list and the mapping are
+  in `config/positioning.md`; `validate.py` FAILs an unlisted name and any figure beside a
+  name without cleared figures.
+- **Season pressure is the sequence's only urgency**, and it is about *our offer window*,
+  not their calendar: the holiday run-up is when we can get the strongest offers across.
+
+> **The SDR's "brand / sponsorship-led" comparables — Lamborghini, Adidas, NBA, Celsius,
+> HBO, Complex — were NOT cleared** and will FAIL validation. There is currently no
+> cleared comparable for a brand-led prospect; route those to the closest cleared name by
+> event type. Tell the SDR, since email 2 was written expecting those logos.
+
+## 8. Email 3 — the close
+
+One line. Close the loop, ask for this week, stop. **No new information, no new value
+props, no breakup theatrics** ("before I close your file"), no urgency.
+
+## 9. Banned patterns
+
+Any link in email 1 or 3, and any booking link in the cold sequence · any number attached
+to financial incentives · any reference to a future season, renewal window or next year ·
+value props that belong in email 2 appearing in email 1 · any sentence that softens the
+ask ("no worries if not") · urgency in email 1 or 3 · inflated titles or invented details
+about their calendar · closing sentences that restate the email.
+
+## 10. Personalization inputs
+
+**The SDR spec names HubSpot *company* as the source for venue and city. That is wrong for
+this audience** and the correction matters: these contacts have **no HubSpot company
+record** — companies are created only when an organizer is already a Posh customer — so
+everything comes off the contact.
+
+| Spec field | Our field | Source |
+|---|---|---|
+| `first_name` | `first_name` | HubSpot contact |
+| `job_function_verb` | `job_title` | HubSpot contact. Default "manage partnerships"; never inflate |
+| `venue` | **`prospect_org`** | contact-level, from the lead scrape |
+| `city` | `city` | contact-level, from the lead scrape |
+| `recent_or_upcoming_act` | **DROPPED** | no data source; see §6 |
+| `comparable_1/2` | one cleared name | `config/positioning.md`, matched by vertical |
+
+**Subject lines:** email 1 only. Emails 2 and 3 send with `subject: ""` so Smartlead
+threads them and they arrive as "Re: ...". The spec writes their subject as
+"re: ticketing at {{venue}}" — that is *describing what the recipient sees*, not an
+instruction to write a literal subject. Writing one would break the thread.
+
+**Warm opens:** when `callback_tier` is not `none`, the callback **replaces** beat 2, the
+observation. It never adds to it — both would double the opening and break the 75-word
+cap. See §9 of the older section below, which still governs how a callback is worded.
 
 ---
 

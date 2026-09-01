@@ -1264,7 +1264,19 @@ Findings measured on `reviews/draft-run-34-20260819-cta-opener.csv` (7 PASS / 13
 
 ---
 
-## V2: give `objection` a recycle date of its own
+## V2: give `objection` a recycle date of its own — CLOSED 2026-09-01, not built
+**Closed by a reclassification, which is the better fix.** The SDR copy spec settles it:
+email 1 asks "are you locked in?", so "we're locked in through June" is the successful
+answer, not an objection. Contract locks now classify as **`not_now` with the contract end
+date captured**, which already carries a recycle date. The gap this item described — the
+one decline that names its own return date being the only one with no scheduled return —
+disappears, because those replies are no longer `objection`.
+
+`objection` keeps no recycle date, and that is now correct rather than a gap: what is left
+in that bucket is doubts about the product, which have no date to wait for.
+
+Original note follows.
+
 **Deferred out of v1 by explicit decision 2026-08-31.** Not a bug; v1 matches the spec.
 
 A contract lock ("we're signed with Tixr through next summer") classifies as `objection`,

@@ -265,14 +265,20 @@ python scripts/reply_check.py --campaign 123 --limit 5
   the payout timing like?"), because forcing it flipped an actual pricing ask to
   `not_now`, which parks a warm lead for 90 days. The cheap error is not worth the
   expensive one.
-- **`objection` vs `not_now` on a contract lock** ("we're signed with Tixr through next
-  summer") is a genuine judgement call and the precedence table settles it as
-  `objection`, since a constraint you could answer outranks timing. Note the consequence:
-  `objection` sets NO recycle date, so a contract expiry does not schedule its own
-  return, and the human in the queue has to set one manually. **Accepted for v1 and
-  deferred to v2 by decision on 2026-08-31** — see "V2: give `objection` a recycle date
-  of its own" in `BACKLOG.md`. Do not quietly add one here; the wait behaviour needs
-  deciding first.
+- **`objection` vs `not_now` on a contract lock — SETTLED 2026-09-01, and it reversed.**
+  It now classifies as **`not_now` with the contract end date captured** in
+  `outbound_recycle_after`. The SDR copy spec is explicit: email 1 asks "are you locked
+  in?", so "we're locked in through June" is **the successful answer it was designed to
+  get**, not a rejection. Treating it as an objection was reading a win as a loss.
+
+  This supersedes the earlier reading, where the precedence table's "a constraint you
+  could answer outranks timing" made it an `objection` with no recycle date at all. That
+  left the one decline that tells us exactly when to return as the only decline with no
+  scheduled return — which is why it had been logged as a v2 gap. **The v2 item is closed
+  by this, not by building it.**
+
+  The test between the two is now clean: **a contract or a season they must wait out is
+  `not_now`; a doubt about us that an answer would resolve is `objection`.**
 
 ### What this script deliberately does not do
 

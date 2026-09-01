@@ -349,7 +349,8 @@ PRECEDENCE, highest wins, because one reply can carry several signals:
 8. not_interested is the default decline when nothing stronger is present.
 
 named_return_date: ONLY for not_now, and only when the prospect names a time you can
-resolve to a date ("after the summer", "ask me in Q1", "next March"). Resolve it
+resolve to a date ("after the summer", "ask me in Q1", "next March", "our contract runs
+through June"). A CONTRACT END DATE IS THE MOST VALUABLE CASE -- capture it. Resolve it
 relative to the reply's own date, which is in the thread. Leave it empty if they named
 no time, or for any other intent. Never invent one: an empty value is correct and safe,
 a guessed one silently moves when a real person gets contacted again.
@@ -358,13 +359,18 @@ WORKED EXAMPLES for the two collisions that the rules alone do not settle. These
 different replies from the ones you will be given; apply the reasoning, not the wording.
 
   "We just signed with Tixr through next summer."
-  -> objection. A constraint you could ANSWER (migration timing, running in parallel) is
-     an objection even when it names a timeframe. Precedence 6 beats 7.
+  -> not_now, and set named_return_date to when the contract ends. A CONTRACT LOCK IS A
+     SUCCESSFUL ANSWER, not a rejection: the email asked whether they are locked in, and
+     they said yes and told us when. That is the exact information it was designed to
+     get. Route it to timing, capture the date, come back then.
 
   "Swamped until after our festival in October, try me then."
-  -> not_now. Nothing to answer here, only timing. This is what not_now is FOR: no
-     concern, just a date.
-  The test between those two: is there something a reply could address, or only a wait?
+  -> not_now. Nothing to answer, only timing.
+
+  "Your platform can't do reserved seating, can it?"
+  -> objection. A concern that a REPLY could address, with no timing in it at all.
+  The test: a contract or a season they must wait out is not_now. A doubt about us that
+  an answer would resolve is objection.
 
   "We're on Eventbrite and it works fine, but what would switching run us?"
   -> interested, NOT question. Asking what something costs is a buying signal, and
@@ -489,7 +495,10 @@ CLASSIFY_CASES = [
     ("What's the payout timing like?", ("question", "interested"),
      "a product question that is money-adjacent; either intent acts the same"),
     ("We're locked into a contract with Dice until next year.",
-     "objection", "a concern to handle, not a decline"),
+     "not_now", "SDR spec 2026-09-01: a contract lock is a successful answer to email 1, "
+                "not a rejection. Route to timing and capture the date"),
+    ("Does your platform handle reserved seating?",
+     ("question", "objection"), "a doubt a reply could resolve, with no timing in it"),
     ("Not right now, we're mid season. Ask me again in January.",
      "not_now", "explicit later"),
     ("No thanks.", "not_interested", "the default decline"),
