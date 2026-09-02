@@ -683,7 +683,38 @@ comparable for a brand-led prospect. **Tell the SDR.**
 
 ---
 
-## GAP: nothing syncs bounces to HubSpot — found 2026-09-02
+## Bounce sync — BUILT 2026-09-02 (`scripts/sync_bounces.py`)
+Dry run by default; `--apply` writes `outbound_status = bounced`. Wired into the morning
+heartbeat slot alongside the unsubscribe sync.
+
+**It never sets `outbound_suppressed`, and that is a correctness decision.** Suppression
+is opt-out only, written by exactly two things. A bounce is a deliverability fact, not a
+consent decision, and it is already a hard exclusion through `outbound_status`; filing a
+bounce as suppression would record it as though the person had asked us to stop.
+
+**Soft bounces do not permanently exclude anyone.** A full mailbox is temporary, a dead
+address is not, and permanent exclusion is not undone by waiting. Rows are classified
+hard/soft/unknown from whatever reason field the row carries, and **an unknown type is
+skipped unless `--include-soft` is passed** — refusing to permanently exclude a contact
+that may have bounced temporarily.
+
+**The self-check that matters (guarantee 4).** This relies on
+`statistics?email_status=bounced`, the same filter that returned NOTHING for unsubscribes
+after a confirmed one. So every run cross-checks the enumerated rows against
+`analytics.bounce_count`, and **a zero result with a non-zero aggregate is a loud failure
+and a non-zero exit** — verified by injection. Without that, the first real batch's
+bounces would have looked like "no bounces" forever.
+
+**One deliberate asymmetry with the unsubscribe sync.** That job declines to overwrite
+`outbound_status = meeting_booked` because `outbound_suppressed` carries the suppression
+independently. Here status is the ONLY carrier of a bounce, so declining would mean not
+recording it; this job overwrites and prints loudly, naming what was lost.
+
+**Verified:** 15 pure cases, plus injected tests for the mismatch alarm and for the
+processing path against a real HubSpot contact. Nothing written; nothing bounced yet.
+
+### Original gap note
+
 `outbound_status = bounced` is a **HARD** eligibility gate, so a bounced contact is
 permanently excluded. Correct — except **nothing ever writes it.** `eligibility.py` only
 reads it, `send_replies.py` only reads it, and `sync_unsubscribes.py` deliberately avoids

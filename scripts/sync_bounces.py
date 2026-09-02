@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+"""Sync Smartlead hard bounces into HubSpot as `outbound_status = bounced`.
+
+Closes the gap recorded in BACKLOG.md: `bounced` is a HARD eligibility gate that nothing
+ever wrote, so a dead address stayed fully eligible and was re-enrolled next campaign.
+
+    Smartlead bounced statistics  ->  HubSpot outbound_status = bounced
+
+**Why it matters more than it sounds.** Repeatedly mailing invalid addresses is among the
+fastest ways to damage domain reputation, and these domains are weeks old. One
+re-enrolment of a dead address is cheap; doing it every campaign is not.
+
+Six guarantees:
+
+  1. DRY RUN BY DEFAULT. `--apply` is required.
+  2. IT NEVER SETS `outbound_suppressed`. Per config/hubspot-properties.md, suppression
+     is OPT-OUT ONLY, written by exactly two things: the unsubscribe sync and the reply
+     handler. A bounce is a deliverability fact, not a consent decision, and it is
+     already a hard exclusion through `outbound_status`. Conflating the two would file a
+     bounce as though the person had asked us to stop.
+  3. IT NEVER WRITES NATIVE `hs_email_optout`. Same reasoning, more so.
+  4. AN EMPTY RESULT WITH A NON-ZERO BOUNCE COUNT IS A LOUD FAILURE, not a quiet zero.
+     The enumeration filter here is the same one that returned NOTHING for unsubscribes
+     after a confirmed unsubscribe, which is why sync_unsubscribes.py walks the lead list
+     instead. Whether it works for bounces could not be established without a real
+     bounce, so this cross-checks itself against the aggregate and says so if they
+     disagree.
+  5. SOFT BOUNCES MUST NOT PERMANENTLY EXCLUDE ANYONE. A full mailbox is temporary; a
+     dead address is not. If the API does not distinguish them, that is REPORTED rather
+     than assumed, and `--include-soft` is required to act on rows whose type is unknown.
+  6. IDEMPOTENT. A contact already `bounced` is skipped, so re-running changes nothing.
+
+**One asymmetry with the unsubscribe sync, deliberately.** That job declines to overwrite
+`outbound_status = meeting_booked`, because `outbound_suppressed` carries the suppression
+independently and the status write is only informational. Here `outbound_status` is the
+ONLY carrier of the bounce, so declining to write it would mean not recording the bounce
+at all. It therefore DOES overwrite, and prints loudly when it overwrites something
+valuable so a human can see it happen.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import sys
+import urllib.error
+import urllib.request
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from eligibility import HubSpot, env_token, env_value  # noqa: E402
+from reply_check import HubSpotWriter  # noqa: E402
+
+SL_BASE = "https://server.smartlead.ai/api/v1"
+READ_PROPS = ["email", "outbound_status", "outbound_suppressed", "firstname", "lastname"]
+
+# Fields a statistics row might carry describing the bounce. None is documented; these
+# are checked so a hard/soft distinction is USED when present rather than ignored.
+TYPE_FIELDS = ("bounce_type", "bounce_category", "bounce_reason", "email_status_reason",
+               "reason", "bounce_sub_type", "smtp_response")
+SOFT_MARKERS = ("soft", "mailbox full", "quota", "temporar", "deferred", "try again",
+                "greylist", "out of office", "451", "452", "4.2.2")
+HARD_MARKERS = ("hard", "does not exist", "no such user", "unknown user",
+                "invalid recipient", "550", "5.1.1", "user unknown", "domain not found")
+
+
+def classify_bounce(row: dict) -> tuple[str, str]:
+    """(kind, evidence) where kind is 'hard', 'soft' or 'unknown'.
+
+    Guarantee 5. A soft bounce is a full mailbox or a temporary refusal and must not
+    permanently exclude a contact; a hard bounce is a dead address and must. Nothing in
+    the Smartlead docs promises either signal, so an absent one yields 'unknown' and the
+    caller refuses to act without --include-soft.
+    """
+    for f in TYPE_FIELDS:
+        v = str(row.get(f) or "").strip()
+        if not v:
+            continue
+        low = v.lower()
+        if any(m in low for m in SOFT_MARKERS):
+            return "soft", f"{f}={v!r}"
+        if any(m in low for m in HARD_MARKERS):
+            return "hard", f"{f}={v!r}"
+    return "unknown", "no bounce-type field on the row"
+
+
+def decide(kind: str, existing: dict, include_soft: bool) -> tuple[str, dict, str]:
+    """(outcome, properties, note). Pure, so the rules are testable without an API."""
+    status = (existing.get("outbound_status") or "").strip()
+    if status == "bounced":
+        return "already recorded", {}, "already outbound_status=bounced"
+    if kind == "soft":
+        return ("skip", {},
+                "SOFT bounce: temporary, so it must not permanently exclude anyone")
+    if kind == "unknown" and not include_soft:
+        return ("skip", {},
+                "bounce type unknown and --include-soft not given; refusing to "
+                "permanently exclude a contact that may have only bounced temporarily")
+
+    props = {"outbound_status": "bounced"}
+    note = ""
+    # See the module docstring: status is the ONLY carrier of a bounce, so unlike the
+    # unsubscribe sync this cannot decline to overwrite. It reports instead.
+    if status and status != "bounced":
+        note = (f"OVERWRITING outbound_status={status!r} with 'bounced'. Status is the "
+                f"only field that records a bounce, so this is unavoidable — but if "
+                f"{status!r} mattered, a human should know it is gone.")
+    return "record", props, note
+
+
+class Smartlead:
+    """Read-only. This job never changes anything in Smartlead."""
+
+    def __init__(self, key: str):
+        self.key = key
+        self.calls = 0
+
+    def get(self, path: str):
+        sep = "&" if "?" in path else "?"
+        req = urllib.request.Request(f"{SL_BASE}{path}{sep}api_key={self.key}",
+                                     headers={"User-Agent": "outbound-engine/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                self.calls += 1
+                raw = r.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(
+                f"GET {path} -> {e.code}: {(e.read() or b'').decode()[:200]}") from None
+
+    def campaigns(self) -> list[dict]:
+        return self.get("/campaigns") or []
+
+    def bounced(self, cid) -> list[dict]:
+        out, offset = [], 0
+        while True:
+            d = self.get(f"/campaigns/{cid}/statistics"
+                         f"?offset={offset}&limit=100&email_status=bounced")
+            rows = d.get("data") or []
+            out += rows
+            offset += len(rows)
+            if not rows or offset >= int(d.get("total_stats") or 0):
+                return out
+
+    def bounce_count(self, cid) -> int:
+        return int((self.get(f"/campaigns/{cid}/analytics") or {}).get("bounce_count") or 0)
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Sync Smartlead bounces into HubSpot. Dry run by default.")
+    ap.add_argument("--apply", action="store_true",
+                    help="WRITE outbound_status=bounced to HubSpot.")
+    ap.add_argument("--campaign", help="one campaign id; default is every campaign")
+    ap.add_argument("--include-soft", action="store_true",
+                    help="also act on rows whose bounce type cannot be determined. Off "
+                         "by default: a soft bounce is temporary and permanent exclusion "
+                         "is not reversible by waiting.")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prove the classification and decision rules with no API calls")
+    a = ap.parse_args(argv)
+
+    if a.self_test:
+        return _self_test()
+
+    key = env_value("SMARTLEAD_API_KEY")
+    if not key:
+        raise RuntimeError("SMARTLEAD_API_KEY not set")
+    sl = Smartlead(key)
+    print("APPLY: writing outbound_status=bounced" if a.apply
+          else "DRY RUN: nothing will be written. Re-run with --apply to act.")
+
+    campaigns = ([{"id": a.campaign, "name": f"(id {a.campaign})"}] if a.campaign
+                 else sl.campaigns())
+    if not campaigns:
+        print("no campaigns in the account, so there are no bounces to sync yet.")
+        return 0
+
+    found: dict[str, dict] = {}
+    mismatch = False
+    for camp in campaigns:
+        cid = camp.get("id")
+        rows = sl.bounced(cid)
+        count = sl.bounce_count(cid)
+        print(f"campaign {cid} {camp.get('name','')!r}: "
+              f"{len(rows)} bounced row(s), analytics says {count}")
+        # Guarantee 4. The filter this relies on is the one that silently returned
+        # nothing for unsubscribes, so it is checked against the aggregate every run.
+        if count > 0 and not rows:
+            mismatch = True
+            print(f"  !! analytics reports {count} bounce(s) but the "
+                  f"email_status=bounced filter returned NOTHING. That is the same "
+                  f"failure the unsubscribe sync hit, and it means this job cannot see "
+                  f"bounces on this campaign. Do NOT treat a clean run as 'no bounces'.")
+        for r in rows:
+            email = (r.get("lead_email") or "").strip().lower()
+            if email:
+                found[email] = r
+
+    if not found:
+        print("\nno bounced rows found." if not mismatch
+              else "\nno rows enumerated, but the aggregate disagrees — see above.")
+        return 1 if mismatch else 0
+
+    hs_read = HubSpot(env_token())
+    writer = HubSpotWriter(env_token(), a.apply)
+    contacts = hs_read.search_by_email(sorted(found), READ_PROPS)
+    counts = {"record": 0, "skip": 0, "already recorded": 0, "unmatched": 0}
+    print(f"\n{len(found)} bounced address(es), {len(contacts)} matched in HubSpot\n")
+
+    for email, row in sorted(found.items()):
+        kind, evidence = classify_bounce(row)
+        existing = contacts.get(email)
+        if existing is None:
+            counts["unmatched"] += 1
+            print(f"  UNMATCHED {email:42} {kind} bounce ({evidence}); no HubSpot "
+                  f"contact, so the bounce cannot be recorded")
+            continue
+        outcome, props, note = decide(kind, existing, a.include_soft)
+        counts[outcome] += 1
+        label = {"record": "BOUNCED ", "skip": "SKIP    ",
+                 "already recorded": "CURRENT "}[outcome]
+        print(f"  {label} {email:42} {kind} bounce ({evidence})")
+        if note:
+            print(f"           {note}")
+        if props:
+            print(f"           {writer.write(existing['hs_object_id'], props)}")
+
+    print(f"\n{counts['record']} recorded, {counts['skip']} skipped, "
+          f"{counts['already recorded']} already current, {counts['unmatched']} unmatched")
+    print(f"{sl.calls} Smartlead calls, {hs_read.calls + writer.calls} HubSpot calls")
+    if not a.apply:
+        print("DRY RUN: nothing was written.")
+    if counts["skip"]:
+        print("Skipped rows are soft or unknown bounces. Re-run with --include-soft only "
+              "if you accept permanently excluding a contact that may bounce temporarily.")
+    return 1 if mismatch else 0
+
+
+def _self_test() -> int:
+    fails = []
+
+    def check(label, got, want):
+        if got != want:
+            fails.append(f"{label}: got {got!r}, want {want!r}")
+
+    check("a 550 is hard", classify_bounce({"bounce_reason": "550 user unknown"})[0], "hard")
+    check("mailbox full is soft",
+          classify_bounce({"bounce_reason": "452 mailbox full"})[0], "soft")
+    check("explicit hard type", classify_bounce({"bounce_type": "Hard"})[0], "hard")
+    check("explicit soft type", classify_bounce({"bounce_type": "soft"})[0], "soft")
+    check("no type field is unknown", classify_bounce({"lead_email": "a@b.com"})[0],
+          "unknown")
+
+    # A hard bounce on a fresh contact records.
+    outcome, props, _ = decide("hard", {}, False)
+    check("hard bounce records", (outcome, props), ("record", {"outbound_status": "bounced"}))
+    check("guarantee 2: never suppresses", "outbound_suppressed" in props, False)
+    check("guarantee 3: never native opt-out", "hs_email_optout" in props, False)
+
+    # Guarantee 5.
+    check("soft bounce is skipped", decide("soft", {}, False)[0], "skip")
+    check("soft stays skipped even with --include-soft",
+          decide("soft", {}, True)[0], "skip")
+    check("unknown is skipped by default", decide("unknown", {}, False)[0], "skip")
+    check("unknown records with --include-soft", decide("unknown", {}, True)[0], "record")
+
+    # Guarantee 6.
+    check("already bounced is a no-op",
+          decide("hard", {"outbound_status": "bounced"}, False)[:2],
+          ("already recorded", {}))
+
+    # The asymmetry: it DOES overwrite, and says so.
+    outcome, props, note = decide("hard", {"outbound_status": "meeting_booked"}, False)
+    check("a bounce overwrites meeting_booked", props.get("outbound_status"), "bounced")
+    check("and reports the overwrite", "OVERWRITING" in note, True)
+    check("naming what was lost", "meeting_booked" in note, True)
+
+    print(f"{len(fails)} FAILED" if fails else "all pure cases passed")
+    for f in fails:
+        print(f"  FAIL {f}")
+    return 1 if fails else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

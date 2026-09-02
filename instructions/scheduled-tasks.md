@@ -12,7 +12,7 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
 
 | Slot | Time (America/New_York) | Days | Jobs |
 |---|---|---|---|
-| `morning` | 09:45 | Mon–Fri | reply check **+ unsubscribe sync** |
+| `morning` | 09:45 | Mon–Fri | reply check **+ unsubscribe sync + bounce sync** |
 | `midday` | 13:05 | Mon–Fri | reply check |
 | `afternoon` | 16:25 | Mon–Fri | reply check |
 
@@ -32,8 +32,9 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
   a full day. Three slots keep the worst case to about four working hours, and each poll
   is only a handful of API calls.
 - **Weekdays only.** Nobody reviews the queue at the weekend. Monday morning catches it.
-- **The unsubscribe sync runs once, in the morning.** It walks every lead on every
-  campaign, so it is the expensive job. The reply check only pulls message history for
+- **The unsubscribe and bounce syncs run once, in the morning.** The unsubscribe sync
+  walks every lead on every campaign, so it is the expensive job; the bounce sync is
+  cheap but there is no reason to run it three times a day. The reply check only pulls message history for
   leads already marked replied, so it stays cheap at every slot.
 - **A late poll is safe, and this is the reason.** Smartlead's `stop_lead_settings` is
   `REPLY_TO_AN_EMAIL` (set in `config/smartlead-defaults.md` and sent by

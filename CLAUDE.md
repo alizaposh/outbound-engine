@@ -165,6 +165,9 @@ scripts/                   ← Python (stdlib + anthropic only)
                              to Slack EVERY run, so silence means broken
   send_replies.py          ← THE ONLY THING THAT SENDS TO A PROSPECT. Sends replies a
                              human approved in the review Sheet. DRY RUN BY DEFAULT
+  sync_bounces.py          ← Smartlead bounces -> HubSpot outbound_status=bounced.
+                             DRY RUN BY DEFAULT. Never sets outbound_suppressed: a
+                             bounce is a deliverability fact, not a consent decision
   sync_unsubscribes.py     ← Smartlead unsubscribes -> HubSpot outbound_suppressed.
                              DRY RUN BY DEFAULT. Scoped suppression only, never the
                              native global opt-out
