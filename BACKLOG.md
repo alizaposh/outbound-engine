@@ -683,6 +683,40 @@ comparable for a brand-led prospect. **Tell the SDR.**
 
 ---
 
+## The `--apply` write paths, PROVEN LIVE 2026-09-02
+Until today **no `--apply` path in this repo had ever written anything.** All three were
+proven by dry runs, verified property options and offline cases only, which meant the
+first real write would have happened unattended on a real prospect. Closed with one
+throwaway HubSpot contact (`aliza.mayer+enginetest@gmail.com`, a plus-address on a mailbox
+the operator controls, so a stray send lands with them and not a stranger), created and
+deleted inside the test.
+
+The Smartlead **reads** were already proven live, so those were injected and the HubSpot
+**writes** were real. Run in sequence on one contact, each reading the previous one's
+state:
+
+| Step | Wrote | Confirmed |
+|---|---|---|
+| `reply_check --apply` | `outbound_reply_intent=not_now`, `outbound_status=replied`, `outbound_recycle_after=2027-02-01` | The recycle date came from the **reply date** (2026-08-27) plus the **named** February, not from today. Both rules held on a live write. Queue row written too. |
+| `sync_unsubscribes --apply` | `outbound_suppressed=true`, `outbound_opt_out_date=2026-08-20`, `outbound_status=opted_out` | The opt-out date is the **real unsubscribe date**, not the run date. |
+| `sync_bounces --apply` | `outbound_status=bounced` | Overwrote `opted_out` and **reported the overwrite by name**, as designed. |
+| all three, re-run | nothing | Idempotent: "1 already current" from both syncs. |
+
+**Two things this proved that dry runs could not:**
+
+1. **`hs_email_optout` is still `None` after all three write paths.** The scope-matching
+   guarantee is real, not just documented.
+2. **A design decision paid off visibly.** The bounce overwrote `outbound_status`, wiping
+   `opted_out` — and the suppression SURVIVED, because `outbound_suppressed=true` and
+   `outbound_opt_out_date` live in their own fields. Had suppression been stored in the
+   status field, a bounce arriving after an opt-out would have silently un-suppressed a
+   contact who had asked us to stop. That is the exact failure the field split prevents,
+   and it was demonstrated rather than argued.
+
+**Still never run with `--apply`: `send_replies.py`.** It is the only path that emails a
+prospect, and testing it means sending real mail. The safe version is a reply into
+rehearsal 1's completed thread, which lands in the operator's own inbox.
+
 ## Bounce sync — BUILT 2026-09-02 (`scripts/sync_bounces.py`)
 Dry run by default; `--apply` writes `outbound_status = bounced`. Wired into the morning
 heartbeat slot alongside the unsubscribe sync.
