@@ -710,6 +710,40 @@ nearest cleared name by event type, or name none — an email with no customer n
 strictly better than one with an invented customer. **The SDR still needs telling**, since
 email 2 was written around those logos.
 
+## Enrolment write-back — BUILT 2026-09-02, and Smartlead does NOT dedupe
+`create_campaign.py` never touched HubSpot, so nothing wrote
+`outbound_last_campaign_id` — documented as **Essential**, "the ONLY link from a HubSpot
+contact to the campaign that mailed it" — or `outbound_status = in_sequence`.
+
+**The serious half was `in_sequence`.** The pre-send filter's SOFT tier skips contacts
+already in sequence, and nothing ever set it. **Verified 2026-09-02 that Smartlead does
+not block cross-campaign duplicates either:** the same lead uploaded cleanly into two
+campaigns, `upload_count: 1` and `skipped_in_other_campaign_count: 0` on both. So an
+overlapping second list would have enrolled the same person twice and sent them two cold
+sequences in parallel, possibly from two different senders. Nothing in either system
+prevented it.
+
+Now written after the campaign exists (not before — recording an enrolment that then
+failed to create would make contacts look mailed when nothing was), batched 100 at a time.
+
+**Plus a guard that runs in the DRY RUN.** If any lead about to be enrolled is
+`outbound_suppressed` or terminal (`opted_out` / `bounced`), it refuses with exit 2 and
+names them. That contact should never have reached campaign creation, so its presence
+means eligibility was skipped or stale — and the dry run is the cheapest place to learn
+it, because no campaign exists yet to clean up. Verified live with a throwaway suppressed
+contact.
+
+**A note on testing this:** HubSpot search is eventually consistent, so a contact created
+seconds earlier is often not yet findable and a search-based guard will appear to pass.
+The first attempt at this test "failed" for that reason plus reading `$?` after a pipe
+(which returns the last command's status, not Python's). Wait for searchability before
+testing anything that depends on search.
+
+**Still open: nothing records WHICH SENDER mailed a contact** — see the sender-split note.
+`outbound_last_campaign_id` gives the campaign, and the campaign implies the sender today
+only because campaigns are single-sender by construction. That is an inference, not a
+record.
+
 ## Sender split: one sender for the first batch, and the gap that blocks more
 **Decided 2026-09-02: the first batch uses ONE sender (Carl).** Not a compromise — it is
 sufficient and it defers a real gap.

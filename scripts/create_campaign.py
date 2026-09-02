@@ -235,6 +235,75 @@ def verify_campaign(sl, cid, cfg, repair: bool = False) -> int:
     return 0
 
 
+def record_enrolment(rows, cid, name, apply_changes: bool) -> int:
+    """Write the enrolment back to HubSpot: campaign id + outbound_status=in_sequence.
+
+    Closes the gap that `outbound_last_campaign_id` was documented as ESSENTIAL -- the
+    only link from a HubSpot contact to the campaign that mailed it, since there is no
+    local database -- and nothing wrote it.
+
+    `in_sequence` matters more. The pre-send filter's SOFT tier skips contacts already
+    in sequence, but nothing ever set it, and **Smartlead does not block cross-campaign
+    duplicates either** (verified 2026-09-02: the same lead uploaded cleanly to two
+    campaigns, skipped_in_other_campaign_count=0). So without this, an overlapping
+    second list enrols the same person twice and they receive two cold sequences in
+    parallel, possibly from two different senders.
+
+    Returns the number of contacts recorded.
+    """
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    from eligibility import HubSpot, env_token
+
+    ids = [(r.get("hs_object_id") or "").strip() for r in rows]
+    linked = [i for i in ids if i]
+    unlinked = len(ids) - len(linked)
+    if unlinked:
+        print(f"  {unlinked} enrolled lead(s) have no hs_object_id, so their enrolment "
+              f"cannot be recorded in HubSpot. They will look un-enrolled to the next "
+              f"eligibility run.")
+    if not linked:
+        return 0
+
+    hs = HubSpot(env_token())
+    # Guard: eligibility should already have excluded these. If one slipped through,
+    # enrolling it is the bug -- say so rather than papering over it with a status write.
+    emails = [(r.get("email") or "").strip() for r in rows if (r.get("email") or "").strip()]
+    current = hs.search_by_email(emails, ["email", "outbound_status", "outbound_suppressed"])
+    blocked = {e: p for e, p in current.items()
+               if str(p.get("outbound_suppressed") or "").lower() in ("true", "1")
+               or (p.get("outbound_status") or "") in ("opted_out", "bounced")}
+    if blocked:
+        raise RuntimeError(
+            f"REFUSING to record enrolment: {len(blocked)} enrolled contact(s) are "
+            f"suppressed or terminal in HubSpot -- {sorted(blocked)}. They should never "
+            f"have reached campaign creation, so the eligibility step was skipped or "
+            f"stale. Re-run scripts/eligibility.py and regenerate from its output.")
+
+    props = {"outbound_last_campaign_id": f"{cid}", "outbound_status": "in_sequence"}
+    if not apply_changes:
+        print(f"  would record enrolment on {len(linked)} contact(s): {props}")
+        return len(linked)
+
+    # Batched: one call per 100 rather than one per contact.
+    import json as _json
+    import urllib.request as _u
+    tok = env_token()
+    done = 0
+    for i in range(0, len(linked), 100):
+        chunk = linked[i:i + 100]
+        body = {"inputs": [{"id": h, "properties": props} for h in chunk]}
+        req = _u.Request("https://api.hubapi.com/crm/v3/objects/contacts/batch/update",
+                         method="POST", data=_json.dumps(body).encode(),
+                         headers={"Authorization": f"Bearer {tok}",
+                                  "Content-Type": "application/json"})
+        with _u.urlopen(req, timeout=60) as r:
+            r.read()
+        done += len(chunk)
+    print(f"  recorded enrolment on {done} HubSpot contact(s): "
+          f"outbound_last_campaign_id={cid}, outbound_status=in_sequence")
+    return done
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Create a DRAFTED Smartlead campaign from approved copy. Never launches.")
@@ -366,6 +435,15 @@ def main(argv=None) -> int:
         print(json.dumps(lead_list[0], indent=2)[:1200])
         print("\nsequence:")
         print(json.dumps(sequences, indent=2)[:700])
+        print("\nenrolment write-back:")
+        # Runs the SUPPRESSED/TERMINAL guard here too, on purpose: a dry run is the
+        # cheapest place to discover that a contact should never have reached campaign
+        # creation, because no campaign exists yet to clean up.
+        try:
+            record_enrolment(rows, "(not created)", name, apply_changes=False)
+        except Exception as e:
+            print(f"  WOULD REFUSE: {e}", file=sys.stderr)
+            return 2
         return 0
 
     sl = Smartlead(api_key())
@@ -409,6 +487,17 @@ def main(argv=None) -> int:
             print(f"COULD NOT DELETE partial campaign {cid}: {e2}\n"
                   f"Delete it in the Smartlead UI before retrying.", file=sys.stderr)
         return 1
+
+    # After the campaign exists, not before: recording an enrolment that then failed to
+    # be created would make contacts look enrolled when nothing was.
+    print()
+    try:
+        record_enrolment(rows, cid, name, apply_changes=not a.dry_run)
+    except Exception as e:
+        print(f"  ENROLMENT NOT RECORDED: {e}", file=sys.stderr)
+        print(f"  The campaign {cid} EXISTS and its leads are uploaded. Fix the cause and "
+              f"re-record before launching, or the next eligibility run will treat these "
+              f"contacts as never mailed.", file=sys.stderr)
 
     final = sl.call("GET", f"/campaigns/{cid}")
     status = final.get("status")
