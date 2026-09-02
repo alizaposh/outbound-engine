@@ -683,6 +683,41 @@ comparable for a brand-led prospect. **Tell the SDR.**
 
 ---
 
+## GAP: nothing syncs bounces to HubSpot — found 2026-09-02
+`outbound_status = bounced` is a **HARD** eligibility gate, so a bounced contact is
+permanently excluded. Correct — except **nothing ever writes it.** `eligibility.py` only
+reads it, `send_replies.py` only reads it, and `sync_unsubscribes.py` deliberately avoids
+treating a bounce as an opt-out (that call was right: it would file a false compliance
+record). Meanwhile `CLAUDE.md` requires a suppression list of anyone who "bounced hard".
+
+**Consequence:** a hard-bounced address stays fully eligible in HubSpot and is re-enrolled
+in the next campaign, mailing a dead address again. Exactly the mirror of the unsubscribe
+sync — Smartlead knows, HubSpot does not — and it bites hardest right now, because
+repeatedly mailing invalid addresses is among the fastest ways to damage domain
+reputation and these domains are ~17 days old.
+
+**What is reachable (checked 2026-09-02):**
+- `GET /campaigns/{id}/statistics?email_status=bounced` — exists, returns the usual
+  `{total_stats, data}` shape. Currently 0, since nothing has bounced.
+- `analytics.bounce_count` — exists, aggregate only.
+- **The lead record carries NO bounce flag.** It has `is_unsubscribed` and
+  `unsubscribed_client_id_map` and nothing equivalent for bounces, so the
+  `is_unsubscribed`-style precise signal that made the unsubscribe sync reliable has no
+  counterpart here.
+
+**The risk in building it now:** that statistics filter is the SAME one that returned
+nothing for unsubscribes after a confirmed unsubscribe, which is why
+`sync_unsubscribes.py` walks the lead list instead. Whether `email_status=bounced` behaves
+differently cannot be known without a real bounce.
+
+**Recommended shape:** build against the statistics path, and make an unrecognised or
+empty result a LOUD report rather than a silent zero — the same approach that worked for
+`BODY_FIELDS`, where the first real reply either confirmed the guess or aborted with a
+message naming the fix. A first 34-lead batch will produce bounces naturally, so the
+answer arrives without manufacturing one. **Deliberately causing a bounce is not worth
+it**: a hard bounce on a 17-day-old warmed domain is a real reputation cost to buy
+information the first batch supplies for free.
+
 ## From-name shows as the email address, not "Brooke Carrobis" — found 2026-09-02
 Rehearsal 2's email 1 landed in the Gmail inbox but displayed the sender as
 `brooke...@poshviphub.com` rather than `Brooke Carrobis`.
