@@ -621,6 +621,40 @@ must remain a separate, deliberate decision.
   in between.
 - **One reply per thread per run**, so a Sheet edited twice cannot fan out.
 
+## SDR copy spec implemented — Test11 exported for review 2026-09-02
+**102 of 102 emails passed, 0 FAILs**, on the 34-contact eligible list from HubSpot list
+1764. Exported to tab **Test11** of the generation review sheet (duplicated from Test10 so
+the header and the human-only Ranking/Feedback columns carried over; data rows
+value-cleared, never `deleteDimension`, which the API refuses when it would remove every
+non-frozen row).
+
+Sequence of runs, kept because the failures were more instructive than the pass:
+
+| Run | Result | What it taught |
+|---|---|---|
+| v1 | 33 FAIL / 34 | The "locked in" question appeared in **2 of 34** emails. The rules were in the rulebook and ignored: `shape_specs[1]` is the per-contact exemplar, and the rewrite left the 1x shapes holding an opener with no skeleton. Emails 2 and 3 kept full drafts and landed at cap, which is what pointed at the cause before any code was read. |
+| v2 | 4 FAIL | Three were validator bugs, not copy: the subject word cap counted every token of a five-word band name, `Mic.RO` tripped the lowercase rule, and `90s Til Dawn`'s own digits read as a fabricated figure beside a no-figure customer. |
+| v3 | 0 FAIL | After trimming the openers. Length was arithmetic: fixed beats cost ~54 words, so a 75 cap leaves ~21 for the opener, and shape 1D's ran ~55 — over in 8 of 8 at a median of 97. |
+| v4/v5 | 0 FAIL | Plus "organizers like X" in email 2 and the warm closer on email 3. |
+
+**Coverage on the final run:** all three required beats present 34/34; 34 distinct email-1
+openers; 2 intro / 4 offer / 7 CTA / 4 closer variants in play; all six cleared customer
+names used, matched by vertical.
+
+**Two decisions recorded in the copy files rather than only here**, because both look like
+mistakes to a future reader:
+- The warm closer on email 3 does **not** violate "cut the last sentence". That rule
+  targets throat-clearing; a sign-off that adds no information and asks nothing is why it
+  earns its place.
+- Shape 1D's August-endorsed wording was **trimmed** to fit the cap. The cap is the newer
+  decision and the one the SDR asked for; the original is in git history.
+
+**Still not cleared:** Lamborghini, Adidas, NBA, Celsius, HBO, Complex. The SDR wrote
+email 2 expecting those logos and they FAIL validation, so there is currently no cleared
+comparable for a brand-led prospect. **Tell the SDR.**
+
+---
+
 ## Rehearsal 2: threading + Gmail deliverability — STAGED 2026-09-01
 **Campaign 3888067**, DRAFTED, 1 lead (`aliza.mayer@gmail.com`), sender
 `brooke.carrobis@poshviphub.com`, 3/3 PASS.
