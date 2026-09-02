@@ -655,6 +655,35 @@ comparable for a brand-led prospect. **Tell the SDR.**
 
 ---
 
+## From-name shows as the email address, not "Brooke Carrobis" — found 2026-09-02
+Rehearsal 2's email 1 landed in the Gmail inbox but displayed the sender as
+`brooke...@poshviphub.com` rather than `Brooke Carrobis`.
+
+**Not our config.** All 12 Smartlead mailboxes carry a correct `from_name`
+("Brooke Carrobis", "Carl Newmark", "Zach Hickman") — verified via
+`GET /email-accounts`. Nothing to fix in this repo or in `config/senders.md`.
+
+**Most likely cause: these are `type: GMAIL` accounts.** Smartlead sends through Google,
+and for Gmail-connected mailboxes the From display name comes from the **Google account
+profile**, not from Smartlead's `from_name`. A Workspace user whose name is blank, or set
+to the address, displays as the address no matter what Smartlead holds.
+
+**Decisive check:** open the email in Gmail → Show original → read the `From:` header.
+- `From: "Brooke Carrobis" <...>` — the name IS being sent and Gmail chose not to render
+  it, which happens with unknown senders and eases as the domain ages. Little to do.
+- `From: <...>` with no display name — the Google profile has no name. **Fixable:**
+  Workspace Admin → Users → set first/last name, or that mailbox's Gmail → Settings →
+  Accounts → "Send mail as" → edit info. Then send one test and re-check the header.
+
+**Why this is a launch item, not cosmetic.** An address-only sender reads as automation
+before a prospect has read a word, and it costs replies on every email in every campaign.
+Cheap to fix once, across all 12 mailboxes, and worth confirming before the first real
+batch.
+
+**Check all three senders, not just Brooke.** One mailbox displaying correctly does not
+clear the other eleven: the profile name is per Google user, so Carl and Zach need the
+same check.
+
 ## Rehearsal 2: threading + Gmail deliverability — RESTAGED 2026-09-02
 **Campaign 3893958** (the 2026-09-01 campaign 3888067 was deleted unsent: its copy predated
 the SDR spec, and launching stale copy that then sits in an inbox for a week tests the
