@@ -683,6 +683,33 @@ comparable for a brand-led prospect. **Tell the SDR.**
 
 ---
 
+## The SDR spec asked for FABRICATED customer claims — caught 2026-09-02
+The 2026-09-01 copy spec listed Lamborghini, Adidas, NBA, Celsius, HBO and Complex as
+comparables for brand-led prospects. **None of them are Posh customers.** Confirmed by the
+person running outbound: *"not actual customers, we should not reference them ever."*
+
+**What stopped it shipping** was refusing to add them to `CLEARED_CUSTOMERS` on the SDR's
+say-so when the spec was implemented, and asking instead. `positioning.md` allows only an
+explicit list and `validate.py` FAILs anything unlisted, so every email naming one would
+have failed — but the reason recorded at the time was "not cleared", which reads as a
+paperwork problem. It was not: the claim is false.
+
+**Now banned by name** in `validate.py.FABRICATED_CUSTOMERS`, not merely omitted, for
+three reasons: the error states the claim is false rather than unapproved; a careless
+future addition to the cleared list cannot re-enable them; and the record shows these were
+specifically proposed and specifically rejected as untrue. "Complex" is matched only in
+customer-claim context, since it is also an ordinary word.
+
+**The general lesson worth keeping.** A copy spec from a person who knows the product is
+still not a source of truth for CLAIMS. Names, figures and funding need clearing by
+someone who can say whether they are true, and the cost of asking is one question while
+the cost of not asking is an invented claim about a third party in mail to strangers.
+
+**Consequence, accepted:** there is no comparable for a brand-led prospect. Route to the
+nearest cleared name by event type, or name none — an email with no customer name is
+strictly better than one with an invented customer. **The SDR still needs telling**, since
+email 2 was written around those logos.
+
 ## Sender split: one sender for the first batch, and the gap that blocks more
 **Decided 2026-09-02: the first batch uses ONE sender (Carl).** Not a compromise — it is
 sufficient and it defers a real gap.

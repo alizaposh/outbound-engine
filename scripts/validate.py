@@ -37,11 +37,12 @@ STAT_MENTION = re.compile(r"\b\d+[ \t]*%(?!unsubscribe)")
 # person running outbound: We Met IRL, Palm Tree Festival and VibeApple were added, the
 # original three kept.
 #
-# DELIBERATELY ABSENT: Lamborghini, Adidas, NBA, Celsius, HBO, Complex. The SDR's copy
-# spec listed them as comparables for brand/sponsorship-led prospects, and they were NOT
-# cleared. Naming a real company as a customer is a permissions question, not a copy
-# preference, so they FAIL until someone confirms otherwise. Recorded here rather than
-# quietly dropped, because the spec still asks for them.
+# NEVER NAMEABLE, because they are NOT CUSTOMERS. Confirmed 2026-09-02 by the person
+# running outbound: "not actual customers, we should not reference them ever." The SDR's
+# copy spec listed them as comparables for brand-led prospects, which would have put a
+# FABRICATED customer claim into cold email to strangers. They are banned by name in
+# FABRICATED_CUSTOMERS below rather than merely left out of the cleared list, so the
+# failure says why.
 CLEARED_CUSTOMERS = ["Caché Life", "Cache Life", "We Belong Here", "NARC Run Club", "NARC",
                      "We Met IRL", "Palm Tree Festival", "VibeApple"]
 # Only NARC has cleared figures; a numeral next to any other named customer means
@@ -492,6 +493,40 @@ def check_gmv_leak(subject: str, body: str) -> list[Finding]:
     return out
 
 
+# Named companies that are NOT customers and must never be referenced (2026-09-02).
+# Banned explicitly, not just omitted from CLEARED_CUSTOMERS, for three reasons: the
+# error can explain that the claim is false rather than merely unapproved; a careless
+# future addition to the cleared list cannot re-enable them; and the record shows these
+# were specifically proposed and specifically rejected as untrue.
+FABRICATED_CUSTOMERS = ("Lamborghini", "Adidas", "NBA", "Celsius", "HBO")
+# "Complex" is also a real word, so it is matched only in customer-claim context --
+# "organizers like Complex" fails, "a complex setup" does not.
+CONTEXTUAL_FABRICATED = ("Complex",)
+CLAIM_CONTEXT = r"(work(ing)? with|run(ning)? ticketing for|organizers like|clients?|customers?|power(ing)?|partners? with|like)"
+
+
+def check_fabricated_customers(subject: str, body: str) -> list[Finding]:
+    """FAIL any reference to a company that is not a customer.
+
+    This is not the same failure as naming an unapproved-but-real customer. These
+    companies do not use Posh, so naming them is an invented claim about a third party,
+    sent to a stranger. It is the single most damaging thing this copy could contain.
+    """
+    out = []
+    hay = f"{subject}\n{body}"
+    for name in FABRICATED_CUSTOMERS:
+        if re.search(rf"\b{re.escape(name)}\b", hay):
+            out.append(Finding("fabricated_customer", FAIL,
+                f"{name!r} is NOT a Posh customer and must never be referenced "
+                f"(config/positioning.md). Naming it invents a claim about a third party"))
+    for name in CONTEXTUAL_FABRICATED:
+        if re.search(rf"{CLAIM_CONTEXT}\s+(\w+\s+){{0,2}}\b{re.escape(name)}\b", hay, re.I):
+            out.append(Finding("fabricated_customer", FAIL,
+                f"{name!r} referenced as a customer or partner; it is NOT one "
+                f"(config/positioning.md)"))
+    return out
+
+
 def check_case_studies(subject: str, body: str, *, allowed_names=()) -> list[Finding]:
     out = []
     # Masked first: "we run ticketing for Caché Life, and just closed a $37M Series B"
@@ -609,6 +644,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_gmv_leak(subject, body)
     res.findings += check_category_leak(subject, body)
     res.findings += check_case_studies(subject, body, allowed_names=allowed_names)
+    res.findings += check_fabricated_customers(subject, body)
     res.findings += check_no_invented_platform(subject, body,
                                                competitor_known=competitor_known)
     res.findings += check_commercial_terms(subject, body)

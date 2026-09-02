@@ -146,14 +146,22 @@ one.
   | Dating, in-person networking, community | We Met IRL |
   | Run club / recurring community events | NARC Run Club |
 
-- **NOT cleared, and asked for anyway: Lamborghini, Adidas, NBA, Celsius, HBO, Complex.**
-  The SDR copy spec of 2026-09-01 lists these as comparables for brand and
-  sponsorship-led prospects. They were **not** cleared, so they FAIL validation and must
-  not appear. Recorded explicitly rather than quietly omitted, because the spec still
-  asks for them and someone will otherwise assume it was an oversight. Naming a real
-  company as a customer in cold outbound is a permissions question, not a copy
-  preference. **Consequence: there is no cleared comparable for a brand-led prospect** —
-  route those to the closest cleared name by event type instead.
+- **NEVER REFERENCE: Lamborghini, Adidas, NBA, Celsius, HBO, Complex. They are NOT
+  customers.** Confirmed 2026-09-02 by the person running outbound: *"not actual
+  customers, we should not reference them ever."*
+
+  The SDR copy spec of 2026-09-01 listed these as comparables for brand and
+  sponsorship-led prospects, which would have put a **fabricated customer claim** into
+  cold email to strangers. This is a different and worse failure than naming an
+  unapproved-but-real customer: it is an invented claim about a third party, and it is
+  the most damaging thing this copy could contain. It is banned by name in
+  `validate.py.FABRICATED_CUSTOMERS`, not merely left off the cleared list, so the error
+  says the claim is false rather than just unapproved and a careless future addition to
+  the cleared list cannot re-enable it.
+
+  **Consequence, and it is fine: there is no comparable for a brand-led prospect.** Route
+  those to the nearest cleared name by event type. An email with no customer name is
+  strictly better than one with a name we invented.
 - **Never invent or extrapolate a customer figure.** The only cleared customer figures
   are NARC Run Club's (34 events on Posh, 6 months on Posh, 500+ total attendees),
   cited exactly as written. **Every other nameable customer has no cleared figures** —

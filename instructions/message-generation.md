@@ -136,9 +136,15 @@ company proof → both levers restated with more weight → the season reason �
   not their calendar: the holiday run-up is when we can get the strongest offers across.
 
 > **The SDR's "brand / sponsorship-led" comparables — Lamborghini, Adidas, NBA, Celsius,
-> HBO, Complex — were NOT cleared** and will FAIL validation. There is currently no
-> cleared comparable for a brand-led prospect; route those to the closest cleared name by
-> event type. Tell the SDR, since email 2 was written expecting those logos.
+> HBO, Complex — ARE NOT CUSTOMERS and must never be referenced.** Confirmed 2026-09-02.
+> Naming them would be a fabricated claim about a third party in an email to a stranger,
+> which is categorically worse than naming an unapproved-but-real customer. They FAIL
+> validation by name.
+>
+> **The SDR needs telling**, because email 2 was written expecting those logos and the
+> row is now empty. There is no comparable for a brand-led prospect: route to the nearest
+> cleared name by event type, or name none. An email with no customer name beats one with
+> an invented customer.
 
 ## 8. Email 3 — the close
 
