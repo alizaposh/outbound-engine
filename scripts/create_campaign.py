@@ -256,6 +256,11 @@ def main(argv=None) -> int:
                     help="where the approval is recorded, e.g. a Slack permalink")
     ap.add_argument("--skip-failed", action="store_true",
                     help="drop rows that failed validation instead of refusing the batch")
+    ap.add_argument("--delays",
+                    help="TEST ONLY: override seq_delay_days, e.g. '0,1,1', so a "
+                         "threading check does not wait 3 days for email 2. Never use "
+                         "this on a real campaign; production delays are in "
+                         "config/smartlead-defaults.md for deliverability reasons.")
     ap.add_argument("--dry-run", action="store_true",
                     help="print exactly what would be sent to Smartlead; write nothing")
     a = ap.parse_args(argv)
@@ -308,7 +313,15 @@ def main(argv=None) -> int:
             f"{ {m: sender_map[m] for m in wrong} }. A mismatch misrepresents the sender.")
 
     name = (f"{dt.date.today():%Y-%m}_{a.audience}_{a.usecase}")
-    delays = cfg.get("seq_delay_days", [0, 3, 4])
+    delays = list(cfg.get("seq_delay_days", [0, 3, 4]))
+    delay_override = ([int(x) for x in a.delays.split(",")] if a.delays else None)
+    if delay_override:
+        # Test affordance ONLY. Production delays live in config/smartlead-defaults.md
+        # and are 3 then 4 days for deliverability reasons; compressing them on a real
+        # campaign would send three emails to a prospect inside a week.
+        delays = delay_override
+        print(f"!! DELAYS OVERRIDDEN to {delays} -- test campaigns only. "
+              f"Config says {cfg.get('seq_delay_days')}.")
     cap = int(cfg.get("max_new_leads_per_day", 15))
 
     print(f"campaign name : {name}")

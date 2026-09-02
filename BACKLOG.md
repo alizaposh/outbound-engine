@@ -655,7 +655,29 @@ comparable for a brand-led prospect. **Tell the SDR.**
 
 ---
 
-## Rehearsal 2: threading + Gmail deliverability — STAGED 2026-09-01
+## Rehearsal 2: threading + Gmail deliverability — RESTAGED 2026-09-02
+**Campaign 3893958** (the 2026-09-01 campaign 3888067 was deleted unsent: its copy predated
+the SDR spec, and launching stale copy that then sits in an inbox for a week tests the
+wrong thing). DRAFTED, 1 lead `aliza.mayer@gmail.com`, sender
+`brooke.carrobis@poshviphub.com`, current copy, 3/3 PASS.
+
+**Delays overridden to `0,1,1`** via the new `--delays` flag, so email 2 lands the next day
+instead of in three. Threading is the last unproven mechanical thing, and waiting three
+days for the answer is a needless hold on launch. The flag prints a loud warning and
+names the config value it is overriding; **production delays stay 3 then 4 days** in
+`config/smartlead-defaults.md` for deliverability reasons, and compressing them on a real
+campaign would put three emails in front of a prospect inside a week.
+
+**DO NOT REPLY.** Replying stops the sequence — which is exactly what ended rehearsal 1
+before emails 2 and 3 could send.
+
+**What it proves:** that emails 2 and 3, which send with `subject: ""`, actually arrive as
+`Re:` on email 1's thread. If it fails they arrive with blank or duplicated subjects,
+which is highly visible to a prospect. It also gives the first real deliverability read on
+an unrelated consumer domain, and exercises a second sender and domain (Brooke /
+poshviphub.com).
+
+### Original staging note (campaign 3888067, deleted)
 **Campaign 3888067**, DRAFTED, 1 lead (`aliza.mayer@gmail.com`), sender
 `brooke.carrobis@poshviphub.com`, 3/3 PASS.
 
