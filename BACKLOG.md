@@ -710,6 +710,44 @@ nearest cleared name by event type, or name none — an email with no customer n
 strictly better than one with an invented customer. **The SDR still needs telling**, since
 email 2 was written around those logos.
 
+## Lead-Level Activity Logs: what they do and do not give us — checked 2026-09-02
+Smartlead's Lead-Level Activity Logs track sends, replies, **status changes including
+"Lead marked as Bounced"**, OOO auto-pause/auto-restart, categorisation, and
+cross-campaign moves. If that were reachable by API it would replace the fragile bounce
+enumeration in `sync_bounces.py`.
+
+**It is not reachable.** Eight plausible endpoint shapes all 404
+(`/campaigns/{c}/leads/{l}/activity`, `/activity-logs`, `/logs`, `/events`, `/timeline`,
+`/leads/{l}/activity`, `/leads/{l}/activity-logs`, `/campaigns/{c}/activity-logs`), and
+the documented `/campaigns/{id}/lead-statistics` also 404s. **The activity log is a UI
+feature**, like HubSpot activity logging and Optimize Email Delivery. So the bounce
+self-check stays: `sync_bounces.py` still cross-checks its enumeration against
+`analytics.bounce_count` and fails loudly on disagreement.
+
+**The real-time path for bounces is a webhook** (`EMAIL_BOUNCE` event type), which lands
+in the same place as the rest of the webhook question — see "Why polling and not Smartlead
+webhooks".
+
+### What the search DID turn up, and it closed a gap
+**`GET /leads/{lead_id}/campaigns` works** and returns every campaign a lead belongs to.
+And more usefully, the lead-upload endpoint accepts
+**`settings: {ignore_duplicate_leads_in_other_campaign: true}`**.
+
+**Verified it works** (2026-09-02): the same lead uploaded into a second campaign returns
+`skipped_in_other_campaign_count=1` and `total_leads=0` with the setting, versus
+`upload_count=1` and a silent duplicate without it. `create_campaign.py` now sets it.
+
+**Why this is a second layer and not a replacement** for the `outbound_status=in_sequence`
+gate: it does not depend on our own HubSpot write-back having succeeded, and that
+write-back has a failure path which only prints a warning. Two independent defences
+against the same failure, one in each system.
+
+**A trap found while reading the response:** `upload_count` counts what was ATTEMPTED,
+`total_leads` counts what LANDED. The script was printing `upload_count`, which would have
+reported a full upload while leads were being dropped. It now reports both and warns
+loudly when they differ — because a dropped lead has approved copy in the review sheet
+that will never send, and the sheet does not show it.
+
 ## Enrolment write-back — BUILT 2026-09-02, and Smartlead does NOT dedupe
 `create_campaign.py` never touched HubSpot, so nothing wrote
 `outbound_last_campaign_id` — documented as **Essential**, "the ONLY link from a HubSpot

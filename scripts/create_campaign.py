@@ -504,11 +504,33 @@ def main(argv=None) -> int:
                                f"mailboxes; refusing a campaign with the wrong senders")
         sl.call("POST", f"/campaigns/{cid}/email-accounts", {"email_account_ids": ids})
         sl.call("POST", f"/campaigns/{cid}/sequences", sequences)
-        up = sl.call("POST", f"/campaigns/{cid}/leads", {"lead_list": lead_list})
-        print(f"  uploaded {up.get('upload_count')} lead(s); "
+        # ignore_duplicate_leads_in_other_campaign makes SMARTLEAD refuse a lead already
+        # in another campaign. Verified 2026-09-02: without it the same lead uploads
+        # cleanly into two campaigns and receives two cold sequences in parallel; with
+        # it, skipped_in_other_campaign_count=1 and the lead is not added.
+        #
+        # This is a SECOND layer, not a replacement for the outbound_status=in_sequence
+        # gate. It matters because it does not depend on our own HubSpot write-back
+        # having succeeded -- and that write-back has a failure path that only prints a
+        # warning.
+        up = sl.call("POST", f"/campaigns/{cid}/leads", {
+            "lead_list": lead_list,
+            "settings": {"ignore_duplicate_leads_in_other_campaign": True}})
+        landed = int(up.get("total_leads") or 0)
+        dupes = int(up.get("skipped_in_other_campaign_count") or 0)
+        print(f"  uploaded {up.get('upload_count')} lead(s), {landed} landed; "
               f"duplicates={up.get('duplicate_count')} blocked={up.get('block_count')} "
               f"invalid={up.get('invalid_email_count')} "
-              f"already_in_another_campaign={up.get('skipped_in_other_campaign_count')}")
+              f"already_in_another_campaign={dupes}")
+        # upload_count counts what was ATTEMPTED; total_leads is what actually landed.
+        # Reading the wrong one reports a full upload while leads were dropped.
+        if dupes or landed != len(lead_list):
+            print(f"\n  !! {len(lead_list) - landed} of {len(lead_list)} lead(s) did NOT "
+                  f"land, {dupes} because they are already in another campaign.\n"
+                  f"     Those prospects have approved copy in the review sheet that will "
+                  f"NEVER SEND, and the sheet does not show it. Either they were already "
+                  f"mailed (correct to skip) or the eligibility step is stale. Reconcile "
+                  f"before treating this campaign as covering the whole list.")
     except Exception as e:
         # Guarantee 4: no half-configured campaign left behind for someone to trust.
         print(f"\nFAILED after creation: {e}", file=sys.stderr)
