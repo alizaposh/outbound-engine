@@ -398,10 +398,59 @@ The draft_response is for a HUMAN TO REVIEW AND SEND. Never write one for
 out_of_office or automated_reply. Keep it short, plain, one ask, no dashes, and never
 promise pricing or terms.
 
+**For `interested` and `question`, the draft MUST include this booking link, as a plain
+visible URL: {booking_link}** ({owner}'s calendar). Do not invent a different link, do
+not write "I'll send over some times" and do not offer to find a slot by hand -- give
+them the link so they can book. You stay the correspondent; the meeting simply lands on
+{owner}'s calendar, and there is no mid-thread introduction.
+
+For every other intent, no link.
+
+**NEVER INVENT A FACT ABOUT POSH.** This is the hard rule of the draft. You do not have
+the product documentation in front of you, so you cannot know payout timings, fee
+structures, integrations, capacity limits, or feature specifics -- and a draft that
+states one confidently is the most dangerous output here, because it reads as authoritative
+and a reviewer skimming it will send it.
+
+  - **Never write:** a number of days, a percentage, a fee, a rate, a limit, or a named
+    integration, unless the PROSPECT'S OWN MESSAGE stated it and you are repeating it
+    back.
+  - **When they ask something specific you do not know, say so and route it.** "Good
+    question, that is worth walking through properly" plus the booking link is a correct
+    and complete answer. Deferring to the call is never a failure.
+  - This mirrors the rule on cold copy, which is machine-checked against an approved
+    claims list. **Drafts are not machine-checked**, so the discipline has to live here.
+
 THREAD (oldest first):
 ---
 {thread}
 ---"""
+
+
+MEETING_ROUTING = ROOT / "config" / "meeting-routing.md"
+
+
+def meeting_routing() -> tuple[str, str]:
+    """(owner name, booking link) from config/meeting-routing.md.
+
+    Parsed, never restated. `meeting-routing.md` exists so changing the meeting owner is
+    a config edit in one place, and hardcoding the link here would defeat that.
+
+    This closes a real gap: the action map REQUIRES `interested` and `question` drafts to
+    share the owner's booking link, and the classifier was never told the link existed.
+    Drafts promised to "send over a few time slots" instead, which is a human doing it by
+    hand -- and getting the meeting booked is the entire point of an interested reply.
+    """
+    text = MEETING_ROUTING.read_text(encoding="utf-8")
+    link = re.search(r"\|\s*Booking link\s*\|\s*`?(https?://\S+?)`?\s*\|", text)
+    owner = re.search(r"\|\s*(?:Owner|Meeting owner|Name)\s*\|\s*`?([^|`]+?)`?\s*\|",
+                      text, re.I)
+    if not link:
+        raise RuntimeError(
+            f"no booking link found in {MEETING_ROUTING.name}. Expected a table row "
+            "'| Booking link | <url> |'. Refusing to draft a meeting reply with no link "
+            "rather than silently omitting it.")
+    return (owner.group(1).strip() if owner else "the meeting owner"), link.group(1)
 
 
 def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
@@ -463,7 +512,11 @@ def classify(client, model: str, thread: list[dict]) -> dict:
         for m in thread)
     # The prospect's own words are what get classified, but the whole thread is supplied:
     # reply-handling.md step 3 requires reading the full conversation before acting.
-    prompt = CLASSIFY_PROMPT.replace("{thread}", rendered[:12000])
+    owner, link = meeting_routing()
+    prompt = (CLASSIFY_PROMPT
+              .replace("{booking_link}", link)
+              .replace("{owner}", owner)
+              .replace("{thread}", rendered[:12000]))
     resp = client.messages.create(model=model, max_tokens=500,
                                   messages=[{"role": "user", "content": prompt}])
     raw = resp.content[0].text.strip()

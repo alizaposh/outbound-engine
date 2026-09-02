@@ -217,12 +217,42 @@ definitions and allowed values: `config/hubspot-properties.md`.
   intent, leave `outbound_status` untouched, and RESUME the sequence. Neither is a real
   reply, so neither may advance the lead.
 
-## Response guidance by category  [FILL IN with real examples over time]
-- Interested → `[FILL IN]`
-- Question → `[FILL IN]`
-- Objection → `[FILL IN]`
-- Not interested → `[FILL IN]`
-- Stop → confirm removal, suppress, no further contact.
+## Response guidance by category (filled 2026-09-02; refine with real examples)
+
+Enforced in the `draft_response` instructions inside `scripts/reply_check.py`.
+
+- **Interested** → warm, one line, **plus the meeting owner's booking link as a plain
+  URL** from `config/meeting-routing.md`. Do not offer to find a time by hand: give them
+  the link. The persona stays the correspondent; the meeting lands on the owner's calendar.
+- **Question** → answer only what can be answered without inventing anything, then the
+  booking link. **Deferring to the call is a complete answer**, not a failure.
+- **Objection** → acknowledge it, do not argue, offer the call. Never counter with a
+  claim we cannot support.
+- **Not interested** → short, gracious, no re-pitch, no link. `outbound_recycle_after`
+  does the follow-up work, not the copy.
+- **Not now** → acknowledge the timing, confirm you will come back, and capture the date
+  they named. No link and no pitch.
+- **Stop** → confirm removal, suppress, no further contact, no link.
+
+### THE HARD RULE OF DRAFTS: never invent a fact about Posh
+
+Discovered 2026-09-02 while wiring the booking link. Asked "what's the payout timing
+like?", the drafter produced **"We process payouts within 2 business days of event
+close."** Nothing approves that. It was invented, and it was fluent.
+
+**Why this is more dangerous than the same error in cold copy.** Generated copy is
+machine-checked against an approved claims list and would FAIL. **Drafts are not checked
+at all** — they go straight to a human, and a confident specific is exactly what a
+reviewer skims past and sends. The engine would be putting a fabricated product fact in
+front of a prospect, with a person's name on it.
+
+So the drafter is now told: no day counts, percentages, fees, rates, limits or named
+integrations unless the **prospect's own message** said it first, and route anything
+specific to the call. Verified: timing, fee and integration questions all now defer and
+share the link instead of inventing an answer.
+
+**If drafts ever start being sent without a human reading them, this rule needs machine
+enforcement**, not prompt discipline.
 
 Corrections from humans become new rules here. Keep this file current.
 

@@ -739,10 +739,8 @@ The first attempt at this test "failed" for that reason plus reading `$?` after 
 (which returns the last command's status, not Python's). Wait for searchability before
 testing anything that depends on search.
 
-**Still open: nothing records WHICH SENDER mailed a contact** — see the sender-split note.
-`outbound_last_campaign_id` gives the campaign, and the campaign implies the sender today
-only because campaigns are single-sender by construction. That is an inference, not a
-record.
+**Closed later the same day:** `outbound_sender` now records it, write-once, with gate 10
+reading it. See the sender-split note.
 
 ## Sender split: one sender for the first batch, and the gap that blocks more
 **Decided 2026-09-02: the first batch uses ONE sender (Carl).** Not a compromise — it is
@@ -1142,8 +1140,9 @@ or do not delete campaigns that have sent.
 is what the gate reads, so the status write is informational and yields rather than
 destroying the record of a booked meeting.
 
-**Still open: nothing schedules this.** It and `reply_check.py` are both cron-shaped and
-neither is wired to a schedule yet.
+**Closed 2026-08-31:** three Claude Desktop routines run these on a weekday cadence, with
+a Slack heartbeat. Currently PAUSED until closer to launch — see
+`instructions/scheduled-tasks.md`.
 
 ### Original item, for the reasoning
 **Trigger:** Stage 1 once reply retrieval via the Smartlead API is running (Phase 6);
