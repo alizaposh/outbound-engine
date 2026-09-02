@@ -38,12 +38,22 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Order is the contract with the sheet's header row. Index 11/12 (decision, notes) are
 # the human's and are always written empty.
+# APPEND-ONLY. DECISION_COL and MSG_ID_COL are positional, so inserting rather than
+# appending would silently write the human's decision into the wrong column.
 COLUMNS = ["received_at", "contact_name", "email", "company", "campaign", "sent_by",
            "reply_text", "intent", "proposed_action", "draft_response", "review_reason",
-           "decision", "notes", "smartlead_message_id", "processed_at"]
+           "decision", "notes", "smartlead_message_id", "processed_at",
+           # Added 2026-09-02 for scripts/send_replies.py. Two DIFFERENT ids, and the
+           # difference matters: smartlead_stats_id identifies the THREAD and is what
+           # reply-email-thread requires, while smartlead_message_id is unique per
+           # message and is what dedup keys on. Using either for the other's job breaks
+           # something quietly.
+           "smartlead_stats_id", "sent_at"]
 HUMAN_COLUMNS = ("decision", "notes")
 DECISION_COL = COLUMNS.index("decision")          # 11 -> column L
 MSG_ID_COL = COLUMNS.index("smartlead_message_id")  # 13 -> column N
+STATS_ID_COL = COLUMNS.index("smartlead_stats_id")  # 15 -> column P
+SENT_AT_COL = COLUMNS.index("sent_at")              # 16 -> column Q
 DECISION_CHOICES = ["Approve", "Edit & send", "Suppress", "Do not send", "Reclassify"]
 
 # Intents that are not real replies. Kept in sync with instructions/reply-handling.md.
@@ -229,7 +239,8 @@ def append_reply(reply: dict, service=None, cfg=None, store=None,
 
     reply keys (all optional except intent + smartlead_message_id):
       received_at, contact_name, email, company, campaign, sent_by, reply_text,
-      intent, proposed_action, draft_response, review_reason, smartlead_message_id
+      intent, proposed_action, draft_response, review_reason, smartlead_message_id,
+      smartlead_stats_id
 
     Result: {"appended": bool, "skipped": reason|None, "row": int|None,
              "message_id": str}

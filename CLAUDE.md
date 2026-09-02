@@ -163,6 +163,8 @@ scripts/                   ← Python (stdlib + anthropic only)
                              queues the rest. DRY RUN BY DEFAULT; never sends a reply
   heartbeat.py             ← THE SCHEDULED RUN. Shells the two polling jobs and posts
                              to Slack EVERY run, so silence means broken
+  send_replies.py          ← THE ONLY THING THAT SENDS TO A PROSPECT. Sends replies a
+                             human approved in the review Sheet. DRY RUN BY DEFAULT
   sync_unsubscribes.py     ← Smartlead unsubscribes -> HubSpot outbound_suppressed.
                              DRY RUN BY DEFAULT. Scoped suppression only, never the
                              native global opt-out

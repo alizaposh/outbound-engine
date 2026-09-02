@@ -444,7 +444,11 @@ def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
             body = strip_quoted(body)
         norm.append({
             "inbound": inbound,
+            # message_id for dedup (unique per message); stats_id kept separately
+            # because reply-email-thread needs it to address the thread, and it is
+            # SHARED across the thread so it must never be used for dedup.
             "id": str(m.get("id") or m.get("message_id") or m.get("stats_id") or ""),
+            "stats_id": str(m.get("stats_id") or ""),
             "subject": m.get("subject") or "",
             "body": re.sub(r"\s+\n", "\n", (body or "")).strip(),
             "at": m.get("received_at") or m.get("sent_at") or m.get("time") or ""})
@@ -810,7 +814,8 @@ def main(argv=None) -> int:
                     "reply_text": newest["body"][:4000], "intent": intent,
                     "proposed_action": res.get("proposed_action", ""),
                     "draft_response": res.get("draft_response", ""),
-                    "smartlead_message_id": newest["id"]}
+                    "smartlead_message_id": newest["id"],
+                    "smartlead_stats_id": newest.get("stats_id", "")}
                 if a.apply:
                     r = rq.append_reply(payload, service=svc, cfg=cfg, store=store)
                     print(f"      queue: {'row ' + str(r['row']) if r['appended'] else r['skipped']}")

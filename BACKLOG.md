@@ -587,7 +587,35 @@ and prints the three UI-only settings it cannot check so they get eyeballed.
 
 ---
 
-## Automate sending an approved reply — AGREED 2026-09-01, after the copy pass
+## Automate sending an approved reply — BUILT 2026-09-02 (`scripts/send_replies.py`)
+Dry run by default. Reads rows marked `Approve` / `Edit & send`, sends the
+`draft_response` as edited in the Sheet, stamps `sent_at`.
+
+**A correction to this item's own instructions.** It said `reply_message_id` must be the
+`message_id` and not `stats_id`. **That is backwards for this endpoint.** Probed live on
+2026-09-02 with an unresolvable id so nothing could send: `reply-email-thread` requires
+exactly **`email_stats_id`** and **`email_body`**, and the documented
+`reply_message_id` / `reply_email_time` are neither required nor what addresses the
+thread. Both ids matter, for opposite jobs — `stats_id` addresses the thread, `message_id`
+is unique per message and is the dedup key — and the earlier note conflated them.
+
+**That also exposed a gap: `stats_id` was not being captured at all.** `reply_check.py`
+stored only `message_id`, so an approved reply could not have been sent. Two columns were
+appended to the queue sheet (`smartlead_stats_id`, `sent_at`) — appended, not inserted,
+because `decision` and `smartlead_message_id` are addressed by position.
+
+**Verified** with seven synthetic rows: `Approve` and `Edit & send` selected, `Do not
+send` ignored, blank draft skipped, already-stamped skipped, a second row on the same
+thread refused, and a row with no `stats_id` refused. Plus the HubSpot suppression lookup
+against a real contact. Test rows removed; nothing was sent.
+
+**Ordering choice worth keeping:** the row is stamped `sending` BEFORE the request. A
+crash therefore leaves `sending`, which blocks a retry and asks for a human. That biases
+towards a missing reply rather than a duplicate one, because a duplicate from a supposed
+person is the worse failure. A timeout is likewise treated as sent.
+
+### Original item
+
 **Priority: after the copy work.** A reply loop that drafts well is worth more than one
 that sends fast, and copy is what blocks launch.
 

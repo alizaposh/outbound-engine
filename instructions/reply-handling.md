@@ -169,12 +169,26 @@ Three independent things hold this, so it cannot drift by accident:
    nobody noticed.
 3. Golden rule 1 in `CLAUDE.md`.
 
-**Known gap, deliberately left open (2026-09-01):** the review Sheet offers `Approve` and
-`Edit & send` as decisions and **nothing consumes that column.** No code reads it. The
-real flow today is: engine drafts → a human reads the Sheet → **a human sends by hand.**
-The dropdown records a decision that no machine acts on. Scheduled to be closed after the
-copy pass — see "Automate sending an approved reply" in `BACKLOG.md`. Until then, do not
-read `Approve` as meaning anything was sent.
+**Gap CLOSED 2026-09-02: `scripts/send_replies.py`.** `Approve` and `Edit & send` now
+do something. The job reads those rows, sends the `draft_response` **as edited in the
+Sheet**, and stamps `sent_at` so a row cannot send twice.
+
+```bash
+python scripts/send_replies.py            # DRY RUN: shows what would send
+python scripts/send_replies.py --apply    # SENDS
+python scripts/send_replies.py --row 7 --apply
+```
+
+**This does not weaken the auto-send allowlist above, and the distinction is the whole
+point.** Sending here requires a human to have read that specific text and marked the
+row. An entry in `auto_send_intents` would send with no human at all; that list stays
+empty and asserted. A human approving one drafted reply is a different act from
+authorising a category.
+
+It re-checks suppression **at send time**, because a reply queued Monday and approved
+Thursday may have opted out in between and the row cannot know that. And it claims the
+row *before* sending, so a crash leaves `sending …` and blocks a retry rather than
+risking a duplicate reply from a supposed person.
 
 ## HubSpot updates
 

@@ -94,3 +94,25 @@ edited ignore rule, or by zipping the folder to share it.
 
 `.gitignore` still carries `/*.json` and the GCP `<project>-<hash>.json` shape as a
 backstop for the next key someone downloads into the wrong place.
+
+## Columns added 2026-09-02 for `scripts/send_replies.py`
+
+Appended, never inserted: `decision` and `smartlead_message_id` are addressed by
+POSITION in `review_queue.py`, so inserting a column would write a human's decision into
+the wrong cell.
+
+| Column | Written by | Purpose |
+|---|---|---|
+| `smartlead_stats_id` | the reply check | Addresses the THREAD. `reply-email-thread` requires it as `email_stats_id`. |
+| `sent_at` | the reply sender | Send-once stamp. `sending …` while in flight, then `sent …` or `FAILED …`. |
+
+**The two ids are not interchangeable, and each breaks something different.**
+`smartlead_stats_id` is **shared across a whole thread**, so it addresses the thread but
+is useless for dedup — keying dedup on it would mark a reply processed the moment the
+outbound email was recorded. `smartlead_message_id` is unique per message, so it is the
+dedup key but cannot address a thread. Verified against a real thread on 2026-09-01,
+where both messages carried one `stats_id`.
+
+**`sent_at` reading `sending …`** means a run died between claiming the row and getting a
+response. **Do not simply clear it**: check the thread in Smartlead first, because the
+reply may or may not have gone out.
