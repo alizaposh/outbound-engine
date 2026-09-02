@@ -713,9 +713,25 @@ state:
    contact who had asked us to stop. That is the exact failure the field split prevents,
    and it was demonstrated rather than argued.
 
-**Still never run with `--apply`: `send_replies.py`.** It is the only path that emails a
-prospect, and testing it means sending real mail. The safe version is a reply into
-rehearsal 1's completed thread, which lands in the operator's own inbox.
+### `send_replies.py --apply` — PROVEN LIVE 2026-09-02, a real email sent
+Sent into rehearsal 1's thread (campaign 3887546, `aliza@posh.vip`), so the mail landed
+in the operator's own inbox. **Every `--apply` path in the repo has now written or sent
+for real at least once.**
+
+- `POST reply-email-thread` → `HTTP 200 Email added to the queue, will be sent out soon!`
+- **It appeared on the thread as a third message**, `type=SENT`, threaded against the
+  original — so a reply-into-thread genuinely threads rather than starting a new mail.
+- **The campaign was `COMPLETED`.** Replying into a finished campaign's thread works,
+  which matters: an approved reply is usually acted on days after the sequence ends.
+- Row stamped `sent 2026-09-02T17:28:23+00:00`. **Re-running skipped it** rather than
+  sending twice.
+- `decision` and `notes` untouched, so the human's columns survived a write pass.
+
+**What is still unproven about it, honestly:** the FAILED branch and the crash-mid-send
+branch. A 4xx would stamp `FAILED` and a timeout would stamp `sent` and not retry, and
+both are covered only by reading the code. Provoking them means either a deliberately
+malformed send or killing the process mid-request, and neither is worth manufacturing
+against a live thread.
 
 ## Bounce sync — BUILT 2026-09-02 (`scripts/sync_bounces.py`)
 Dry run by default; `--apply` writes `outbound_status = bounced`. Wired into the morning
