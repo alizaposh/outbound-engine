@@ -174,10 +174,11 @@ one.
   `scripts/validate.py`).
 - **Competitor observations are allowed; invented claims about them are not** (revised
   2026-08-26). The blanket "no competitor disparagement" rule was removed because it got
-  in the way of copy the sales lead endorsed: "I often notice that organizers on
-  Eventbrite face operational challenges, such as having your guest lists, payouts, and
-  promotion all living in three different places." That is an observation about where a
-  workflow lands, and it is the line that gives the email its human tone.
+  in the way of copy the sales lead endorsed at the time. **That endorsed line was itself
+  cut on 2026-09-02** as fluff — an observation explaining the prospect's own job back to
+  them — so it is deliberately not quoted here any more: quoting it taught the generator
+  to write it. What survives is the narrower principle, that naming where a competitor's
+  workflow lands is an observation rather than disparagement.
   What still holds, and why each one is narrower than "no disparagement":
   - **Never invent a shortcoming or a capability.** "built for small creators", "not
     built for someone running your scale" are assertions about another product that we

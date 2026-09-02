@@ -12,7 +12,7 @@ sequence exists to say. So variation now lives in **beat 1 only**, the opener, w
 the one beat with real per-lead input. Varying the question or the offer is now a bug,
 not variety.
 
-`scripts/run_generation.py` parses the `## Shape 1A:` headings; keep them exactly.
+`scripts/run_generation.py` parses the shape headings; keep their exact form.
 
 ## The fixed skeleton of email 1
 
@@ -27,35 +27,34 @@ Hey {first_name},
 
 Are you locked in on your ticketing platform right now?
 
-If there's room, I'd like to put a custom offer together — marketing support and
-financial incentives.
+%OFFER%
 
-Worth 15 minutes to see what we could bring to the table?
+%CTA%
 ```
 
 - **The question is present-tense and flat.** No year, no season, no "looking ahead to".
-- **Name both levers out loud** — marketing support AND financial incentives. Never
-  compress them into "value" or "what we could do for you".
+- **Name the offer as a bundle**, from the Offer variants at the end of this file. Never
+  compress it into "value" or "what we could do for you".
 - **Ask for a reply, not a booking.** No calendar link anywhere in the cold sequence.
-- **≤ 75 words**, intro line included. **The opener's budget is about 21 words.** The
-  fixed beats cost roughly 54 (intro 8, question 11, offer 20, ask 15), so anything
-  longer than two short sentences cannot fit. This is arithmetic, not taste: shapes with
-  three-sentence openers ran 97 words and went over the cap in 8 of 8 emails.
+- **≤ 75 words**, intro line included. The opener's budget is about **21 words**: the
+  fixed beats cost roughly 54, so anything longer than one or two short sentences cannot
+  fit. Arithmetic, not taste — shapes with three-sentence openers ran a median of 97 and
+  went over in 8 of 8 emails.
 - **Write NOTHING beyond these paragraphs.** No extra middle paragraph explaining the
   problem, no "Posh pulls that into one spot" line. A run produced a 113-word email 1 by
-  inserting exactly that, and it is the bloat the spec exists to remove.
+  inserting exactly that.
 - **The sender's self-introduction stays**, near the top. The SDR draft omitted it; the
-  person running outbound kept it by explicit decision on 2026-09-01, as they had in
-  August. Without it email 1 never says what Posh is.
+  person running outbound kept it by explicit decision on 2026-09-01.
 
-## Shape 1A: the competitor, named
+## Shape 1A: the platform, named
 For a contact whose `current_competitor` is known and usable.
 
 **Opening variants (code picks one; use it as the opening move):**
 - Saw {prospect_org} is running ticketing through {competitor}.
 - Noticed {prospect_org} is on {competitor} for ticketing at the moment.
 - Came across {prospect_org} and saw you're running ticketing on {competitor}.
-
+- Saw you're running {prospect_org} ticketing on {competitor}.
+- Noticed {prospect_org} runs ticketing on {competitor} right now.
 
 > Hey {first_name},
 >
@@ -69,58 +68,25 @@ For a contact whose `current_competitor` is known and usable.
 >
 > %CTA%
 
-**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
-at the end of this file, picked per contact by code. The question, the offer, and the ask
-are the three things the sequence exists to say. **≤ 75 words.**
-
-Nothing evaluative about the platform. The observation earns the email; it does not
-argue yet.
-
-## Shape 1B: the competitor plus the operational consequence
-Known competitor, and the contact is large enough that operations are the live problem.
-
-**Opening variants (code picks one; use it as the opening move):**
-- Saw {prospect_org} is on {competitor}. Most {vertical} organizers in {city} end up juggling guest lists, payouts and promotion separately.
-- Noticed {prospect_org} runs ticketing on {competitor}. Guest lists, payouts and promotion usually end up in three places.
-- Saw you're on {competitor}. Most {city} {vertical} organizers stitch guest lists, payouts and promotion together by hand.
-
-
-> Hey {first_name},
->
-> {sender.intro_line}
->
-> Saw {prospect_org} is on {competitor}. Most {vertical} organizers in {city} end up
-> juggling guest lists, payouts and promotion separately.
->
-> Are you locked in on your ticketing platform right now?
->
-> %OFFER%
->
-> %CTA%
-
-**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
-at the end of this file, picked per contact by code. The question, the offer, and the ask
-are the three things the sequence exists to say. **≤ 75 words.**
-
-Two sentences maximum in the opener. It is the longest permitted and the cap must
-absorb it.
+**One sentence. State the platform and stop.** No characterisation of the platform, and
+no observation about what organizers like them supposedly struggle with — see "NO
+OBSERVATION SENTENCES" below.
 
 ## Shape 1C: no platform named
 **Used whenever the competitor is unknown or unusable. A correctness gate, not a style
-choice** — 1A, 1B and 1D all state which platform they are on, and stating that wrongly is
-worse than any amount of sameness.
+choice** — 1A states which platform they are on, and stating that wrongly is worse than
+any amount of sameness.
 
 **Opening variants (code picks one; use it as the opening move):**
-- We work with a lot of {vertical} organizers in {city}.
-- Most of who we work with in {city} are {vertical} organizers, so {prospect_org} caught my eye.
-- We do a lot of work with {vertical} organizers around {city}.
-
+- We work with a lot of organizers in {city}.
+- Most of who we work with are organizers around {city}.
+- We do a lot of work with organizers in {city}.
 
 > Hey {first_name},
 >
 > {sender.intro_line}
 >
-> We work with a lot of {vertical} organizers in {city}.
+> We work with a lot of organizers in {city}.
 >
 > Are you locked in on your ticketing platform right now?
 >
@@ -128,44 +94,8 @@ worse than any amount of sameness.
 >
 > %CTA%
 
-**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
-at the end of this file, picked per contact by code. The question, the offer, and the ask
-are the three things the sequence exists to say. **≤ 75 words.**
+Says only what the lead data supports, and **names no platform and no category**.
 
-Says only what the lead data supports: their vertical and their city. **No platform is
-named anywhere in this shape** — that is the gate.
-
-## Shape 1D: the endorsed shape
-The opener the person running outbound wrote themselves, kept as the tone reference.
-
-**Opening variants (code picks one; use it as the opening move):**
-- Saw {prospect_org} is on {competitor}. Working with {vertical} organizers in {city}, I often see guest lists, payouts and promotion living apart.
-- Saw {prospect_org} runs ticketing on {competitor}. With {city} {vertical} organizers I often see guest lists, payouts and promotion in three places.
-- Noticed {prospect_org} is on {competitor}. I often see {vertical} organizers in {city} keeping guest lists, payouts and promotion apart.
-
-
-> Hey {first_name},
->
-> {sender.intro_line}
->
-> Saw {prospect_org} is on {competitor}. Working with {vertical} organizers in {city},
-> I often see guest lists, payouts and promotion living apart.
->
-> Are you locked in on your ticketing platform right now?
->
-> %OFFER%
->
-> %CTA%
-
-**Every line above is required.** `%OFFER%` and `%CTA%` are filled from the variant lists
-at the end of this file, picked per contact by code. The question, the offer, and the ask
-are the three things the sequence exists to say. **≤ 75 words.**
-
-**Trimmed 2026-09-01 from the originally endorsed wording**, which ran ~55 words in the
-opener alone and put every email using this shape over the cap (median 97 words, 8 of 8
-over). The original phrasing is preserved in git history and in the "CONCRETE, NOT VAGUE"
-rule below, which is what it was really teaching. The cap wins: it is the newer decision
-and it is the one the SDR asked for.
 
 ## Email 2 shapes (threaded reply, no greeting, no re-introduction)
 
@@ -176,21 +106,22 @@ because this email carries the proof email 1 withholds.
 The **$37M Series B** is approved here and only here. The Fortune article may appear as a
 **visible plain URL**, never as anchor text, and the default is no link at all.
 
-**Phrase it as "organizers like {cleared_customer}"**, not a bare "we run ticketing for
-{cleared_customer}". It reads as a comparable — here is the kind of organizer we work
+**Phrase it as "organizers like {comparable}"**, not a bare "we run ticketing for
+{comparable}". It reads as a comparable — here is the kind of organizer we work
 with — rather than as a claim that the prospect and the customer are the same thing.
 
-**One cleared customer name, matched to their world** (`config/positioning.md`):
-nightlife → VibeApple or Caché Life; festival → Palm Tree Festival or We Belong Here;
-dating and networking → We Met IRL; run clubs → NARC Run Club. **Never a figure beside
-any of them** except NARC's cleared numbers.
+**Use `{comparable}` exactly as supplied.** The research note carries ONE cleared
+customer name, already matched to this contact by `pick_comparable()` in
+`run_generation.py`. **Do not choose your own** and do not name a second: the mapping
+lives in code precisely so the internal vertical that drives it never reaches the prompt.
+**Never a figure beside the name** except NARC's cleared numbers.
 
 ### Shape 2A: proof first
 > Hope you had a good weekend — circling back on this.
 >
 > Bit more context on us: we just closed a $37M Series B, and we run ticketing for organizers
-> like {cleared_customer}. Happy to get into the marketing side, and there's real room on the
-> financial incentives for a {vertical} organizer like {prospect_org}.
+> like {comparable}. Happy to get into the marketing side, and there's real room on the
+> financial incentives for {prospect_org}.
 >
 > With the holiday season coming up, this is usually the best time of year for us to get
 > a strong offer across.
@@ -203,8 +134,8 @@ cleanly onto a cleared name.
 
 > Circling back on this.
 >
-> We run ticketing for organizers like {cleared_customer}, and just closed a $37M Series B. For a
-> {vertical} organizer like {prospect_org} there's real room on the incentives, and the
+> We run ticketing for organizers like {comparable}, and just closed a $37M Series B. For {prospect_org}
+> there's real room on the incentives, and the
 > marketing side is usually where we add the most.
 >
 > The holiday run-up is when we can get the strongest offers across.
@@ -215,7 +146,7 @@ cleanly onto a cleared name.
 When email 1 ran long, or the contact's register is terse.
 
 > Circling back. We just closed a $37M Series B and run ticketing for organizers
-> like {cleared_customer}. There's real room on the incentives for {prospect_org}, and the
+> like {comparable}. There's real room on the incentives for {prospect_org}, and the
 > holiday run-up is when we can get the strongest offer across.
 >
 > Free for 15 minutes this week?
@@ -262,23 +193,30 @@ is allowed to stay. Do not "tidy" it away.
     at them as a flat assertion, which reads as surveillance rather than an introduction.
   - **"Quick one about {org}:"** is not. It opens on a demand.
   The difference is whose perspective the sentence is from. Keep it ours.
-- **CONCRETE, NOT VAGUE.** This replaced a phrase blacklist that was cutting the wrong
-  things, and it still governs every sentence that survives the new caps.
-  - **Write this:** "I often notice that organizers on {competitor} face operational
-    challenges, such as having your guest lists, payouts, and promotion all living in
-    three different places." It works because it is **first person** ("I often notice"),
-    it **names their world**, and it **lists the actual items** rather than gesturing at
-    them.
-  - **Not this:** "which is the part most ticketing tools are worst at", "that is the part
-    organizers tell us eats the week". Opinions with no content: they explain the problem
-    back to the person who has it.
-  - A closing "so ..." consequence is **good** when specific — "so you're not juggling
-    tools on event night" — and filler when it restates the sentence before it.
+- **CONCRETE, NOT VAGUE — but there is now nothing between the opener and the
+  question.** This rule used to carry a worked example of an observation sentence, and
+  that example was reproduced in generated copy long after the sentence itself was cut.
+  The example is gone; what it was really teaching survives as: when you do write a
+  sentence, name the actual thing rather than gesturing at it. Opinions with no content
+  ("which is the part most ticketing tools are worst at") were always banned and remain
+  so.
 - **Cut the last sentence.** The final line of a draft is almost always throat-clearing: a
   summary of what was already said, or a soft apology for emailing. Delete it and check
   whether the email still works. It usually reads better.
 - **Never inflate their title.** If they manage partnerships, they manage partnerships —
   not "run", "lead", "head up" or "own".
+- **NEVER PRINT OUR INTERNAL CATEGORY.** The lead's `vertical` — "Party", "Live
+  Performance", "Other Social Communities", "Festival" — is an internal classification
+  used to route the persona and pick the comparable. It is **not passed to the model at
+  all** as of 2026-09-02, and it must never appear in copy. "live performance organizers
+  in Los Angeles" and "party organizers" both shipped in a real batch, and "Other Social
+  Communities organizers" was one draw away. Say "organizers", or say nothing.
+  `validate.py` FAILs a category used as a descriptor.
+- **NO OBSERVATION SENTENCES.** Cut 2026-09-02 as fluff. Sentences of the form "I often
+  see organizers in {city} keeping guest lists, payouts and promotion apart" explain the
+  prospect's own job back to them and earn nothing. The opener states a fact — what
+  platform they are on, or where we work — and then the email asks its question. If a
+  sentence describes what organizers "tend to" or "usually" or "often" do, delete it.
 - **A compliment must name a specific thing, or be cut.** There is no data source for a
   booked act, so the opener makes a specific *observation* instead of paying a compliment.
   A generic compliment is the exact fluff the spec exists to remove.
@@ -337,3 +275,16 @@ short, no ask, no new information.
 
 **No presumption.** "Looking forward to chatting!" is warm; "Speak Tuesday" would assume a
 yes nobody gave.
+
+## Removed shapes (history, not guidance)
+
+Kept outside every shape section on purpose: the parser hands a shape's whole section to
+the model, so a note living inside one becomes part of the prompt. This one was inside 1C
+and was being read as copy guidance, describing the very observation sentences the shape
+must not write.
+
+**Shapes 1B and 1D, removed 2026-09-02.** Both existed to carry an observation sentence
+about what organizers in the prospect's category tend to struggle with. That was cut as
+fluff, which left them identical to 1A. There are only two real situations — we know their
+platform or we do not — so there are two shapes. `assign_shapes` still asks for B and D
+for some volume bands and `pick()` falls back to A, which is correct.

@@ -482,16 +482,26 @@ shapes file where exactly one reaches you at a time.
 - **Sell with warmth, not fluff.** The bundle (dedicated account support, financial
   incentives, marketing push) is real, but naming all of it in one breath is the feature
   dump the AEs down-scored. Pick the single facet that fits this persona and band.
-- **CONCRETE, NOT VAGUE.** The middle of the email is where it earns its tone, so it
-  needs real content rather than less content. Speak in the first person, name their
-  world, and list the actual items: "We work with a lot of [vertical] organizers in
-  [city], and I often notice that organizers on [competitor] face operational challenges,
-  such as having your guest lists, payouts, and promotion all living in three different
-  places." The "I often notice" is doing work: a person is speaking, not a brand. Name a
-  platform only when the research note actually carries one. What to avoid is the opinion with no content: "which is the
-  part most ticketing tools are worst at", "that is the part organizers tell us eats the
-  week". A closing "so ..." consequence is good when specific ("so you're not juggling
-  tools on event night") and filler only when it restates the sentence before it.
+- **THERE IS NO MIDDLE OF THE EMAIL ANY MORE (revised 2026-09-02).** Email 1 is: intro
+  line, one sentence of fact, the question, the offer, the ask. **Nothing else.** Do not
+  add a sentence explaining what organizers like them tend to struggle with.
+  - **The banned shape, described rather than quoted.** Any sentence that generalises
+    about what organizers "often", "usually" or "tend to" experience; any sentence
+    reporting what we "hear most" or "see" from organizers; and any follow-on claiming
+    we consolidate or unify those things. All were endorsed copy for an earlier, longer
+    email and were **cut as fluff**: they explain the prospect's own job back to them and
+    earn nothing.
+  - **Deliberately not quoted verbatim, for the same reason the example was deleted.**
+    A negative example is still an example. Writing the forbidden sentence out here, in
+    the anchor that reaches every prompt, is how it survives being banned.
+  - This rule replaced a worked example of exactly that sentence. **The example was the
+    problem** — it lived here, in the anchor injected into every prompt, so the model
+    kept reproducing it while a prohibition elsewhere was ignored. A run right after the
+    cut still produced it in 1 of 6 emails and ran 109 words against a 75 cap.
+  - **Never name our internal category.** "party organizers", "live performance
+    organizers", "nightlife and event organizers" — the classification routes the
+    persona and picks the comparable, and the prospect must never be shown the bucket we
+    filed them in. Say "organizers".
 - **Length: email 1 is 50 to 95 words of body.** The email the sales lead endorsed is
   about 85. When over, cut a vague sentence, never a specific one, and never the
   question. Vagueness is the problem, not length: a longer concrete email beats a short

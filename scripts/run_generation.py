@@ -380,6 +380,29 @@ def pick_variant(c: Contact, variants: list[str], salt: str = "") -> str:
     return variants[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(variants)]
 
 
+# Which cleared customer to name for which internal vertical. Resolved in CODE so the
+# vertical itself never reaches the prompt. Names must exist in
+# validate.CLEARED_CUSTOMERS or the email FAILs.
+VERTICAL_COMPARABLE = {
+    "party":                    ["VibeApple", "Caché Life"],
+    "nightlife":                ["VibeApple", "Caché Life"],
+    "live performance":         ["Palm Tree Festival", "VibeApple"],
+    "festival":                 ["Palm Tree Festival", "We Belong Here"],
+    "other social communities": ["We Met IRL", "NARC Run Club"],
+}
+# An unrecognised or blank vertical still needs a name. Community-shaped is the least
+# presumptuous default: it asserts nothing about scale or format.
+DEFAULT_COMPARABLE = ["We Met IRL", "NARC Run Club"]
+
+
+def pick_comparable(c: Contact) -> str:
+    """One cleared customer name for this contact, chosen from their vertical."""
+    options = VERTICAL_COMPARABLE.get((c.vertical or "").strip().lower(),
+                                      DEFAULT_COMPARABLE)
+    seed = f"comparable:{(c.email or c.prospect_org or '').strip().lower()}"
+    return options[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(options)]
+
+
 def pick_opening(c: Contact, shape_key: str,
                  openings: dict[str, list[str]]) -> str:
     """One opening variant per contact, within the assigned shape.
@@ -466,7 +489,13 @@ def research_note(c: Contact, persona, basis, platform_known,
         "organization": c.prospect_org or c.company,
         "company": c.company,
         "email_domain": c.email.split("@")[-1] if "@" in c.email else None,
-        "vertical": c.vertical,
+        # `vertical` is deliberately ABSENT. It is our internal classification --
+        # "Party", "Live Performance", "Other Social Communities", "Festival" -- and the
+        # model printed it straight into copy ("live performance organizers in LA",
+        # "Other Social Communities organizers"). It routes the persona and selects the
+        # comparable, both done in code, so the model never needs to see the label and
+        # cannot leak a taxonomy the prospect should never read.
+        "comparable": pick_comparable(c),
         "current_competitor": (f"appears to be {c.current_competitor}"
                                if platform_known else None),
         "competitor_confidence": "high" if platform_known else "unknown",

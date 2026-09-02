@@ -457,6 +457,32 @@ def _mask_approved(text: str) -> str:
     return APPROVED_FIGURE.sub("SERIESB", text)
 
 
+# Our internal lead classification. Routes the persona and picks the comparable; must
+# never be printed. Matched only as a DESCRIPTOR ("party organizers"), which is how it
+# leaked, so "Palm Tree Festival" as a cleared customer name still passes.
+INTERNAL_CATEGORIES = ("party", "live performance", "other social communities",
+                       "nightlife", "festival")
+CATEGORY_LEAK = re.compile(
+    r"\b(" + "|".join(INTERNAL_CATEGORIES) + r")\s+(organiz|promot|venue|event|client)",
+    re.I)
+
+
+def check_category_leak(subject: str, body: str) -> list[Finding]:
+    """FAIL if our internal vertical is used to describe the prospect.
+
+    "live performance organizers in Los Angeles" and "party organizers" both shipped in a
+    real batch, and "Other Social Communities organizers" was one draw away. The label is
+    ours, not theirs, and a prospect should never be shown the bucket we filed them in.
+    Say "organizers".
+    """
+    out = []
+    for m in CATEGORY_LEAK.finditer(f"{subject}\n{body}"):
+        out.append(Finding("category_leak", FAIL,
+            f"internal vertical used as a descriptor: {m.group(0)!r}. Say 'organizers'; "
+            f"the classification is for routing, not for copy"))
+    return out
+
+
 def check_gmv_leak(subject: str, body: str) -> list[Finding]:
     out = []
     hay = _mask_approved(f"{subject} {body}")
@@ -581,6 +607,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_links(subject, body, position=position)
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
     res.findings += check_gmv_leak(subject, body)
+    res.findings += check_category_leak(subject, body)
     res.findings += check_case_studies(subject, body, allowed_names=allowed_names)
     res.findings += check_no_invented_platform(subject, body,
                                                competitor_known=competitor_known)
