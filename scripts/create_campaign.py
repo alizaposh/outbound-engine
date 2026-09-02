@@ -268,7 +268,8 @@ def record_enrolment(rows, cid, name, apply_changes: bool) -> int:
     # Guard: eligibility should already have excluded these. If one slipped through,
     # enrolling it is the bug -- say so rather than papering over it with a status write.
     emails = [(r.get("email") or "").strip() for r in rows if (r.get("email") or "").strip()]
-    current = hs.search_by_email(emails, ["email", "outbound_status", "outbound_suppressed"])
+    current = hs.search_by_email(
+        emails, ["email", "outbound_status", "outbound_suppressed", "outbound_sender"])
     blocked = {e: p for e, p in current.items()
                if str(p.get("outbound_suppressed") or "").lower() in ("true", "1")
                or (p.get("outbound_status") or "") in ("opted_out", "bounced")}
@@ -279,9 +280,31 @@ def record_enrolment(rows, cid, name, apply_changes: bool) -> int:
             f"have reached campaign creation, so the eligibility step was skipped or "
             f"stale. Re-run scripts/eligibility.py and regenerate from its output.")
 
+    # outbound_sender is WRITE ONCE. A contact who heard from Carl in March must hear
+    # from Carl in September; switching persona reads as a boiler room and throws away
+    # the only continuity a cold thread has.
+    sender = (rows[0].get("sender") or "").strip()
+    conflict = {e: p.get("outbound_sender") for e, p in current.items()
+                if p.get("outbound_sender")
+                and p["outbound_sender"].lower() != sender.lower()}
+    if conflict:
+        raise RuntimeError(
+            f"REFUSING to record enrolment: {len(conflict)} contact(s) already belong to "
+            f"a DIFFERENT sender -- {conflict}. This copy is signed {sender!r}, so mailing "
+            f"them would switch the person they have been corresponding with. Filter them "
+            f"out with `scripts/eligibility.py --sender {sender.lower()}` and regenerate.")
+
     props = {"outbound_last_campaign_id": f"{cid}", "outbound_status": "in_sequence"}
+    # Only contacts with no sender yet get one; the rest already match (conflicts raised).
+    unassigned = [e for e, p in current.items() if not p.get("outbound_sender")]
+    if sender:
+        print(f"  sender {sender!r}: {len(unassigned)} contact(s) need it recorded, "
+              f"{len(current) - len(unassigned)} already carry it")
     if not apply_changes:
         print(f"  would record enrolment on {len(linked)} contact(s): {props}")
+        if sender and unassigned:
+            print(f"  would set outbound_sender={sender.lower()!r} on "
+                  f"{len(unassigned)} contact(s) (write once, never changed)")
         return len(linked)
 
     # Batched: one call per 100 rather than one per contact.
@@ -289,9 +312,16 @@ def record_enrolment(rows, cid, name, apply_changes: bool) -> int:
     import urllib.request as _u
     tok = env_token()
     done = 0
+    # Per-contact properties, because outbound_sender is written only where absent.
+    id_by_email = {e: p.get("hs_object_id") for e, p in current.items()}
+    needs_sender = {id_by_email[e] for e in unassigned if id_by_email.get(e)}
     for i in range(0, len(linked), 100):
         chunk = linked[i:i + 100]
-        body = {"inputs": [{"id": h, "properties": props} for h in chunk]}
+        body = {"inputs": [
+            {"id": h,
+             "properties": ({**props, "outbound_sender": sender.lower()}
+                            if sender and h in needs_sender else props)}
+            for h in chunk]}
         req = _u.Request("https://api.hubapi.com/crm/v3/objects/contacts/batch/update",
                          method="POST", data=_json.dumps(body).encode(),
                          headers={"Authorization": f"Bearer {tok}",
@@ -300,7 +330,9 @@ def record_enrolment(rows, cid, name, apply_changes: bool) -> int:
             r.read()
         done += len(chunk)
     print(f"  recorded enrolment on {done} HubSpot contact(s): "
-          f"outbound_last_campaign_id={cid}, outbound_status=in_sequence")
+          f"outbound_last_campaign_id={cid}, outbound_status=in_sequence"
+          + (f", outbound_sender={sender.lower()} on {len(needs_sender)} of them"
+             if sender and needs_sender else ""))
     return done
 
 

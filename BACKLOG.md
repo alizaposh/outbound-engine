@@ -766,12 +766,23 @@ small batch. A split buys volume and nothing else. Three senders is ~180/day.
 campaign 2 reads as a boiler room and undermines the persona the whole sequence is built
 on.
 
-### GAP that must close before multi-sender: nothing records the sender
-`outbound_last_campaign_id` records the campaign; **no property records which sender
-emailed a contact.** So a second campaign cannot reuse the first campaign's sender for a
-returning contact, and the rule above cannot be honoured. Needs an `outbound_sender`
-property (or equivalent) written at enrolment, plus a read in generation so a returning
-contact keeps its sender.
+### CLOSED 2026-09-02: `outbound_sender`, write-once, with a gate that reads it
+Created as a dropdown (`carl`/`brooke`/`zach`) in the `outbound_engine` group.
+
+- **Written at first enrolment only.** `create_campaign.py` sets it on contacts that have
+  none and leaves the rest alone.
+- **A conflict is a hard refusal.** If any lead already belongs to a different sender, the
+  enrolment refuses and names them, because mailing them would switch the person they have
+  been corresponding with.
+- **`eligibility.py --sender carl` is gate 10**, soft-excluding contacts assigned
+  elsewhere with the reason `belongs to brooke`. Evaluated before gate 2, since "fine, but
+  not yours" is more useful than "in sequence". Inert without the flag; gate 1 still
+  outranks it.
+
+**Built before the first campaign on purpose.** The assignment is created at enrolment, so
+recording it later would leave batch 1's contacts with no sender on file — precisely the
+case this protects. **Stored rather than computed**, because a hash would re-shuffle every
+existing assignment the moment a fourth sender is added.
 
 ### How to split, when volume forces it
 - **Deterministic hash on email**, the mechanism every other per-contact pick already

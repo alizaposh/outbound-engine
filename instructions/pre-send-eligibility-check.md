@@ -278,3 +278,21 @@ changing gets changed there.
   the engine).
 - Tracker: reframes the Phase 3 "design data layer" task; absorbs the old
   "dedup / create-if-missing" task into Step 1 + Step 4.
+
+## Gate 10: sender continuity (added 2026-09-02, SOFT, opt-in)
+
+Only active when `--sender <name>` is passed. A contact whose `outbound_sender` is set to
+a **different** sender is soft-excluded with the reason `belongs to <name>`.
+
+**Why it exists.** `outbound_sender` is write-once, so a prospect keeps the same
+correspondent across months. Storing it is only half the job: without a gate reading it,
+a second campaign would happily mail Brooke's contacts over Carl's signature. The
+enrolment step refuses outright in that case, so the gate is what turns a hard refusal
+into a clean, filtered list.
+
+**Why the reason is worded "belongs to brooke".** It reports that the contact is fine and
+simply not yours, which is a different action from "in sequence" or "opted out". Gate 10
+is evaluated **before** gate 2 for that reason — the more useful reason wins.
+
+**Omit `--sender` for a single-sender account** and the gate is inert. Gate 1 still
+outranks it: an opted-out contact reads as opted out, never as someone else's.

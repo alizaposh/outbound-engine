@@ -106,6 +106,7 @@ laptop is.
 | What needs remembering | Where it lives |
 |---|---|
 | Contact ⇄ campaign | `outbound_last_campaign_id` on the HubSpot contact |
+| Contact ⇄ sender | `outbound_sender` on the contact, **write once**. Keeps the same persona corresponding with a prospect across months |
 | Contact ⇄ Smartlead lead | **Email is the join key.** Both systems key on it; no mapping table needed |
 | Reply outcome / lifecycle | `outbound_status`, `outbound_reply_intent` on the contact |
 | Suppression, recycle date | `outbound_suppressed`, `outbound_recycle_after` on the contact |

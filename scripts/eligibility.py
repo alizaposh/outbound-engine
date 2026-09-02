@@ -59,6 +59,7 @@ GATED = {
     "hubspot_owner_id": "gate 6 owner",
     "hs_lead_status": "gate 7 lead status",
     "hs_sequences_is_enrolled": "gate 8 sequence",
+    "outbound_sender": "gate 10 sender continuity (soft, only with --sender)",
     "notes_last_updated": "gate 9 recency",
     "notes_last_contacted": "gate 9 recency",
     "hs_last_sales_activity_timestamp": "gate 9 recency",
@@ -287,9 +288,14 @@ class Decision:
         self.decision, self.reason, self.tier = decision, reason, tier
 
 
-def evaluate(p: dict, cfg: dict, owner_ids: dict[str, str], now: dt.datetime) -> Decision:
+def evaluate(p: dict, cfg: dict, owner_ids: dict[str, str], now: dt.datetime,
+             sender: str = "") -> Decision:
     """The nine gates, in order. First failure wins, so the reported reason is the
-    most important one -- an opt-out reads as 'opted out', never as 'stale'."""
+    most important one -- an opt-out reads as 'opted out', never as 'stale'.
+
+    `sender` adds gate 10 when given: a contact already assigned to a DIFFERENT sender
+    is skipped, so the person they have been corresponding with never changes.
+    """
     g = lambda k: (p.get(k) or "")                                    # noqa: E731
 
     # -- gate 1: opt-out / undeliverable. HARD: never contact. --------------------
@@ -301,6 +307,15 @@ def evaluate(p: dict, cfg: dict, owner_ids: dict[str, str], now: dt.datetime) ->
     if status in cfg["status_hard_values"]:
         return Decision("EXCLUDED",
                         "opted out" if status == "opted_out" else "bounced", "hard")
+
+    # -- gate 10: sender continuity. SOFT: they belong to someone else. ----------
+    # Placed before gate 2 on purpose: "belongs to Brooke" is the more useful reason to
+    # report than "in sequence", because it tells you the contact is fine, just not
+    # yours. outbound_sender is write-once (config/hubspot-properties.md).
+    if sender:
+        assigned = g("outbound_sender").strip().lower()
+        if assigned and assigned != sender.strip().lower():
+            return Decision("EXCLUDED", f"belongs to {assigned}", "soft")
 
     # -- gate 2: outbound status / recycle. SOFT: skip this campaign. -------------
     if status in cfg["status_skip_values"]:
@@ -366,6 +381,11 @@ def main(argv=None) -> int:
     ap.add_argument("--eligible-out", type=pathlib.Path,
                     help="ELIGIBLE-only CSV for run_generation.py --contacts")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--sender",
+                    help="the sender persona this campaign will use (carl/brooke/zach). "
+                         "Adds gate 10: contacts already assigned to a DIFFERENT sender "
+                         "are soft-excluded, so a prospect never switches persona "
+                         "between campaigns. Omit for a single-sender account.")
     a = ap.parse_args(argv)
 
     cfg = load_config()
@@ -442,7 +462,7 @@ def main(argv=None) -> int:
             d = Decision("ELIGIBLE", "NOT IN HUBSPOT - verify before sending")
             p, cid = {}, ""
         else:
-            d = evaluate(p, cfg, owner_ids, now)
+            d = evaluate(p, cfg, owner_ids, now, sender=a.sender)
             cid = p.get("hs_object_id", "")
 
         key = d.reason or "ELIGIBLE"
