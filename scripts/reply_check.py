@@ -28,10 +28,19 @@ Six guarantees:
      outbound_suppressed in HubSpot. Native hs_email_optout is NEVER written: it is
      global, effectively irreversible, and reserved for a human honouring an explicit
      all-email request (config/hubspot-properties.md).
-  6. out_of_office AND automated_reply RESUME THE SEQUENCE and do not advance the lead.
-     Smartlead halts follow-ups on ANY reply and cannot tell a human from an
-     auto-responder, so without this an out-of-office silently freezes a lead who never
-     engaged.
+  6. NEITHER out_of_office NOR automated_reply ADVANCES THE LEAD, and only one resumes.
+     Smartlead halts follow-ups on ANY reply and cannot tell a human from a machine, so
+     something must unfreeze a lead who never engaged -- but not always us:
+       - **out_of_office: Smartlead resumes it, we do not.** It has its own OOO
+         auto-pause with an auto-restart after N days. Resuming immediately would
+         override an intentional wait and mail someone who is still away, which is the
+         exact thing the pause exists to prevent.
+       - **automated_reply: we resume.** Smartlead's feature is out-of-office
+         specifically, so a ticketing autoresponder or a delivery notice is not covered,
+         and nothing else would ever restart that lead.
+     The residual risk is recorded rather than solved: if Smartlead MISSES an
+     out-of-office and reads it as a real reply, the lead stays frozen and our report is
+     the only signal. See instructions/reply-handling.md.
 
 Endpoints were verified against a live throwaway campaign on 2026-08-31. There is no
 "replies since timestamp" endpoint: the path is per-campaign statistics filtered to
@@ -69,7 +78,15 @@ INTENTS = {
     "not_qualified":   {"status": "disqualified", "resume": False, "queue": True},
     "wrong_contact":   {"status": "disqualified", "resume": False, "queue": True},
     "asked_to_stop":   {"status": "opted_out",    "resume": False, "queue": True},
-    "out_of_office":   {"status": None,           "resume": True,  "queue": False},
+    # out_of_office does NOT resume as of 2026-09-02: Smartlead has its own OOO
+    # auto-pause with an auto-restart after N days, and resuming immediately would
+    # override an intentional wait and mail someone who is still away. See
+    # instructions/reply-handling.md.
+    "out_of_office":   {"status": None,           "resume": False, "queue": False},
+    # automated_reply STILL resumes. Smartlead's feature is specifically out-of-office,
+    # so a non-away machine reply -- a ticketing autoresponder, a delivery notice -- is
+    # not covered by it. Stop-on-reply halts the sequence and nothing else would ever
+    # restart it, so this resume is the only thing that unfreezes the lead.
     "automated_reply": {"status": None,           "resume": True,  "queue": False},
 }
 REPLY_CONFIG = ROOT / "config" / "reply-defaults.md"
@@ -849,6 +866,9 @@ def main(argv=None) -> int:
             if spec["resume"]:
                 print(f"      smartlead: {sl.resume(cid, lead_id)}  "
                       f"(not a real reply, lead not advanced)")
+            elif intent == "out_of_office":
+                print("      smartlead: NOT resuming. Its own OOO auto-pause restarts "
+                      "this after N days; resuming now would mail someone still away.")
             if intent == "asked_to_stop":
                 print(f"      smartlead: {sl.unsubscribe(cid, lead_id)}")
 

@@ -56,7 +56,7 @@ are no longer in the enum, and **nothing routes to either**:
 | not_qualified | disqualified | no | stop | Mark disqualified; excluded from future campaigns by the eligibility status filter (reversible) |
 | wrong_contact | disqualified (old contact) | no | stop | Old contact excluded; named replacement created as a **referral lead only — never enrolled, never sent**. See below |
 | asked_to_stop | opted_out | YES (+ opt_out_date) | stop | Confirm removal. The ONLY classifier-driven suppression |
-| out_of_office | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
+| out_of_office | unchanged | no | **Smartlead resumes it, we do not** | Ignore; do NOT advance the lead or write status=replied. See "Who resumes an out-of-office" below |
 | automated_reply | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
 
 ### Recycle windows — `outbound_recycle_after` (set on not_now / not_interested)
@@ -332,3 +332,32 @@ python scripts/reply_check.py --campaign 123 --limit 5
   left in the queue row for a human, per the standing decision not to create contacts.
 - **It never writes `hs_email_optout`.** Only `outbound_suppressed` +
   `outbound_opt_out_date`, plus a Smartlead unsubscribe. Asserted in code.
+
+## Who resumes an out-of-office (revised 2026-09-02)
+
+**Smartlead has its own OOO auto-pause**, which pauses the lead and **auto-restarts after
+N days**, then sends the follow-up. Confirmed by the person running outbound.
+
+**So the engine no longer resumes `out_of_office`.** It used to, and that was wrong in a
+way that is easy to miss: Smartlead's pause encodes "they are away until roughly then",
+and resuming immediately overrides that wait and mails someone who is still out — the
+precise thing the auto-pause exists to prevent. Two systems both trying to be helpful
+would have produced a worse outcome than either alone.
+
+**`automated_reply` still resumes, and the distinction is the point.** Smartlead's feature
+is out-of-office *specifically*. A ticketing autoresponder, a delivery notification, a
+"your ticket has been received" — none of those are away messages, so Smartlead will not
+pause-and-restart for them. Stop-on-reply halts the sequence and **nothing else would ever
+restart it**, so the engine's resume is the only thing that unfreezes that lead.
+
+**The intent is still classified and still written** to `outbound_reply_intent` for both.
+Handing the resume to Smartlead does not mean not noticing.
+
+### The residual risk, recorded rather than solved
+If Smartlead **misses** an out-of-office and reads it as a real reply, it will not pause
+or restart — and the engine no longer resumes either. That lead stays frozen and nobody is
+told. Our classification is the only signal that it happened, so an `out_of_office` intent
+appearing on a lead whose sequence never continues is worth looking at. **If that turns
+out to be common, the fix is to resume only when Smartlead has not already paused**, which
+needs the lead status value Smartlead sets on an OOO pause — not knowable without
+observing a real one.
