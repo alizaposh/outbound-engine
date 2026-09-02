@@ -47,7 +47,7 @@ The sending persona stays the correspondent; the meeting belongs to Zach.
   thread, whether to introduce himself. That judgment is deliberately his and not the
   handler's: whether a mid-thread introduction reads as a natural handoff or as a
   bait-and-switch depends on the specific conversation.
-- **This applies to all 12 mailboxes**, including Zach's own 3. On his mailboxes the
+- **This applies to all 12 mailboxes**, including Zach's own 4. On his mailboxes the
   correspondent and the meeting owner simply happen to be the same person, so no
   escalation-for-identity is needed — only the normal escalation for a substantive
   conversation.

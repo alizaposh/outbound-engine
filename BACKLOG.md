@@ -683,6 +683,47 @@ comparable for a brand-led prospect. **Tell the SDR.**
 
 ---
 
+## Sender split: one sender for the first batch, and the gap that blocks more
+**Decided 2026-09-02: the first batch uses ONE sender (Carl).** Not a compromise — it is
+sufficient and it defers a real gap.
+
+**Why a split exists at all.** `create_campaign.py` refuses a CSV mixing senders because a
+Smartlead campaign **rotates across its mailboxes**: put two people's mailboxes in one
+campaign and an email signed by one sends from the other's. So each sender needs its own
+campaign, its own generation run (`--mailbox`), and its own slice of the eligible list.
+
+**Why one sender is enough for 34.** Each sender owns **4 mailboxes, one on each of the
+four domains**, at 15/day = **60 first-touches per day per sender**. Thirty-four fits in a
+single day.
+
+**The thing that is easy to get wrong: sender ≠ domain.** Using only Carl still spreads
+across all four domains, so there is **no deliverability argument** for adding senders to a
+small batch. A split buys volume and nothing else. Three senders is ~180/day.
+
+### The rule that matters more than the split method
+**One prospect should only ever hear from one sender.** Carl in campaign 1 and Brooke in
+campaign 2 reads as a boiler room and undermines the persona the whole sequence is built
+on.
+
+### GAP that must close before multi-sender: nothing records the sender
+`outbound_last_campaign_id` records the campaign; **no property records which sender
+emailed a contact.** So a second campaign cannot reuse the first campaign's sender for a
+returning contact, and the rule above cannot be honoured. Needs an `outbound_sender`
+property (or equivalent) written at enrolment, plus a read in generation so a returning
+contact keeps its sender.
+
+### How to split, when volume forces it
+- **Deterministic hash on email**, the mechanism every other per-contact pick already
+  uses, so it is stable across runs.
+- **Persisted to HubSpot**, so it survives even if the hash inputs change. The hash alone
+  is not enough: adding a sender changes every assignment.
+- **NOT by vertical or city.** That couples a persona to a segment for no benefit and
+  creates artifacts like one sender owning every festival.
+
+**Zach sending cold is already settled** — `config/meeting-routing.md` applies the
+persona-fronted model to all 12 mailboxes including his own, where correspondent and
+meeting owner coincide.
+
 ## The `--apply` write paths, PROVEN LIVE 2026-09-02
 Until today **no `--apply` path in this repo had ever written anything.** All three were
 proven by dry runs, verified property options and offline cases only, which meant the
