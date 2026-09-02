@@ -718,9 +718,14 @@ def _self_test() -> int:
     # -- guarantee 5, structurally
     check("native opt-out is not writable", "hs_email_optout" in HubSpotWriter.write.__doc__
           if HubSpotWriter.write.__doc__ else False, False)
+    # An ALLOWLIST on purpose, so adding any method to the Smartlead client forces a
+    # deliberate update here rather than quietly widening what this class can do. It
+    # caught lead_ids_by_email being added during the threading work, which is the
+    # mechanism working -- a send method would be caught the same way.
     check("guarantee 2: the Smartlead client exposes no way to send mail",
           sorted(m for m in dir(Smartlead) if not m.startswith("_")),
-          ["campaigns", "get", "replied_leads", "resume", "thread", "unsubscribe"])
+          ["campaigns", "get", "lead_ids_by_email", "replied_leads", "resume", "thread",
+           "unsubscribe"])
 
     print(f"config: not_now floor {nn}d, not_interested {ni}d, auto-send "
           f"{cfg['auto_send_intents'] or 'empty (enforced)'}")
