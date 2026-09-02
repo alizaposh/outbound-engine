@@ -176,6 +176,10 @@ because this email carries the proof email 1 withholds.
 The **$37M Series B** is approved here and only here. The Fortune article may appear as a
 **visible plain URL**, never as anchor text, and the default is no link at all.
 
+**Phrase it as "organizers like {cleared_customer}"**, not a bare "we run ticketing for
+{cleared_customer}". It reads as a comparable — here is the kind of organizer we work
+with — rather than as a claim that the prospect and the customer are the same thing.
+
 **One cleared customer name, matched to their world** (`config/positioning.md`):
 nightlife → VibeApple or Caché Life; festival → Palm Tree Festival or We Belong Here;
 dating and networking → We Met IRL; run clubs → NARC Run Club. **Never a figure beside
@@ -184,8 +188,8 @@ any of them** except NARC's cleared numbers.
 ### Shape 2A: proof first
 > Hope you had a good weekend — circling back on this.
 >
-> Bit more context on us: we just closed a $37M Series B, and we run ticketing for
-> {cleared_customer}. Happy to get into the marketing side, and there's real room on the
+> Bit more context on us: we just closed a $37M Series B, and we run ticketing for organizers
+> like {cleared_customer}. Happy to get into the marketing side, and there's real room on the
 > financial incentives for a {vertical} organizer like {prospect_org}.
 >
 > With the holiday season coming up, this is usually the best time of year for us to get
@@ -199,7 +203,7 @@ cleanly onto a cleared name.
 
 > Circling back on this.
 >
-> We run ticketing for {cleared_customer}, and just closed a $37M Series B. For a
+> We run ticketing for organizers like {cleared_customer}, and just closed a $37M Series B. For a
 > {vertical} organizer like {prospect_org} there's real room on the incentives, and the
 > marketing side is usually where we add the most.
 >
@@ -210,26 +214,40 @@ cleanly onto a cleared name.
 ### Shape 2C: short
 When email 1 ran long, or the contact's register is terse.
 
-> Circling back. We just closed a $37M Series B and run ticketing for
-> {cleared_customer}. There's real room on the incentives for {prospect_org}, and the
+> Circling back. We just closed a $37M Series B and run ticketing for organizers
+> like {cleared_customer}. There's real room on the incentives for {prospect_org}, and the
 > holiday run-up is when we can get the strongest offer across.
 >
 > Free for 15 minutes this week?
 
 ## Email 3 shapes (the close)
 
-**One line. ≤ 30 words.** No new information, no new value props, no breakup theatrics,
-no urgency. Close the loop and stop.
+**≤ 30 words.** No new information, no new value props, no breakup theatrics, no urgency.
+
+**A warm closer is required** (`%CLOSER%`, picked per contact from the list at the end of
+this file). Without it the close reads harsh — a bare "closing the loop" is the last thing
+a prospect hears from us and should not sound like a door shutting.
+
+**This is NOT the "cut the last sentence" rule being broken.** That rule targets
+throat-clearing: a summary of what was just said, or an apology for emailing. A warm
+sign-off is neither. It adds no information and asks for nothing, which is exactly why it
+is allowed to stay. Do not "tidy" it away.
 
 ### Shape 3A: the endorsed close
-> Closing the loop here — if you've got time this week to look at the offer, let's get on
+> Closing the loop here. If you've got time this week to look at the offer, let's get on
 > the phone.
+>
+> %CLOSER%
 
 ### Shape 3B: the plain question
-> Closing the loop — worth 15 minutes this week to look at the offer?
+> Closing the loop. Worth 15 minutes this week to look at the offer?
+>
+> %CLOSER%
 
 ### Shape 3C: shortest
 > Closing the loop here. Still worth a look at the offer?
+>
+> %CLOSER%
 
 ## Rules that apply to every shape
 
@@ -303,3 +321,19 @@ they say yes.
 The third was banned in August on AE feedback and **un-banned by explicit decision**,
 because it appears in the sales team's own live email. Kept for the record so the
 reversal is visible.
+
+## Closer variants (code picks one)
+
+The last line of email 3, and the last thing a prospect hears from the sequence. Warm,
+short, no ask, no new information.
+
+- Looking forward to chatting!
+- Either way, hope the season goes well.
+- Would be great to connect.
+- Either way, good luck with the run.
+
+**Budget: 9 words maximum.** The longest close (3A) is 21 words and the cap is 30, so a
+10-word closer pushed a real email to 32. Keep every variant at or under 9.
+
+**No presumption.** "Looking forward to chatting!" is warm; "Speak Tuesday" would assume a
+yes nobody gave.

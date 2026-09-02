@@ -351,6 +351,7 @@ def shape_openings(path: str = SHAPES_FILE) -> dict[str, list[str]]:
 
 OFFER_VARIANTS: list[str] = []
 CTA_VARIANTS: list[str] = []
+CLOSER_VARIANTS: list[str] = []
 
 
 def load_variants(label: str, path: str = SHAPES_FILE) -> list[str]:
@@ -599,7 +600,9 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
     # rather than described, because the exemplar is what the model actually follows.
     offer = pick_variant(c, OFFER_VARIANTS, "offer")
     cta = pick_variant(c, CTA_VARIANTS, "cta")
+    closer = pick_variant(c, CLOSER_VARIANTS, "closer")
     specs = {pos: s.replace("%OFFER%", offer).replace("%CTA%", cta)
+                   .replace("%CLOSER%", closer)
              for pos, s in specs.items()}
     # This sender's own approved intro lines, picked per contact. resolve_sender_intro
     # asserts every variant names its own sender, so variety here cannot reintroduce the
@@ -762,11 +765,17 @@ def main(argv=None) -> int:
     shapes = load_shapes()
     openings = shape_openings()
     global OFFER_VARIANTS, CTA_VARIANTS
+    global CLOSER_VARIANTS
     OFFER_VARIANTS, CTA_VARIANTS = load_variants("Offer"), load_variants("CTA")
+    CLOSER_VARIANTS = load_variants("Closer")
+    if not CLOSER_VARIANTS:
+        raise SystemExit("no Closer variants parsed; email 3 would end on a bare "
+                         "'closing the loop', which reads as a door shutting")
     if not OFFER_VARIANTS or not CTA_VARIANTS:
         raise SystemExit("no Offer/CTA variants parsed from config/message-shapes.md; "
                          "email 1's offer and ask would come out blank")
     print(f"variants: {len(OFFER_VARIANTS)} offer, {len(CTA_VARIANTS)} CTA, "
+          f"{len(CLOSER_VARIANTS)} closer, "
           f"{sum(len(v) for v in assemble.load_sender_intros().values())} sender intro")
     print("shapes: " + "; ".join(f"m{p}={','.join(sorted(shapes[p]))}"
                                  for p in POSITIONS) + " (assigned per contact)")
