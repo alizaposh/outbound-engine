@@ -710,6 +710,50 @@ nearest cleared name by event type, or name none — an email with no customer n
 strictly better than one with an invented customer. **The SDR still needs telling**, since
 email 2 was written around those logos.
 
+## Intake proven end to end on a real form submission — 2026-09-08
+A live Workflow Builder submission was read, parsed, checked for capacity, run through
+eligibility, and answered in-thread. **Three bugs found by doing it for real**, none of
+which the unit tests could have caught.
+
+### 1. The parser did not match what Workflow Builder actually posts
+It expected `Label: value` on one line. The tool posts the label **alone on a bolded
+line with the value beneath**, the label carries a parenthetical the author wrote for the
+rep (`*HubSpot List (URL)*`), and Slack wraps pasted URLs as `<https://...>`. Both
+layouts now parse, trailing parentheticals are dropped as human guidance rather than part
+of the field name, and Slack's bracketing is stripped.
+
+### 2. The leads file it built was unusable — every request would have failed
+`run_pipeline` wrote a CSV of `hs_object_id` only, because that is what the list
+membership endpoint returns. **`eligibility.py` requires an `email` column**, so every
+lead came back `ERROR: no email` and the whole request would have died at the first step
+on every submission. Emails are now fetched in a batched read, and members with no
+address are counted and reported rather than dropped.
+
+### 3. Guarantee 5 was written but not implemented
+"A list that yields no eligible leads is REPORTED, not silently dropped" was in the
+docstring, and the code let a zero-eligible list fall through to generation — which fails
+on an empty file, so the rep would have been told "failed at the generation step". Wrong
+and useless. It now stops after eligibility and posts the breakdown.
+
+**The real submission produced exactly that case**, which is the best possible test: list
+1764 resubmitted while already in flight, so 0 of 35 eligible. The rep sees
+
+```
+[engine:rejected] HubSpot list 1764: none of the 35 contacts are eligible right now.
+• 25 — in sequence
+• 9 — in HubSpot sequence
+• 1 — existing customer (has_group)
+Most of these are reversible — a contact already in a sequence becomes available when it finishes.
+```
+
+Every guard firing in concert, and an answer a rep can act on.
+
+**One honest imprecision left:** the capacity check uses LIST SIZE, before eligibility. A
+35-contact list reserves 35 of the 60-lead ceiling even if only 3 are eligible, so intake
+is pessimistic about capacity. It errs toward not starting campaigns, which is the safe
+direction while the domains are young, but a busy queue could hold requests that would
+barely consume anything.
+
 ## Intake wired to #outbound-email-requests, and a bug that would have killed it
 Channel `C0C074D2UFM`, private, bot is a member, `SLACK_REQUEST_CHANNEL` set.
 

@@ -112,41 +112,83 @@ def is_skippable(m: dict, me: str, my_bot_id: str | None) -> bool:
     return m.get("subtype") in SKIP_SUBTYPES
 
 
+def _norm_label(raw: str) -> str:
+    """A form label reduced to a comparable key.
+
+    Workflow Builder emits the label bolded, on its own line, and often with a
+    parenthetical hint the author wrote for the rep -- "*HubSpot List (URL)*". The
+    parenthetical is guidance for a human, not part of the field name, so it is dropped.
+    """
+    s = re.sub(r"[*_`]", "", raw or "").strip()
+    s = re.sub(r"\s*\([^)]*\)\s*$", "", s)        # trailing "(URL)", "(optional)"
+    s = s.rstrip(":").strip()
+    return re.sub(r"\s+", " ", s).lower()
+
+
+def _clean_value(raw: str) -> str:
+    """Strip Slack decoration from a submitted value.
+
+    Slack wraps bare URLs as <https://...> and link-with-text as <url|text>, so a pasted
+    HubSpot URL arrives bracketed. Left in place, the list-id patterns still match, but
+    the value shown back to the rep would carry the brackets.
+    """
+    s = (raw or "").strip()
+    s = re.sub(r"<([^|>]+)(?:\|[^>]*)?>", r"\1", s)   # <url> and <url|text>
+    s = re.sub(r"^[\s*_`]+|[\s*_`]+$", "", s)
+    return s
+
+
 def parse_form(text: str) -> dict | None:
     """Parse a Workflow Builder submission into {list, angle, notes}, or None.
 
-    Returns None when the message is not a form, so the caller can fall back to loose
-    parsing. Requires a recognised LIST label: a message with only an angle is not a
-    request, and guessing would queue a campaign against nothing.
+    Handles BOTH layouts, because the tool produces the first one and a hand-written
+    message tends to use the second:
+
+        *Label*            <- label alone on a line, value on the next line(s)
+        value
+
+        Label: value       <- label and value on one line
+
+    Returns None when no recognised LIST field is present, so the caller can fall back to
+    loose parsing. A submission with only an angle is not a request: guessing would queue
+    a campaign against nothing.
     """
-    fields: dict[str, str] = {}
+    known = {name: key for key, names in FORM_LABELS.items() for name in names}
+    fields: dict[str, list[str]] = {}
+    current: str | None = None
+
     for line in (text or "").splitlines():
-        # Workflow Builder commonly bolds labels, so the asterisks are stripped.
-        m = re.match(r"^\s*[*_]{0,2}\s*([A-Za-z][A-Za-z ]{1,24}?)\s*[*_]{0,2}\s*:\s*(.*\S)?\s*$",
-                     line)
-        if not m:
+        if not line.strip():
             continue
-        label = m.group(1).strip().lower()
-        # Slack bold puts the closing marker AFTER the colon -- "*Angle:* Halloween" --
-        # so the captured value starts with a stray "*". Strip markers from both ends.
-        # Any mix of markers and spaces at either end: "_Angle:_ _NYE packages_" leaves
-        # "_ _NYE packages_", which strip("*_") only partly cleans because it stops at
-        # the space.
-        value = re.sub(r"^[\s*_]+|[\s*_]+$", "", m.group(2) or "")
-        for key, names in FORM_LABELS.items():
-            if label in names:
-                fields[key] = value
-                break
+        # "Label: value" on one line.
+        m = re.match(r"^\s*[*_`]{0,3}\s*([A-Za-z][A-Za-z ()/]{1,30}?)\s*[*_`]{0,3}\s*:\s*(.*)$",
+                     line)
+        if m and _norm_label(m.group(1)) in known:
+            current = known[_norm_label(m.group(1))]
+            val = _clean_value(m.group(2))
+            fields.setdefault(current, [])
+            if val:
+                fields[current].append(val)
+            continue
+        # A bolded label alone on its own line; the value follows.
+        bare = _norm_label(line)
+        if bare in known and not re.search(r"[a-z0-9]\s*:\s*\S", line, re.I):
+            current = known[bare]
+            fields.setdefault(current, [])
+            continue
+        if current:
+            fields[current].append(_clean_value(line))
+
     if "list" not in fields:
         return None
-    list_id, _ = parse_request(fields["list"])
+    list_id, _ = parse_request(" ".join(fields["list"]))
     if not list_id:
         return None
-    angle = fields.get("angle", "")
+    angle = " ".join(fields.get("angle", [])).strip()
     if angle.lower() in ("none", "n/a", "-", ""):
         angle = ""
     return {"list_id": list_id, "angle": angle[:ANGLE_MAX],
-            "notes": fields.get("notes", ""), "form": True}
+            "notes": " ".join(fields.get("notes", [])).strip(), "form": True}
 
 
 def parse_request(text: str) -> tuple[str | None, str]:
@@ -293,18 +335,45 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
     tab = f"Intake-{list_id}-{stamp}"
 
     from eligibility import env_token
+    tok = env_token()
     ids, after = [], None
     while True:
         u = (f"https://api.hubapi.com/crm/v3/lists/{list_id}/memberships?limit=100"
              + (f"&after={after}" if after else ""))
-        req = urllib.request.Request(u, headers={"Authorization": f"Bearer {env_token()}"})
+        req = urllib.request.Request(u, headers={"Authorization": f"Bearer {tok}"})
         with urllib.request.urlopen(req, timeout=30) as r:
             d = json.loads(r.read())
         ids += [m["recordId"] for m in d.get("results", [])]
         after = (d.get("paging") or {}).get("next", {}).get("after")
         if not after:
             break
-    leads.write_text("hs_object_id\n" + "\n".join(ids) + "\n", encoding="utf-8")
+
+    # The membership endpoint returns record IDS ONLY, and eligibility.py requires an
+    # `email` column -- without it every lead comes back "ERROR: no email" and the whole
+    # request fails silently at the first step. Fetch the addresses here, batched.
+    pairs = []
+    for i in range(0, len(ids), 100):
+        chunk = ids[i:i + 100]
+        body = {"inputs": [{"id": x} for x in chunk], "properties": ["email"]}
+        req = urllib.request.Request(
+            "https://api.hubapi.com/crm/v3/objects/contacts/batch/read",
+            method="POST", data=json.dumps(body).encode(),
+            headers={"Authorization": f"Bearer {tok}",
+                     "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            got = json.loads(r.read())
+        for res in got.get("results", []):
+            email = (res.get("properties") or {}).get("email") or ""
+            if email.strip():
+                pairs.append((res["id"], email.strip()))
+    import csv as _csv
+    with leads.open("w", newline="", encoding="utf-8") as fh:
+        w = _csv.writer(fh)
+        w.writerow(["hs_object_id", "email"])
+        w.writerows(pairs)
+    if len(pairs) < len(ids):
+        print(f"    note: {len(ids) - len(pairs)} of {len(ids)} list member(s) have no "
+              f"email address and cannot be processed")
 
     steps = [
         ("eligibility", [PY, str(ROOT / "scripts/eligibility.py"), "--leads", str(leads),
@@ -315,7 +384,8 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
         ("export", [PY, str(ROOT / "scripts/export_review.py"), "--csv", str(gen),
                     "--mailbox", mailbox, "--tab", tab]),
     ]
-    out = {"tab": tab, "leads": len(ids), "steps": {}}
+    out = {"tab": tab, "leads": len(ids), "steps": {}, "eligible": None,
+           "exclusions": {}}
     if not apply_changes:
         out["steps"] = {n: "would run" for n, _ in steps}
         return out
@@ -325,6 +395,30 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
         out[f"{name}_output"] = ((p.stdout or "") + (p.stderr or ""))[-1500:]
         if p.returncode != 0:
             break
+        if name == "eligibility":
+            # Guarantee 5. Without this, a list where nobody is eligible falls through to
+            # generation, which fails on an empty file, and the rep is told "failed at
+            # generation" -- which is both wrong and useless. Observed on a real
+            # resubmission of a list already in flight: 35 members, 0 eligible.
+            import csv as _csv
+            rows = list(_csv.DictReader(elig.open(encoding="utf-8")))
+            keep = [r for r in rows if (r.get("decision") or "") == "ELIGIBLE"]
+            out["eligible"] = len(keep)
+            counts: dict[str, int] = {}
+            for r in rows:
+                if (r.get("decision") or "") != "ELIGIBLE":
+                    reason = r.get("reason") or "(no reason)"
+                    counts[reason] = counts.get(reason, 0) + 1
+            out["exclusions"] = counts
+            if not keep:
+                out["steps"]["generation"] = "skipped"
+                out["steps"]["export"] = "skipped"
+                return out
+            # Generation reads the ELIGIBLE-only rows.
+            with elig.open("w", newline="", encoding="utf-8") as fh:
+                w = _csv.DictWriter(fh, fieldnames=list(rows[0]))
+                w.writeheader()
+                w.writerows(keep)
     return out
 
 
@@ -421,6 +515,21 @@ def main(argv=None) -> int:
             continue
 
         res = run_pipeline(list_id, brief, a.mailbox, a.apply, angle=angle)
+        if res.get("eligible") == 0:
+            # Guarantee 5: say WHY, per reason. "Nothing happened" is the worst possible
+            # answer to a request, and the reasons are usually actionable -- already in a
+            # sequence, already a customer, opted out.
+            lines = "\n".join(f"• {n} — {r}" for r, n in
+                               sorted(res["exclusions"].items(), key=lambda x: -x[1]))
+            print(f"    0 of {res['leads']} eligible; reporting the reasons")
+            print("    " + sl.reply(channel, ts,
+                  f"{TAG_REJECTED} HubSpot list {list_id}: none of the "
+                  f"{res['leads']} contacts are eligible right now, so nothing was "
+                  f"drafted.\n{lines}\n"
+                  f"Most of these are reversible — a contact already in a sequence "
+                  f"becomes available when it finishes."))
+            rejected += 1
+            continue
         failed = [k for k, v in res["steps"].items() if v == "FAILED"]
         if failed:
             print(f"    pipeline FAILED at {failed[0]}")

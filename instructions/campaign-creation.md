@@ -159,13 +159,25 @@ fields, and the labels matter because they are parsed:
 
 | Field label | Required | Maps to |
 |---|---|---|
-| `HubSpot list` | yes | the audience. A URL, `list 1764`, or a bare id |
+| `HubSpot list` | yes | the audience. Reps paste the **URL** — no need to find the id |
 | `Angle` | no | `run_generation.py --angle`. Free text, capped at 400 chars. `none` is fine |
 | `Notes` | no | carried for the reviewer, not sent to the model |
 
-Synonyms are accepted (`Audience`, `Campaign angle`, `Theme`, `Copy direction`), and
-Slack's bold/italic markers around labels and values are stripped. **Free-text messages
-still work** as a fallback, but the form is what keeps submissions mappable.
+**Both Workflow Builder layouts parse**, which matters because the tool produces the
+first one:
+
+```
+*HubSpot List (URL)*                   *or*     HubSpot list: <url>
+<https://.../objectLists/1764/filters>          Angle: Halloween
+*Angle*
+Halloween is coming up
+```
+
+Labels may sit alone on a bolded line with the value beneath, or share a line after a
+colon. A trailing parenthetical in the label is ignored (`HubSpot List (URL)` → `hubspot
+list`) since it is guidance for the rep, not part of the field name. Slack's `<url>`
+bracketing and bold/italic markers are stripped. Synonyms are accepted (`Audience`,
+`Campaign angle`, `Theme`, `Copy direction`).
 
 A number inside a sentence deliberately does NOT parse as a list — "we did this in 2026"
 must not queue a campaign against list 2026. And a message with an `Angle` but no list is
