@@ -74,6 +74,56 @@ LIST_PATTERNS = (
 )
 
 
+# Canonical form labels, produced by a Slack Workflow Builder form. Parsed strictly so
+# a rep's submission maps to the prompt the same way every time -- free text is accepted
+# as a fallback, but the form is what keeps it uniform.
+FORM_LABELS = {
+    "list": ("hubspot list", "list", "hubspot list url", "audience"),
+    "angle": ("angle", "campaign angle", "theme", "messaging angle", "copy direction"),
+    "notes": ("notes", "context", "anything else"),
+}
+# The angle reaches the generation prompt, so it is capped. A rep pasting three
+# paragraphs would crowd out the rulebook, and a topic hint does not need paragraphs.
+ANGLE_MAX = 400
+
+
+def parse_form(text: str) -> dict | None:
+    """Parse a Workflow Builder submission into {list, angle, notes}, or None.
+
+    Returns None when the message is not a form, so the caller can fall back to loose
+    parsing. Requires a recognised LIST label: a message with only an angle is not a
+    request, and guessing would queue a campaign against nothing.
+    """
+    fields: dict[str, str] = {}
+    for line in (text or "").splitlines():
+        # Workflow Builder commonly bolds labels, so the asterisks are stripped.
+        m = re.match(r"^\s*[*_]{0,2}\s*([A-Za-z][A-Za-z ]{1,24}?)\s*[*_]{0,2}\s*:\s*(.*\S)?\s*$",
+                     line)
+        if not m:
+            continue
+        label = m.group(1).strip().lower()
+        # Slack bold puts the closing marker AFTER the colon -- "*Angle:* Halloween" --
+        # so the captured value starts with a stray "*". Strip markers from both ends.
+        # Any mix of markers and spaces at either end: "_Angle:_ _NYE packages_" leaves
+        # "_ _NYE packages_", which strip("*_") only partly cleans because it stops at
+        # the space.
+        value = re.sub(r"^[\s*_]+|[\s*_]+$", "", m.group(2) or "")
+        for key, names in FORM_LABELS.items():
+            if label in names:
+                fields[key] = value
+                break
+    if "list" not in fields:
+        return None
+    list_id, _ = parse_request(fields["list"])
+    if not list_id:
+        return None
+    angle = fields.get("angle", "")
+    if angle.lower() in ("none", "n/a", "-", ""):
+        angle = ""
+    return {"list_id": list_id, "angle": angle[:ANGLE_MAX],
+            "notes": fields.get("notes", ""), "form": True}
+
+
 def parse_request(text: str) -> tuple[str | None, str]:
     """(hubspot list id, brief) from a Slack message.
 
@@ -204,7 +254,8 @@ def list_size(list_id: str) -> int:
     return int((d.get("list") or {}).get("size") or 0)
 
 
-def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool) -> dict:
+def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
+                 angle: str = "") -> dict:
     """eligibility -> generation -> export. Each step is the existing script, run as a
     subprocess so its own guarantees and refusals stay intact rather than being
     re-implemented here."""
@@ -234,7 +285,8 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool) ->
         ("eligibility", [PY, str(ROOT / "scripts/eligibility.py"), "--leads", str(leads),
                          "--out", str(elig), "--sender", mailbox.split(".")[0]]),
         ("generation", [PY, str(ROOT / "scripts/run_generation.py"), "--contacts",
-                        str(elig), "--mailbox", mailbox, "--out", str(gen), "--quiet"]),
+                        str(elig), "--mailbox", mailbox, "--out", str(gen), "--quiet"]
+                       + (["--angle", angle] if angle else [])),
         ("export", [PY, str(ROOT / "scripts/export_review.py"), "--csv", str(gen),
                     "--mailbox", mailbox, "--tab", tab]),
     ]
@@ -299,14 +351,19 @@ def main(argv=None) -> int:
         if status == TAG_ACCEPTED or status == TAG_REJECTED:
             continue                              # guarantee 3
 
-        list_id, brief = parse_request(text)
+        form = parse_form(text)
+        if form:
+            list_id, brief, angle = form["list_id"], form["notes"], form["angle"]
+        else:
+            list_id, brief = parse_request(text)
+            angle = ""
         who = m.get("user", "?")
         if not list_id:
             print(f"  {ts} <@{who}>: no HubSpot list found; rejecting")
             print("    " + sl.reply(channel, ts,
                   f"{TAG_REJECTED} I could not find a HubSpot list in that message.\n"
-                  f"Post the list URL (or `list 1764`) plus a one-line brief, and I will "
-                  f"pick it up on the next run."))
+                  f"Use the campaign request form, or post at minimum "
+                  f"`HubSpot list: <url>`. I will pick it up on the next run."))
             rejected += 1
             continue
 
@@ -321,7 +378,8 @@ def main(argv=None) -> int:
             continue
 
         ok, why = decide_capacity(flight, size, ceiling)
-        print(f"  {ts} list {list_id} ({size} contacts) brief={brief[:50]!r}")
+        print(f"  {ts} list {list_id} ({size} contacts) "
+              f"{'form' if form else 'free text'} angle={angle[:60]!r}")
         print(f"    capacity: {why}")
         if not ok:
             queued += 1
@@ -334,7 +392,7 @@ def main(argv=None) -> int:
                 print("    still queued; not repeating the reply")
             continue
 
-        res = run_pipeline(list_id, brief, a.mailbox, a.apply)
+        res = run_pipeline(list_id, brief, a.mailbox, a.apply, angle=angle)
         failed = [k for k, v in res["steps"].items() if v == "FAILED"]
         if failed:
             print(f"    pipeline FAILED at {failed[0]}")
@@ -347,7 +405,8 @@ def main(argv=None) -> int:
         handled += 1
         print(f"    pipeline: {res['steps']}, review tab {res['tab']}")
         print("    " + sl.reply(channel, ts,
-              f"{TAG_ACCEPTED} HubSpot list {list_id}, {size} contacts — copy drafted.\n"
+              f"{TAG_ACCEPTED} HubSpot list {list_id}, {size} contacts — copy drafted"
+              + (f" with your angle: _{angle}_" if angle else " (no angle given)") + ".\n"
               f"Review tab *{res['tab']}* in the generation review sheet.\n"
               f"Reply here with approval and I will build the campaign. "
               f"**Nothing sends until a human launches it.**"))

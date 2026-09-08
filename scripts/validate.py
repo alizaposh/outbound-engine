@@ -505,6 +505,42 @@ CONTEXTUAL_FABRICATED = ("Complex",)
 CLAIM_CONTEXT = r"(work(ing)? with|run(ning)? ticketing for|organizers like|clients?|customers?|power(ing)?|partners? with|like)"
 
 
+# Comparative and superlative claims about price or market position. Unsupportable by
+# anything in positioning.md, and until 2026-09-08 nothing checked for them: the only
+# thing stopping "we are the cheapest platform" was the model choosing not to write it.
+# That became too thin once reps could pass a campaign angle into the prompt.
+#
+# Deliberately NARROW. A bare "best" is approved copy -- email 2 says "this is usually
+# the best time of year for us to get a strong offer across" -- so only "best" attached
+# to the product is banned.
+SUPERLATIVE_CLAIMS = (
+    re.compile(r"\b(cheapest|least expensive)\b", re.I),
+    re.compile(r"\bcheaper than\b", re.I),
+    re.compile(r"\blowest\b[^.]{0,20}\b(fee|fees|price|prices|cost|costs|rate|rates)\b", re.I),
+    re.compile(r"\bbest\s+(ticketing|platform|option|choice|value|solution)\b", re.I),
+    re.compile(r"(?:\B#1\b|\bnumber one\b)", re.I),
+    re.compile(r"\b(more|less)\s+expensive\s+than\b", re.I),
+)
+
+
+def check_superlatives(subject: str, body: str) -> list[Finding]:
+    """FAIL comparative or superlative claims about price or market position.
+
+    Nothing in config/positioning.md supports them, and they are the shape a
+    rep-supplied campaign angle is most likely to push copy towards -- "tell them we're
+    cheaper". The offer's existence is sayable; its superiority is not.
+    """
+    out = []
+    hay = f"{subject}\n{body}"
+    for rx in SUPERLATIVE_CLAIMS:
+        m = rx.search(hay)
+        if m:
+            out.append(Finding("superlative_claim", FAIL,
+                f"unsupportable comparative claim {m.group(0)!r}; nothing in "
+                f"positioning.md supports a price or market-position comparison"))
+    return out
+
+
 def check_fabricated_customers(subject: str, body: str) -> list[Finding]:
     """FAIL any reference to a company that is not a customer.
 
@@ -645,6 +681,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_category_leak(subject, body)
     res.findings += check_case_studies(subject, body, allowed_names=allowed_names)
     res.findings += check_fabricated_customers(subject, body)
+    res.findings += check_superlatives(subject, body)
     res.findings += check_no_invented_platform(subject, body,
                                                competitor_known=competitor_known)
     res.findings += check_commercial_terms(subject, body)
