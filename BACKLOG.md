@@ -710,6 +710,39 @@ nearest cleared name by event type, or name none — an email with no customer n
 strictly better than one with an invented customer. **The SDR still needs telling**, since
 email 2 was written around those logos.
 
+## GAP CLOSED 2026-09-08: nothing moved a lead OFF `in_sequence`
+`scripts/close_sequences.py`. **This one would have burned the first list.**
+
+`create_campaign.py` writes `outbound_status = in_sequence` at enrolment, and
+`in_sequence` is a **soft exclusion** in `config/pre-send-defaults.md`. Nothing wrote the
+next state. So every contact ever enrolled would sit at `in_sequence` **forever and be
+permanently unreachable by any future campaign** — the first campaign would quietly
+consume its own 25 leads and every later one would skip them as "in sequence".
+
+`no_response` exists in the `outbound_status` options and is documented as covering "the
+project step-7 no-response write-back". Nothing wrote it.
+
+**The transition:** Smartlead lead status `COMPLETED` → HubSpot `outbound_status =
+no_response`, and **only from `in_sequence`**.
+
+**Why that restriction is the whole safety of it.** A lead who REPLIED is also `COMPLETED`
+in Smartlead. Without the `in_sequence`-only rule, a lifecycle tidy-up that knows nothing
+about replies would overwrite `replied`, `meeting_booked`, `opted_out`, `bounced` and
+`disqualified` — erasing the most valuable states in the system. Everything except
+`in_sequence` is left alone.
+
+**Only `COMPLETED` counts**, never `BLOCKED`: an unsubscribed or bounced lead reaches
+`BLOCKED`, and those belong to the unsubscribe and bounce syncs, which write stronger
+states.
+
+**Timing.** With delays [0, 3, 4] the first campaign's leads start completing around
+2026-09-15, so this was built before it could bite rather than after. Live dry run today:
+25 leads, 4 `INPROGRESS` and 21 `STARTED`, nothing to close yet — correct.
+
+**Verified:** 17 pure cases covering every status in both systems, plus an injected run
+against three real enrolled contacts showing the `in_sequence -> no_response` transition
+and an unmatched address. Wired into the morning heartbeat slot.
+
 ## FIRST REAL CAMPAIGN — created DRAFTED 2026-09-08, campaign 3921030 3921033
 `2026-09_list1764_ticketing-switch`. **25 leads**, sender Carl across all four domains,
 production delays [0, 3, 4], `DRAFTED` and not launched.

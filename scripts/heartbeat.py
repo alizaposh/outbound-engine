@@ -54,12 +54,14 @@ PY = sys.executable
 # so it is the expensive one and runs once a day; the reply check is cheap (it only pulls
 # message history for leads already marked replied) and runs every slot.
 SLOTS = {
-    "morning":   ["reply_check", "sync_unsubscribes", "sync_bounces"],
+    "morning":   ["reply_check", "sync_unsubscribes", "sync_bounces",
+                   "close_sequences"],
     "midday":    ["reply_check"],
     "afternoon": ["reply_check"],
 }
 JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sync",
-              "sync_bounces": "Bounce sync"}
+              "sync_bounces": "Bounce sync",
+              "close_sequences": "Sequence close-out"}
 
 # Pulled out of each job's stdout for the Slack summary. Best-effort by design: if a
 # pattern stops matching, the message gets less pretty, never wrong -- the raw tail is
@@ -71,6 +73,8 @@ SUMMARY_PATTERNS = [
     re.compile(r"^no unsubscribes found.*$", re.M),
     re.compile(r"^\d+ recorded, \d+ skipped.*$", re.M),      # sync_bounces
     re.compile(r"^no bounced rows found.*$", re.M),
+    re.compile(r"^\d+ closed, \d+ already current.*$", re.M),   # close_sequences
+    re.compile(r"^no finished sequences.*$", re.M),
 ]
 
 
@@ -105,6 +109,7 @@ ATTENTION_COUNTS = [
     re.compile(r"(\d+) to suppress"),            # sync: suppressions to write
     re.compile(r"(\d+) unmatched"),              # sync: unsubscribes HubSpot cannot record
     re.compile(r"(\d+) recorded"),               # bounces newly written
+    re.compile(r"(\d+) unmatched"),              # a finished lead with no contact
 ]
 
 
