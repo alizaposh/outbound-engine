@@ -902,6 +902,53 @@ states.
 against three real enrolled contacts showing the `in_sequence -> no_response` transition
 and an unmatched address. Wired into the morning heartbeat slot.
 
+## CONFIRMED GAP 2026-09-08: 25 emails sent, ZERO HubSpot activity logged
+Asked what enrolment writes back, and whether last-activity dates were being missed. The
+answer surfaced a live problem on campaign 3921033.
+
+### What enrolment writes — three properties, no dates
+`create_campaign.py.record_enrolment` writes exactly:
+`outbound_last_campaign_id`, `outbound_status=in_sequence`, `outbound_sender` (write-once).
+
+### Why no last-activity date: we CANNOT write one
+All four native activity fields are **`readOnly=True`** in HubSpot —
+`notes_last_contacted`, `notes_last_updated`, `hs_last_sales_activity_timestamp`,
+`hs_latest_sequence_enrolled_date`. They are not fields the engine declined to populate;
+they are fields only HubSpot may set. It moves them when an **email activity** is logged
+against the contact, which is what Smartlead's HubSpot integration does.
+
+**And writing them would be wrong even if we could.** Eligibility gate 9 READS those
+timestamps for recency, so writing them at enrolment would feed our own gate fabricated
+data and make every contact look freshly touched by a rep.
+
+### The confirmed problem: activity logging is not working
+**25 of 25 emails sent, and every one of those contacts has `notes_last_contacted`,
+`hs_last_sales_activity_timestamp`, `notes_last_updated`, `num_contacted_notes` and
+`hs_email_last_send_date` all set to `None`.**
+
+So a rep opening any of these 25 contacts sees **no evidence they were ever emailed**. The
+only trace is our own `outbound_status=in_sequence`, which no rep is looking at. That is
+exactly the double-touch risk raised: our engine will not re-enrol them (gate 2), but a
+rep has no reason to know not to.
+
+This is the manual UI gate in `instructions/campaign-creation.md`: *"HubSpot activity
+logging ON — no API endpoint exists. Without it the campaign logs NOTHING to HubSpot,
+silently."* Either it was not enabled on 3921033, or the integration connection is
+unhealthy — `config/smartlead-defaults.md` notes activity only logs "when the send
+actually flows through a healthy integration connection", which is why the documented
+verification gate exists.
+
+**The documented verification gate was never run**, and it would have caught this before
+25 sends: *"after enabling, confirm on a test contact that a Smartlead send appears as an
+EMAIL activity AND moved native Last Contacted (not only Last Activity Date). Only then
+release the full lead set."*
+
+### A reporting error of mine, recorded because it nearly buried the finding
+My first check printed "native Last Contacted moved to today for 25 of 25" — the opposite
+of the truth. I substituted an em-dash placeholder for empty values and then compared it
+to a date string, and `"—" >= "2026-09-08"` is True in Python. **Compare raw values, never
+display placeholders.**
+
 ## FIRST REAL CAMPAIGN — created DRAFTED 2026-09-08, campaign 3921030 3921033
 `2026-09_list1764_ticketing-switch`. **25 leads**, sender Carl across all four domains,
 production delays [0, 3, 4], `DRAFTED` and not launched.
