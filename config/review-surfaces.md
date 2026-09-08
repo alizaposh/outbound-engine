@@ -10,7 +10,7 @@ One row per reply that needs a human decision, appended by the reply-check workf
 
 ```
 REPLY_REVIEW_SHEET_ID: 1VznhnN3cKr7mzJySPLcPqcbLAow2ivRJI1Abwsknyt0
-REPLY_REVIEW_TAB: Untitled
+REPLY_REVIEW_TAB: Replies
 ```
 
 **Columns (15, in this order — the header row is authoritative and must not be
@@ -116,6 +116,18 @@ where both messages carried one `stats_id`.
 **`sent_at` reading `sending …`** means a run died between claiming the row and getting a
 response. **Do not simply clear it**: check the thread in Smartlead first, because the
 reply may or may not have gone out.
+
+## Tab renamed 2026-09-08: `Untitled` -> `Replies`
+
+The tab was literally called `Untitled`, which worked only because every script reads the
+name from `REPLY_REVIEW_TAB` here rather than hardcoding it. It was renamed for legibility:
+with one tab called `Untitled`, adding a second leaves no way to tell which is the queue.
+
+**Nothing else needed changing**, which is the point of the config indirection — grep
+confirmed no script contained the old name. Verified after the rename that the 17-column
+header and, importantly, **the data validation on the `decision` column both survived**.
+That dropdown is the human's only control in this sheet, and losing it silently would turn
+free-text typos into decisions the engine cannot read.
 
 ## When does a row actually appear? (three gates, 2026-09-08)
 
