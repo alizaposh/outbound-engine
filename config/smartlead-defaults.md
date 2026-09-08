@@ -27,6 +27,14 @@ start_hour: "09:00"
 end_hour: "17:00"
 min_time_btw_emails: 10             # minutes, spreads sends inside the window
 max_new_leads_per_day: 15           # per mailbox, matching the Smartlead account setting
+max_leads_in_flight: 60             # INTAKE ceiling for scripts/slack_intake.py. Counts
+                                    # leads inside ACTIVE/DRAFTED/PAUSED campaigns, not
+                                    # sends per day: a lead occupies capacity for about
+                                    # the length of the sequence (~7 days at [0,3,4]), so
+                                    # a per-day ceiling would let a week of campaigns all
+                                    # start on one morning. Deliberately well under the
+                                    # 180/day the mailboxes could carry, because the
+                                    # domains are weeks old. Raise it as they age.
 seq_delay_days: [0, 3, 4]           # email 1 immediately, 2 after 3 days, 3 after 4 more
 stop_lead_settings: REPLY_TO_AN_EMAIL   # stop-on-reply; already the Smartlead default
 track_settings: [DONT_EMAIL_OPEN, DONT_LINK_CLICK]   # BOTH off. Open tracking off

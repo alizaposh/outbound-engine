@@ -710,6 +710,50 @@ nearest cleared name by event type, or name none — an email with no customer n
 strictly better than one with an invented customer. **The SDR still needs telling**, since
 email 2 was written around those logos.
 
+## Slack intake — BUILT 2026-09-08 (`scripts/slack_intake.py`)
+The last unbuilt piece of the v1 architecture. A rep posts a HubSpot list plus a one-line
+brief in the request channel; the engine runs eligibility, generates, exports a review tab,
+and replies in-thread with the tab name.
+
+**HubSpot lists as the submission format, decided rather than assumed.** Eligibility
+consumes list membership by `hs_object_id`, HubSpot is the source of truth, and contact
+creation is off by standing decision — so a pasted email address with no HubSpot record
+could not be processed at all, which would be a confusing dead end for a rep who just
+pasted 40 addresses.
+
+**It stops before sending and cannot be made not to.** Golden rule 1 plus two per-campaign
+settings with no API. The automated span ends at a review link; a human approves,
+`create_campaign.py` drafts, a human launches.
+
+**State lives in the Slack thread.** No intake database: a handled request carries an
+`[engine:accepted|queued|rejected]` tag in its own thread, and that tag IS the dedup
+store. Same rule as the rest of the engine — what it must remember lives where a human can
+read it — and it means the audit trail is the conversation. A queued request already
+acknowledged is not re-acknowledged every morning.
+
+**The capacity ceiling counts leads IN FLIGHT, not sends per day** (`max_leads_in_flight`,
+60). A lead occupies capacity for roughly the sequence length, so a per-day ceiling would
+let a week of campaigns start on one morning. And **Smartlead already paces sends at
+15/mailbox/day**, so this is not flood protection — it decides whether to START a campaign,
+which matters while the domains are weeks old. 60 against 180/day of mailbox capacity is
+deliberately conservative.
+
+**Two prerequisites, both outside the script and both still open:**
+- Slack scopes `channels:history` + `channels:read`; the bot holds only `chat:write`, so
+  intake exits 2 with a one-line message naming the fix. Verified.
+- `SLACK_REQUEST_CHANNEL` in `.env`, bot invited. Not defaulted to the review channel on
+  purpose.
+
+**Not wired into the heartbeat yet**, on purpose: it runs generation, which is slow and
+costs model calls. Run it by hand a few times, confirm the replies read well to a rep,
+then add it — the same graduation the write jobs used.
+
+**Verified:** 15 pure cases covering the paste shapes reps actually use, the capacity rule
+at its boundaries, and the thread-tag dedup including that the LATEST tag wins so
+queued→accepted is respected. One test expectation contradicted its own label ("a year is
+not a list id" while asserting it returns 2026) — the code was right and the expectation
+was wrong; a number inside a sentence must not queue a campaign against list 2026.
+
 ## GAP CLOSED 2026-09-08: nothing moved a lead OFF `in_sequence`
 `scripts/close_sequences.py`. **This one would have burned the first list.**
 

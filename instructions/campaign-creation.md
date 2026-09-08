@@ -138,3 +138,61 @@ is visible:
   read back and deleted real campaigns.
 - ~~Lock the campaign-naming convention and default delays.~~ Locked in
   `config/smartlead-defaults.md`; that file has no `[FILL IN]` markers left.
+
+---
+
+## Slack intake: a rep submits a HubSpot list (built 2026-09-08)
+
+`scripts/slack_intake.py`. Implements the request channel decided in `CLAUDE.md`.
+
+```bash
+python scripts/slack_intake.py --self-test     # parsing + capacity rules, no API
+python scripts/slack_intake.py                 # DRY RUN: reads, decides, posts nothing
+python scripts/slack_intake.py --apply         # posts replies and runs the pipeline
+```
+
+**The rep posts a HubSpot list plus a one-line brief.** A URL, `list 1764`, or the bare id
+on its own line all parse. A number inside a sentence deliberately does NOT — "we did this
+in 2026" must not queue a campaign against list 2026.
+
+**Why a HubSpot list and not pasted emails.** Eligibility consumes list membership by
+`hs_object_id`, HubSpot is the source of truth, and contact creation is off by standing
+decision — so a pasted address with no HubSpot record could not be processed at all. That
+would be a confusing dead end for a rep who just pasted 40 emails.
+
+### What it does, and where it stops
+1. Reads the request channel, parses the list and brief.
+2. **Capacity check** against `max_leads_in_flight` in `config/smartlead-defaults.md`
+   (60 today). Over the ceiling → replies `[engine:queued]` and picks it up on a later run.
+3. Under the ceiling → eligibility → generation → export a review tab → replies
+   `[engine:accepted]` with the tab name.
+4. **It stops there.** A human approves, `create_campaign.py` builds a DRAFTED campaign,
+   and a human does the two UI toggles and launches. Golden rule 1 and two API-less
+   settings make this unavoidable, which is the right outcome rather than a limitation.
+
+### The ceiling counts leads IN FLIGHT, not sends per day
+A lead occupies capacity for about the length of the sequence (~7 days at `[0, 3, 4]`), so
+a per-day ceiling would let a week of campaigns all start on one morning. And note what it
+is FOR: **Smartlead already paces sends at 15/mailbox/day**, so this is not flood
+protection — it decides whether to START a campaign, which matters while the domains are
+weeks old. Raise it as they age; 60 against a 180/day mailbox capacity is deliberately
+conservative.
+
+### State lives in the Slack thread
+There is no intake database. A request the engine has handled carries an `[engine:...]`
+tag in its own thread, and that tag IS the dedup store — the same rule as everywhere else
+in this engine: what it needs to remember lives somewhere a human can open and read. It
+also means the audit trail is the conversation, and a queued request that has already been
+acknowledged is not re-acknowledged every morning.
+
+### Prerequisites, both outside the script
+- **Slack scopes `channels:history` and `channels:read`.** The bot holds only `chat:write`,
+  so intake fails with a one-line message naming the fix until they are added and the app
+  re-installed. Note this grants the bot read access to that channel's content.
+- **`SLACK_REQUEST_CHANNEL` in `.env`**, and the bot invited. Deliberately not defaulted to
+  the review channel: requests and approval traffic should not share one.
+
+### Not yet in the heartbeat, on purpose
+Intake runs generation, which is slow and costs model calls. Run it by hand a few times
+first, confirm the replies read well to a rep, then add it to the morning slot — the same
+graduation pattern the write jobs used.
