@@ -116,3 +116,27 @@ where both messages carried one `stats_id`.
 **`sent_at` reading `sending …`** means a run died between claiming the row and getting a
 response. **Do not simply clear it**: check the thread in Smartlead first, because the
 reply may or may not have gone out.
+
+## When does a row actually appear? (three gates, 2026-09-08)
+
+**Sends never appear in this sheet.** It is a queue of replies needing a human decision,
+not a send log. Sends live in Smartlead, on the HubSpot contact timeline if the
+per-campaign activity-logging toggle is on, and as `outbound_last_campaign_id` +
+`outbound_status=in_sequence` on the contact.
+
+A reply row appears only when **all three** are true:
+
+1. **A campaign is live and someone replies.**
+2. **`reply_check.py` runs.** The three Claude Desktop routines are currently **PAUSED**
+   (`instructions/scheduled-tasks.md`).
+3. **It runs with `--apply`.** The task prompts deliberately omit it, so the routines are
+   dry-run. **Un-pausing alone will NOT populate this sheet** — graduating to `--apply` is
+   a separate, deliberate step with its own criteria in the scheduled-tasks file.
+
+**Only 8 of the 10 intents queue.** `out_of_office` and `automated_reply` never do
+(`NEVER_QUEUE`): they are not real replies and must not consume human attention.
+
+**The dry-run wording was fixed on 2026-09-08 because of exactly this confusion.** The
+summary said "1 queued for review" in dry run, which the heartbeat printed into Slack
+every weekday while the sheet stayed empty — a reliable way to conclude the queue is
+broken. It now reads "1 WOULD be queued (dry run, sheet unchanged)".

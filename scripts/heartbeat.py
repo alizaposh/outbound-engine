@@ -99,7 +99,9 @@ def run_job(name: str, apply_changes: bool) -> dict:
 # earlier version searched for "queued for review" and lit the amber light on a run that
 # said "0 queued for review". The colour is the whole signal, so it has to be exact.
 ATTENTION_COUNTS = [
-    re.compile(r"(\d+) queued for review"),      # reply_check: replies awaiting a human
+    # Matches both "queued for review" and the dry-run "WOULD be queued", so amber
+    # still lights when a dry run finds work waiting.
+    re.compile(r"(\d+) (?:queued for review|WOULD be queued)"),
     re.compile(r"(\d+) to suppress"),            # sync: suppressions to write
     re.compile(r"(\d+) unmatched"),              # sync: unsubscribes HubSpot cannot record
     re.compile(r"(\d+) recorded"),               # bounces newly written

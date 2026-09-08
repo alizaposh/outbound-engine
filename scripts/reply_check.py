@@ -901,7 +901,12 @@ def main(argv=None) -> int:
                     print("      queue: would append a row for human review")
                 queued += 1
 
-    print(f"\n{processed} reply(s) processed, {queued} queued for review, {skipped} skipped")
+    # "queued" vs "WOULD be queued" matters: the heartbeat prints this line into Slack
+    # every weekday, and the routines run WITHOUT --apply until they are graduated. A dry
+    # run reporting "1 queued for review" while the sheet stays empty is exactly how
+    # someone concludes the queue is broken.
+    verb = "queued for review" if a.apply else "WOULD be queued (dry run, sheet unchanged)"
+    print(f"\n{processed} reply(s) processed, {queued} {verb}, {skipped} skipped")
     print(f"{sl.calls} Smartlead calls, {hs.calls} HubSpot calls")
     if not a.apply:
         print("DRY RUN: nothing was written anywhere.")
