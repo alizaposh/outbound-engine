@@ -710,6 +710,37 @@ nearest cleared name by event type, or name none — an email with no customer n
 strictly better than one with an invented customer. **The SDR still needs telling**, since
 email 2 was written around those logos.
 
+## Intake wired to #outbound-email-requests, and a bug that would have killed it
+Channel `C0C074D2UFM`, private, bot is a member, `SLACK_REQUEST_CHANNEL` set.
+
+**Scope names differ for private channels, and this cost a round trip.**
+`channels:history` / `channels:read` cover PUBLIC channels only. A private channel needs
+**`groups:history` and `groups:read`**. The token now carries all four. Worth remembering
+before telling anyone which scopes to add.
+
+### The bug: a blanket bot filter would have ignored every form submission
+Intake skipped any message with a `bot_id` or a `subtype`, to avoid processing its own
+replies. **Slack Workflow Builder posts as an app, with `subtype: bot_message`** — so
+every real form submission would have been silently dropped and the form would never have
+worked at all.
+
+Now it skips only OUR OWN messages (matching `bot_id` from `auth.test`, or our user id)
+plus an explicit list of channel-noise subtypes.
+
+**The reason this was nearly invisible is worth recording.** The only test message
+available was one posted with our own bot token — which is skipped *correctly*, so the
+filter looked fine while being broken for the case that mattered. It was found by asking
+why a form-shaped message produced nothing, and fixed by extracting `is_skippable()` and
+testing it with a synthetic third-party app message. **A test that can only exercise the
+passing branch is not a test.**
+
+**Verified through the real code path** with a Workflow-Builder-shaped message: not
+skipped, list `1764` parsed, angle and notes extracted, capacity accepted.
+
+### Still outstanding
+The Workflow Builder form itself — there is no API to create one, so it is built in
+Slack's UI. Labels must be `HubSpot list` / `Angle` / `Notes`.
+
 ## Rep-supplied campaign angle + a Slack form — BUILT 2026-09-08
 A rep can now steer the copy from the request channel: a Halloween campaign, an NYE
 package push. `run_generation.py --angle`, threaded from the intake form.

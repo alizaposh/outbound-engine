@@ -86,6 +86,31 @@ FORM_LABELS = {
 # paragraphs would crowd out the rulebook, and a topic hint does not need paragraphs.
 ANGLE_MAX = 400
 
+# Message subtypes that are never a request. Deliberately an explicit list rather than
+# "any subtype": a Slack Workflow Builder form posts with subtype `bot_message`, so
+# skipping every subtype meant real form submissions were silently ignored and the form
+# could never have worked. Caught by testing the actual path 2026-09-08.
+SKIP_SUBTYPES = {
+    "channel_join", "channel_leave", "channel_topic", "channel_purpose", "channel_name",
+    "channel_archive", "channel_unarchive", "bot_add", "bot_remove", "pinned_item",
+    "message_changed", "message_deleted", "thread_broadcast", "reminder_add",
+}
+
+
+def is_skippable(m: dict, me: str, my_bot_id: str | None) -> bool:
+    """True if this message is ours or channel noise, so not a request.
+
+    Pulled out to be testable: a message posted by our own bot token cannot be used to
+    verify this, because it is correctly skipped -- which is exactly how the original
+    bug hid. A blanket bot filter dropped Workflow Builder submissions, and the only
+    test message available came from our own bot, so the filter looked fine.
+    """
+    if my_bot_id and m.get("bot_id") == my_bot_id:
+        return True
+    if m.get("user") and m.get("user") == me:
+        return True
+    return m.get("subtype") in SKIP_SUBTYPES
+
 
 def parse_form(text: str) -> dict | None:
     """Parse a Workflow Builder submission into {list, angle, notes}, or None.
@@ -333,7 +358,8 @@ def main(argv=None) -> int:
     cfg = load_defaults()
     ceiling = int(cfg.get("max_leads_in_flight", 60))
     sl = Slack(token, a.apply)
-    me = sl.call("auth.test")["user_id"]
+    who = sl.call("auth.test")
+    me, my_bot_id = who["user_id"], who.get("bot_id")
     print("APPLY: will post replies and run the pipeline" if a.apply
           else "DRY RUN: nothing posted, nothing generated.")
 
@@ -344,7 +370,9 @@ def main(argv=None) -> int:
     msgs = sl.history(channel, a.limit)
     handled = queued = rejected = 0
     for m in reversed(msgs):                      # oldest first, so queue order is fair
-        if m.get("subtype") or m.get("bot_id") or m.get("user") == me:
+        # Skip OUR OWN messages, not every app's. Workflow Builder is an app, so a
+        # blanket bot filter would drop exactly the submissions this exists to read.
+        if is_skippable(m, me, my_bot_id):
             continue
         ts, text = m["ts"], m.get("text") or ""
         status = engine_status(sl.replies(channel, ts), me)
@@ -450,6 +478,28 @@ def _self_test() -> int:
     check("over the ceiling queues", decide_capacity(50, 30, 60)[0], False)
     check("an empty account accepts", decide_capacity(0, 60, 60)[0], True)
     check("a single oversized list queues", decide_capacity(0, 500, 60)[0], False)
+
+    # The message filter. This is where the original bug lived: a blanket bot filter
+    # dropped Workflow Builder submissions, and it could not be caught with a test
+    # message from our own bot because that one is skipped correctly.
+    ME, MYBOT = "U_ENGINE", "B_ENGINE"
+    wf = {"bot_id": "B_WORKFLOW", "subtype": "bot_message",
+          "text": "HubSpot list: 1764"}
+    check("a Workflow Builder submission is NOT skipped",
+          is_skippable(wf, ME, MYBOT), False)
+    check("our own bot reply IS skipped",
+          is_skippable({"bot_id": MYBOT, "text": "[engine:accepted]"}, ME, MYBOT), True)
+    check("our own user message IS skipped",
+          is_skippable({"user": ME, "text": "hi"}, ME, MYBOT), True)
+    check("a human message is NOT skipped",
+          is_skippable({"user": "U_REP", "text": "HubSpot list: 1764"}, ME, MYBOT), False)
+    check("a join notice IS skipped",
+          is_skippable({"subtype": "channel_join", "text": "joined"}, ME, MYBOT), True)
+    check("an edited message IS skipped",
+          is_skippable({"subtype": "message_changed"}, ME, MYBOT), True)
+    check("a third-party app with no subtype is NOT skipped",
+          is_skippable({"bot_id": "B_OTHER", "text": "HubSpot list: 1764"}, ME, MYBOT),
+          False)
 
     # Guarantee 3 / 2: the thread reply is the store.
     bot = "U123"
