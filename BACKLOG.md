@@ -710,6 +710,56 @@ nearest cleared name by event type, or name none — an email with no customer n
 strictly better than one with an invented customer. **The SDR still needs telling**, since
 email 2 was written around those logos.
 
+## FIRST REAL CAMPAIGN — created DRAFTED 2026-09-08, campaign 3921030 3921033
+`2026-09_list1764_ticketing-switch`. **25 leads**, sender Carl across all four domains,
+production delays [0, 3, 4], `DRAFTED` and not launched.
+
+### Re-running eligibility caught 9 contacts that had become ineligible
+The approved Test12 copy covered 34 contacts. Re-checked against live HubSpot six days
+later: **25 eligible, 9 excluded as "in HubSpot sequence"**. Verified independently per
+contact — `hs_sequences_is_enrolled=true`, `active=1`, **all enrolled on 2026-09-04**, two
+days after generation. A rep put them in a HubSpot sequence.
+
+**Had the Sept 2 output been reused, those 9 would have received our cold sequence while
+actively in a rep's sequence.** Gate 8 exists for exactly that and it earned its place.
+**Re-run eligibility immediately before creating a campaign, never reuse an older run** —
+it is a snapshot, and this is the second time the data moved underneath it.
+
+### The approved copy lived only in the Sheet
+The scratchpad was cleared between sessions, so the generation CSV was gone and only
+pre-SDR-spec August drafts survived on disk. The campaign was rebuilt from the **Test12
+tab**, which is arguably the more correct source: the sheet is what a human approved and
+what a reviewer could have edited, while a local CSV can drift from it. `sender` and
+`mailbox` are not in the sheet by design (they are run parameters, not copy) and were
+re-attached explicitly.
+
+**Worth considering:** `create_campaign --csv` reads a local file, so **a reviewer's edits
+made in the Sheet would be silently ignored.** Not a problem today because no edits were
+made (Ranking and Feedback were both empty on all 34 rows), but building from the sheet
+should probably be the supported path rather than a recovery trick.
+
+### A transient failure worth hardening
+The first attempt created campaign 3921030, then the very next call —
+`POST /campaigns/{id}/settings` — returned **404 "Campaign not found"**. Smartlead returns
+the id before the campaign is readable. The failure path worked exactly as designed: the
+partial campaign was deleted, nothing was left half-configured, and the run exited non-zero.
+A retry succeeded as 3921033.
+
+**But that made campaign creation a coin flip**, so `create_campaign.py` now waits for the
+campaign to be readable (6 attempts, backing off) before configuring it.
+
+### Enrolment recorded, verified from HubSpot
+All 25 contacts: `outbound_status=in_sequence`, `outbound_sender=carl`,
+`outbound_last_campaign_id=3921033`. First real use of all three.
+
+### Manual steps before it can send
+1. HubSpot activity logging **ON**
+2. "Add unsubscribe message in all emails" **ON**, "Optimize Email Delivery" **OFF**
+3. `create_campaign.py --verify 3921033 --repair` after touching the UI
+4. Launch, then confirm the unsubscribe link renders on the first delivered email
+5. Un-pause the three routines, and graduate them to `--apply` when ready for the queue
+   to populate
+
 ## Lead-Level Activity Logs: what they do and do not give us — checked 2026-09-02
 Smartlead's Lead-Level Activity Logs track sends, replies, **status changes including
 "Lead marked as Bounced"**, OOO auto-pause/auto-restart, categorisation, and

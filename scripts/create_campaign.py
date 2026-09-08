@@ -42,6 +42,7 @@ import os
 import pathlib
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -483,6 +484,25 @@ def main(argv=None) -> int:
     cid = created.get("id")
     if not cid:
         raise RuntimeError(f"no campaign id returned: {created}")
+
+    # Smartlead returns the id before the campaign is readable. Observed 2026-09-08: the
+    # very next call, POST /campaigns/{id}/settings, came back 404 "Campaign not found".
+    # The cleanup deleted the partial campaign correctly, but the run failed and a retry
+    # succeeded -- so without this, creating a campaign is a coin flip. Wait for the
+    # campaign to be queryable before configuring it.
+    for attempt in range(6):
+        try:
+            if sl.call("GET", f"/campaigns/{cid}").get("id"):
+                break
+        except RuntimeError:
+            pass
+        if attempt == 5:
+            raise RuntimeError(
+                f"campaign {cid} was created but is still not readable after 6 attempts. "
+                f"It may exist in Smartlead; check and delete it before retrying.")
+        time.sleep(1.5 * (attempt + 1))
+    else:
+        raise RuntimeError(f"campaign {cid} never became readable")
     print(f"\ncreated campaign {cid}")
 
     try:
