@@ -115,7 +115,7 @@ Run the outbound engine's scheduled MORNING check.
 
 From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
 
-    ./.venv/bin/python scripts/heartbeat.py --slot morning
+    ./.venv/bin/python scripts/heartbeat.py --slot morning --apply
 
 Then stop and report only the summary it printed.
 
@@ -132,7 +132,7 @@ Run the outbound engine's scheduled MIDDAY check.
 
 From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
 
-    ./.venv/bin/python scripts/heartbeat.py --slot midday
+    ./.venv/bin/python scripts/heartbeat.py --slot midday --apply
 
 Then stop and report only the summary it printed.
 
@@ -149,7 +149,7 @@ Run the outbound engine's scheduled AFTERNOON check.
 
 From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
 
-    ./.venv/bin/python scripts/heartbeat.py --slot afternoon
+    ./.venv/bin/python scripts/heartbeat.py --slot afternoon --apply
 
 Then stop and report only the summary it printed.
 
@@ -236,13 +236,41 @@ The amber signal is driven by parsed **counts**, not by matching words in the ou
 
 ---
 
-## Graduating to `--apply`
+## Graduated to `--apply` on 2026-09-08
 
-The tasks start in **dry run**: the jobs read, decide, and report, and write nothing.
-This is deliberate. An unattended task that writes to HubSpot on its first run, before
-anyone has read what it decides, is exactly the thing to avoid.
+**Done.** The three task prompts above now carry `--apply`, so the jobs write. The
+criteria below were met: a real campaign is live (3921033), all three HubSpot write paths
+were proven live against a throwaway contact, and `BODY_FIELDS` was settled against a real
+reply in rehearsal 1.
 
-Promote by adding `--apply` to the command in each task prompt, but only once:
+### What `--apply` switches on — more than the reply queue
+
+| Job | With `--apply` |
+|---|---|
+| `reply_check` | HubSpot `outbound_*` writes, Smartlead resume for automated replies, **and the queue rows** |
+| `sync_unsubscribes` | `outbound_suppressed` + `outbound_opt_out_date` |
+| `sync_bounces` | `outbound_status=bounced` |
+
+It is all-or-nothing at the heartbeat level, and **that is the right state once a campaign
+is live**: leaving bounces and unsubscribes unsynced while mail is going out is worse than
+leaving the queue empty. An unsynced unsubscribe means HubSpot does not know someone opted
+out; an unsynced bounce means a dead address gets mailed again next campaign.
+
+### What `--apply` does NOT switch on
+
+**`send_replies.py` is not in any slot, so nothing is ever auto-sent.** Drafts are queued,
+a human reads them, marks `Approve` or `Edit & send`, and runs `send_replies --apply`
+themselves. Graduating the routines does not put the engine in charge of replying, and the
+`auto_send_intents` allowlist stays empty and asserted.
+
+### Reverting
+Remove `--apply` from the three prompts. Everything already written stays written; the
+jobs are idempotent, so re-enabling later picks up where it left off.
+
+### Original criteria, for the record
+The tasks started in **dry run** deliberately: an unattended task that writes to HubSpot
+on its first run, before anyone has read what it decides, is exactly the thing to avoid.
+Promotion required:
 
 1. Real campaigns have been running long enough to produce real replies and unsubscribes.
 2. Several heartbeats have been read, and the decisions match what a person would have
