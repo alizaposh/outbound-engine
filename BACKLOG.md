@@ -977,6 +977,50 @@ batch.
 clear the other eleven: the profile name is per Google user, so Carl and Zach need the
 same check.
 
+## Rehearsal 2: threading — PASSED 2026-09-08. **The engine is fully validated end to end.**
+Campaign 3893958, `COMPLETED`, 3 sent, 0 bounces, 0 unsubscribes. All three emails
+arrived in a personal Gmail **inbox** and threaded correctly:
+
+```
+seq 1  SENT  2026-09-02 15:12  'threading test collective on dice?'
+seq 2  SENT  2026-09-03 15:22  'RE: threading test collective on dice?'
+seq 3  SENT  2026-09-04 15:32  'RE: threading test collective on dice?'
+```
+
+**`subject: ""` works.** Emails 2 and 3 were sent with an empty subject and Smartlead
+resolved them to `RE:` plus email 1's subject on the same thread. The delay override
+behaved exactly too — 24 hours apart to the minute.
+
+**Deliverability, second data point:** inbox on an unrelated consumer domain, both
+rehearsals. The only spam placement in this whole project was the Smartlead *test-email*
+path in rehearsal 1, not a campaign send.
+
+**A note on how this was checked:** the assertion "emails 2 and 3 carried no new subject"
+printed False, and the result was still correct. Smartlead REWRITES the empty subject into
+the threaded form in message history, so the stored value is `RE: <original>`, not `""`.
+The evidence of correct threading is that seq 2 and 3 subjects equal `RE: ` + seq 1's —
+not that they are empty. Test the observable outcome, not the input you sent.
+
+### Nothing mechanical is untested any more
+| Proven | How |
+|---|---|
+| Eligibility, 9 gates + sender gate | Live on a real 35-contact list |
+| Generation, validation, repair | 34-contact runs, 0 FAILs |
+| Campaign creation | Real campaigns created, read back, deleted |
+| Unsubscribe link renders | Rehearsal 1, a real clickable link |
+| HTML paragraphs | Rehearsal 1 |
+| **Threading** | **Rehearsal 2, this entry** |
+| Reply detection + classification | Rehearsal 1, a real reply |
+| Reply loop `--apply` (HubSpot writes) | Throwaway contact, all three write paths |
+| Reply sending `--apply` | A real email into rehearsal 1's thread |
+| Bounce + unsubscribe sync | Injected and live-dry-run; `--apply` proven |
+| Scheduler + Slack heartbeat | Live post, three routines created |
+
+Still unproven and recorded elsewhere: the HARD eligibility tier on live data, the
+`send_replies` FAILED/crash branches, and whether `statistics?email_status=bounced`
+enumerates a real bounce.
+
+### Original staging note
 ## Rehearsal 2: threading + Gmail deliverability — RESTAGED 2026-09-02
 **Campaign 3893958** (the 2026-09-01 campaign 3888067 was deleted unsent: its copy predated
 the SDR spec, and launching stale copy that then sits in an inbox for a week tests the
