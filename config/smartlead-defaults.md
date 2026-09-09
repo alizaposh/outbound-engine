@@ -128,7 +128,44 @@ That's the only lever that reduces the manual burden — worth 10 minutes to che
 
 ---
 
-## HubSpot activity logging: the toggle does not work, use BCC-to-CRM (2026-09-09)
+## HubSpot activity logging: BOTH vendor paths are dead. We log it ourselves. (2026-09-09)
+
+**Two mechanisms were tried and both are structurally unavailable. Do not retry either
+without new information from a vendor.**
+
+### 1. Smartlead's per-campaign HubSpot sync — impossible
+Smartlead support, 2026-09-09: *"HubSpot syncing cannot be enabled for leads that are
+added through an API import. There are no API parameters available to enable this setting
+during the import process."* Every lead this engine sends to is API-imported, so the
+mandatory gate in `campaign-creation.md` **was unsatisfiable from the day it was
+written**. Confirmed in practice: campaign 3921033 sent 25 emails and all 25 contacts had
+every activity field `None`.
+
+### 2. HubSpot's BCC-to-CRM — requires the sender to be a HubSpot SEAT
+Smartlead does expose an account-level "BCC to CRM" setting, so this looked like the clean
+answer. It is not. **Proven by a controlled pair of sends on 2026-09-09**, identical
+recipient and identical BCC address, differing only in sender:
+
+| From | A HubSpot user? | Logged? |
+|---|---|---|
+| `aliza.mayer@gmail.com` | no | **NO** — nothing after 15+ minutes |
+| `aliza@posh.vip` | yes (one of 57 owners) | **YES** — engagement created, `notes_last_contacted` moved |
+
+The successful engagement carried `hubspot_owner_id: 91475403`. **HubSpot attributes every
+BCC-logged email to a user and drops what it cannot attribute.** None of the 12 sending
+mailboxes are HubSpot seats, and making them seats means buying 12 licences for robot
+mailboxes.
+
+Also learned from the successful log: BCC moves `notes_last_contacted` and
+`num_contacted_notes` but **not** `hs_last_sales_activity_timestamp`.
+
+### The remaining path: log the activity ourselves
+`/crm/v3/objects/emails` with an association to the contact. Proven on 2026-09-08: the
+engagement is created and `notes_last_contacted` moves within ~20 seconds. This is now the
+only option, not a preference.
+
+## Original BCC plan, superseded by the finding above
+
 
 **Smartlead support, 2026-09-09: "HubSpot syncing cannot be enabled for leads that are
 added through an API import. There are no API parameters available to enable this setting

@@ -902,7 +902,44 @@ states.
 against three real enrolled contacts showing the `in_sequence -> no_response` transition
 and an unmatched address. Wired into the morning heartbeat slot.
 
-## HubSpot activity: the toggle is impossible, BCC-to-CRM is the fix — 2026-09-09
+## HubSpot activity: BOTH vendor paths dead, we must log it ourselves — 2026-09-09
+**Settled by a controlled experiment rather than by reading docs.**
+
+Smartlead's per-campaign HubSpot sync is impossible for API-imported leads, which is every
+lead we send. That was support's answer and it means the mandatory gate in
+`campaign-creation.md` was never satisfiable.
+
+Smartlead's account-level **BCC to CRM** looked like the clean replacement. It is not.
+Two sends, identical recipient and identical BCC address, differing only in the sender:
+
+- from `aliza.mayer@gmail.com` (not a HubSpot user) → **nothing logged**, 15+ minutes
+- from `aliza@posh.vip` (a HubSpot owner) → **logged**, engagement created,
+  `notes_last_contacted` moved, `hubspot_owner_id: 91475403` attached
+
+**HubSpot attributes every BCC-logged email to a user and silently drops what it cannot
+attribute.** The 12 sending mailboxes are not HubSpot seats, and buying 12 licences for
+robot mailboxes is not a real option.
+
+**A note on how this was found.** The first failing test could have been read as "BCC
+doesn't work" and abandoned. The control send from a known seat is what turned an ambiguous
+negative into a definite cause — and it also proved the BCC address itself was correct,
+which the failure alone did not.
+
+**Incidental finding:** BCC logging moves `notes_last_contacted` and `num_contacted_notes`
+but NOT `hs_last_sales_activity_timestamp`.
+
+**So `sync_sends.py` is now the only path**, using `/crm/v3/objects/emails` — already
+proven to create an engagement and move `notes_last_contacted` within ~20 seconds. It also
+solves what BCC could not: **backfilling the 25 sends already made**, which are currently
+invisible to reps.
+
+**One decision to make before building it:** whether engine-logged emails carry a
+`hubspot_owner_id`. HubSpot set one on the BCC-logged email. Leaving ours unowned is more
+honest (no human sent it) but may hide the activity from owner-filtered views; attributing
+it to the meeting owner is more visible but implies a person who did not send it.
+
+## Superseded: the BCC plan
+
 **Smartlead support: HubSpot syncing cannot be enabled for API-imported leads, and no API
 parameter exists to enable it.** Every lead this engine sends is API-imported, so the
 mandatory per-campaign gate in `campaign-creation.md` **can never be satisfied**. That
