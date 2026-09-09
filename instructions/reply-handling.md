@@ -221,6 +221,12 @@ definitions and allowed values: `config/hubspot-properties.md`.
 
 Enforced in the `draft_response` instructions inside `scripts/reply_check.py`.
 
+**These were written here on 2026-09-02 and were NOT in the prompt until 2026-09-09.** The
+doc and the prompt had diverged, and the result was that **5 of 7 intents produced an empty
+draft** — a queued row with nothing to edit, which is most of what the queue exists to
+save. Found by the deliberate reply test, not by reading the code. If this guidance changes,
+change the prompt in the same commit.
+
 - **Interested** → warm, one line, **plus the meeting owner's booking link as a plain
   URL** from `config/meeting-routing.md`. Do not offer to find a time by hand: give them
   the link. The persona stays the correspondent; the meeting lands on the owner's calendar.

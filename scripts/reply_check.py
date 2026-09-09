@@ -421,7 +421,24 @@ not write "I'll send over some times" and do not offer to find a slot by hand --
 them the link so they can book. You stay the correspondent; the meeting simply lands on
 {owner}'s calendar, and there is no mid-thread introduction.
 
-For every other intent, no link.
+**EVERY intent except out_of_office and automated_reply GETS A DRAFT.** A queued row with
+an empty draft makes a human write from scratch, which is most of what the queue exists to
+save. What each one says (from instructions/reply-handling.md):
+
+  interested / question -> warm, one line, PLUS the booking link above.
+  objection             -> acknowledge the concern, do NOT argue it, offer the call. No
+                           link, and never counter with a claim.
+  not_now               -> acknowledge their timing, say you will come back then, name
+                           the time they gave. No link, no pitch.
+  not_interested        -> short and gracious. No re-pitch, no link, no "just one more
+                           thing".
+  asked_to_stop         -> one line confirming they are removed. Nothing else, ever.
+  not_qualified         -> short and friendly, no pitch.
+  wrong_contact         -> thank them, and ask nothing further of them. Do not ask them
+                           to forward it or for the new person's details; a human decides
+                           what to do with a referral.
+
+No link on any intent except interested and question.
 
 **NEVER INVENT A FACT ABOUT POSH.** This is the hard rule of the draft. You do not have
 the product documentation in front of you, so you cannot know payout timings, fee

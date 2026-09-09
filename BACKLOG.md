@@ -902,6 +902,46 @@ states.
 against three real enrolled contacts showing the `in_sequence -> no_response` transition
 and an unmatched address. Wired into the morning heartbeat slot.
 
+## Reply-draft test RUN 2026-09-09 — found an empty-draft bug, fixed
+Seven self-addressed leads, one per intent, replied to by hand. **It found exactly the
+kind of defect it was designed to find.**
+
+### The defect: 5 of 7 intents produced an EMPTY draft
+`objection`, `not_now`, `not_interested`, `asked_to_stop` and `wrong_contact` all returned
+a blank `draft_response`. A human opening the queue for those got a row with nothing to
+edit — writing from scratch, which is most of what the queue exists to save.
+
+**Cause: the doc and the prompt had diverged.** The per-intent response guidance was
+written into `instructions/reply-handling.md` on 2026-09-02 and **never wired into the
+prompt**. The prompt detailed what to do for `interested`/`question` and then said only
+"For every other intent, no link", which the model reasonably read as "nothing to write".
+Now fixed: the prompt carries the per-intent guidance, and the doc says to change both in
+the same commit.
+
+### What was already right, and worth keeping
+- **The payout question deferred instead of inventing.** The reply asked "how do payouts
+  work with posh?" — the same prompt that on 2026-09-02 produced the fabricated "we process
+  payouts within 2 business days". It now answers "worth walking through properly" plus the
+  link. The no-invented-facts rule holds against a real prospect question.
+- **Link discipline was perfect**: present on both link-worthy intents, absent on all five
+  others.
+- **`not_now` extracted the date from the reply** — "swamped until our festival in
+  november" produced `2026-11-30`, not the 90-day floor.
+- **Smartlead threads replies by message headers, not from-address.** All 7 matched their
+  plus-alias leads even though Gmail sent every reply from the primary address. That was an
+  open question and is now settled.
+
+### Two classifications worth a human's judgement, neither a defect
+- **"can you tell me more about posh? how do payouts work?" → `interested`, not
+  `question`.** Defensible: it is a buying-lean question, and the two intents are
+  **operationally identical** (same status, no recycle, same queue), so nothing downstream
+  differs.
+- **"we're happy on tixr, but thanks for reaching out" → `not_interested`, not
+  `objection`.** Also defensible — it is a polite close, not a concern to answer. **But
+  this one has a consequence:** `not_interested` writes a 180-day recycle date and
+  `objection` writes none. 180 days for "happy on tixr" seems right, but it is a real
+  decision the classifier is making, not a cosmetic label.
+
 ## TODO: test reply-draft accuracy with deliberate replies
 **Why deliberate and not just the live campaign.** The 25-contact campaign will produce
 real replies, and those are the truest sample — but slow, and skewed. The intents with the
