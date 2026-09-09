@@ -90,3 +90,28 @@ who signed the copy.
 This matters more than it looked. A Smartlead campaign **rotates across its assigned
 mailboxes**, so one campaign holding copy from three senders would send an email signed
 "Carl" from Brooke's mailbox. Run campaign creation once per sender.
+
+## The sending mailboxes are engine-only and unwatched (confirmed 2026-09-09)
+
+No forwarding is configured on any of the 12 mailboxes, so a prospect's reply lands in a
+`vibeposhvip.com` / `coreposhvip.com` / `poshviphub.com` / `poshvippulse.com` inbox that
+**no human reads**. Smartlead reads them over IMAP; `scripts/reply_check.py` classifies
+and queues them.
+
+**This is the better arrangement, not an oversight.** Carl, Brooke and Zach are real Posh
+employees with HubSpot seats (`carl@posh.vip`, `brooke@posh.vip`, `zach@posh.vip`). If
+these mailboxes forwarded to them, a prospect reply would reach a human **before** the
+review queue — and that human could answer directly, bypassing classification, the queue,
+the HubSpot write-back and the draft review. Two people would be answering the same
+prospect while the engine had no idea. Not forwarding removes that entirely.
+
+**The dependency it creates, and the thing that covers it.** The review queue is the
+**only** path from a prospect's reply to a person. If the engine stops — routines paused,
+machine asleep, token expired — replies accumulate in inboxes nobody opens, and a warm
+prospect goes unanswered with no signal. That is precisely why the Slack heartbeat posts
+on quiet runs: **silence in the channel means broken, not calm**
+(`instructions/scheduled-tasks.md`).
+
+**If that ever changes and forwarding is switched on**, the coordination question comes
+back and needs an answer first: who replies, the human or the queue, and how does each
+know what the other did.
