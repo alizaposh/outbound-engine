@@ -902,6 +902,43 @@ states.
 against three real enrolled contacts showing the `in_sequence -> no_response` transition
 and an unmatched address. Wired into the morning heartbeat slot.
 
+## Activity logging BUILT and BACKFILLED — 2026-09-09 (`scripts/sync_sends.py`)
+**The 25 invisible contacts are visible.** Every contact in campaign 3921033 now carries
+`notes_last_contacted`, an email engagement with the full copy, and attribution to the
+contact's own owner. It was 0 of 25 this morning.
+
+**Owner attribution: the contact's existing owner, decided by the person running
+outbound.** Better than either option offered — it lands the activity in the owning rep's
+feed without inventing a sender. All 25 already had an owner, so the unowned fallback is
+genuinely rare, as predicted. Verified we can set `hubspot_owner_id` on an engagement
+before relying on it.
+
+**It logs replies too, as INCOMING**, so a rep sees the whole conversation rather than
+half of it. Reply bodies are quote-stripped, or our own copy would be duplicated back into
+the timeline inside the prospect's reply.
+
+**Direction is explicit with no default** and an unknown Smartlead type raises. Getting
+this backwards shows a rep that the prospect contacted us — the same trap HubSpot's
+forwarding address would have created, and worse than logging nothing.
+
+**Idempotent via `outbound_last_logged_send` on the contact**, so state stays where a
+human can read it. Verified: a second `--apply` run wrote 0 and reported 26 already
+current. **The backfill is the same code path** — no watermark means log everything — which
+is how the 25 pre-existing sends were recovered. BCC could never have done that.
+
+**The watermark is written AFTER the engagements**, deliberately: a crash mid-contact
+re-logs rather than silently skipping, because a duplicate timeline entry is visible and
+fixable while a missing one is invisible.
+
+**`log_sends_enabled` in `config/smartlead-defaults.md` is the kill switch.** Set it false
+the day Smartlead supports HubSpot sync for API-imported leads, or every activity logs
+twice.
+
+**Consequence now live:** `notes_last_contacted` is a gate 9 recency field with a 30-day
+window, so a contact we mail is gate-9 excluded for 30 days. That closes a real gap —
+there was no cooldown at all after `no_response` — but gate 9's reason will now read
+"recently touched" for our own sends. Worth correcting the reason string.
+
 ## HubSpot activity: BOTH vendor paths dead, we must log it ourselves — 2026-09-09
 **Settled by a controlled experiment rather than by reading docs.**
 

@@ -55,13 +55,14 @@ PY = sys.executable
 # message history for leads already marked replied) and runs every slot.
 SLOTS = {
     "morning":   ["reply_check", "sync_unsubscribes", "sync_bounces",
-                   "close_sequences"],
+                   "close_sequences", "sync_sends"],
     "midday":    ["reply_check"],
     "afternoon": ["reply_check"],
 }
 JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sync",
               "sync_bounces": "Bounce sync",
-              "close_sequences": "Sequence close-out"}
+              "close_sequences": "Sequence close-out",
+              "sync_sends": "Activity logging"}
 
 # Pulled out of each job's stdout for the Slack summary. Best-effort by design: if a
 # pattern stops matching, the message gets less pretty, never wrong -- the raw tail is
@@ -75,6 +76,7 @@ SUMMARY_PATTERNS = [
     re.compile(r"^no bounced rows found.*$", re.M),
     re.compile(r"^\d+ closed, \d+ already current.*$", re.M),   # close_sequences
     re.compile(r"^no finished sequences.*$", re.M),
+    re.compile(r"^\d+ engagement\(s\) (?:written|would be written).*$", re.M),
 ]
 
 

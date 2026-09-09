@@ -12,7 +12,7 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
 
 | Slot | Time (America/New_York) | Days | Jobs |
 |---|---|---|---|
-| `morning` | 09:45 | Mon–Fri | reply check **+ unsubscribe sync + bounce sync + sequence close-out** |
+| `morning` | 09:45 | Mon–Fri | reply check **+ unsubscribe sync + bounce sync + sequence close-out + activity logging** |
 | `midday` | 13:05 | Mon–Fri | reply check |
 | `afternoon` | 16:25 | Mon–Fri | reply check |
 

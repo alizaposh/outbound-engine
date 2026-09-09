@@ -166,6 +166,9 @@ scripts/                   ← Python (stdlib + anthropic only)
                              to Slack EVERY run, so silence means broken
   send_replies.py          ← THE ONLY THING THAT SENDS TO A PROSPECT. Sends replies a
                              human approved in the review Sheet. DRY RUN BY DEFAULT
+  sync_sends.py            ← logs engine sends AND prospect replies to the HubSpot
+                             contact timeline as email engagements. The ONLY way reps
+                             see our sends: both vendor paths are unavailable
   close_sequences.py       ← finished sequences -> outbound_status=no_response, so a
                              non-replier is contactable again instead of stuck
                              in_sequence forever. DRY RUN BY DEFAULT

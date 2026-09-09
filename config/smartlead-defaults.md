@@ -27,6 +27,13 @@ start_hour: "09:00"
 end_hour: "17:00"
 min_time_btw_emails: 10             # minutes, spreads sends inside the window
 max_new_leads_per_day: 15           # per mailbox, matching the Smartlead account setting
+log_sends_enabled: true             # scripts/sync_sends.py writes engine sends and
+                                    # replies to the HubSpot contact timeline. TRUE
+                                    # because both vendor paths are unavailable: Smartlead
+                                    # cannot sync API-imported leads, and HubSpot's BCC
+                                    # only logs mail from a HubSpot seat. SET TO FALSE the
+                                    # day Smartlead supports it, or every activity is
+                                    # logged twice.
 max_leads_in_flight: 60             # INTAKE ceiling for scripts/slack_intake.py. Counts
                                     # leads inside ACTIVE/DRAFTED/PAUSED campaigns, not
                                     # sends per day: a lead occupies capacity for about
