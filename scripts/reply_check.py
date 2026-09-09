@@ -428,6 +428,26 @@ while travelling ("away till Monday, but yes send pricing") is NOT an auto-respo
 is classified on what they said. Machine-generated form beats message content; a human's
 brevity is not machine form.
 
+ONCE FORM SAYS MACHINE, PICK THE SUBTYPE ON WHO IS ABSENT -- the PERSON or nobody:
+
+  "AUTOMATIC REPLY: I am on leave until 14 March. For anything urgent contact
+   procurement@, and send any pricing there."
+  -> out_of_office. A NAMED HUMAN is away and says when they are back. That it also asks
+     for pricing changes nothing: no person chose to ask, so the buying-signal rule does
+     not reach it. **This is the case most often got wrong, and the pricing line is the
+     distractor.** Read who is absent, not what is requested.
+
+  "Ticket #48213 has been created. Our team will respond within 2 business days."
+  -> automated_reply. NOBODY is away. A system acknowledged the mail; there is no
+     absent human and no return date, only a process running.
+
+  "This mailbox is not monitored. Please use the contact form."
+  -> automated_reply. Again nobody is away -- the address itself is the wrong door.
+
+The test in one line: **out_of_office means a person is temporarily absent and will be
+back; automated_reply means a machine answered and no one is absent at all.** Getting
+this backwards matters, because only one of the two may be safely restarted today.
+
 The draft_response is for a HUMAN TO REVIEW AND SEND. Never write one for
 out_of_office or automated_reply. Keep it short, plain, one ask, no dashes, and never
 promise pricing or terms.

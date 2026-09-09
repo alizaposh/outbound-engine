@@ -650,7 +650,63 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
-## FLAKY: `out_of_office` sometimes classifies as `automated_reply` — found 2026-09-09
+## `out_of_office` may be a permanent dead end — OPEN, found 2026-09-09. **Decide this**
+
+The bigger half of the OOO problem, surfaced when Aliza reported that **Smartlead's OOO
+detection labelled all seven of her human replies as out-of-office.**
+
+`INTENTS["out_of_office"]` has `resume: False`, and the entire stated justification is:
+
+> *Smartlead has its own OOO auto-pause with an auto-restart after N days, and resuming
+> immediately would override an intentional wait.*
+
+**That assumption is now doubtful, and everything rests on it.**
+
+*Verified:*
+- **No OOO auto-pause or auto-restart setting is exposed anywhere on the campaign
+  object.** The only related field is `stop_lead_settings: REPLY_TO_AN_EMAIL`.
+- **`REPLY_TO_AN_EMAIL` stops the lead on ANY reply** — and an auto-responder is a reply.
+- All seven test replies landed **`COMPLETED`**, a terminal state. **None was `PAUSED`.**
+  Smartlead labelled them OOO and completed them anyway.
+- Our classifier does **not** read Smartlead's OOO signal, so the bad detection cannot
+  corrupt our intents. That part is sound.
+
+*Inferred, NOT proven:* that a genuine OOO auto-responder also lands `COMPLETED` rather
+than paused. The seven were real human replies, which are supposed to complete. The
+evidence is suggestive — Smartlead thought they were OOO and completed them regardless —
+but the clean test has not been run.
+
+**If the inference holds, the cost is high and silent:** a prospect who was merely on
+holiday receives email 1 and never hears from us again. `resume: False` means we never
+restart them, and there is no Smartlead auto-restart to defer to. **The single most
+recoverable non-response becomes the one permanent dead end**, and nothing surfaces it —
+the lead reads `COMPLETED`, identical to a genuine non-replier.
+
+**The clean test:** put one lead on a live campaign, reply with a real auto-responder
+("I am out of the office until…"), and read the lead status. `PAUSED` means the current
+design is right and this item closes. `COMPLETED` confirms the leak.
+
+**Recommended fix — stop depending on the vendor for this at all.** The auto-responder
+itself carries the answer: OOO messages nearly always state a return date, and
+`named_return_date` already exists for `not_now`. So key the behaviour off **the stated
+return date, not the intent label**:
+
+| reply | resume |
+|---|---|
+| machine reply stating a return date | on that date |
+| machine reply with no date | after a default wait |
+| machine reply, nobody absent (`automated_reply`) | now, as today |
+
+`sl.resume()` works for this — verified live 2026-08-31, returning 200, or 409 "last
+sequence" when no step remains. It needs one new scheduled job to resume leads whose date
+has come, which slots into the morning heartbeat beside the other syncs.
+
+**The reason to prefer this over classifying more carefully:** it deletes the failure
+mode instead of narrowing it. "Never resumes" stops being reachable at all, whatever the
+classifier decides — and the flake below is proof that the classifier will sometimes
+decide wrong.
+
+## FIXED 2026-09-09: `out_of_office` sometimes classified as `automated_reply`
 
 **Roughly 2 runs in 8** of the `--self-test` suite, on this one case:
 
@@ -672,12 +728,22 @@ So the misclassification **mails someone who is still out of the office**, overr
 intentional wait — the precise failure the 2026-09-02 change to `out_of_office` was made
 to prevent. It is silent: nothing downstream can tell that the resume was wrong.
 
-*Likely cause:* the case is adversarial by construction — an auto-responder whose body
-contains a buying signal — so it sits exactly on the form-versus-content boundary that
-precedence rule 2 exists to settle. The fix is probably to make that case an exemplar in
-the prompt rather than only a test of it, which is the pattern that fixed incumbency.
+*Cause:* the prompt settled **form** (machine vs human) and then said nothing about
+choosing between the two machine subtypes. The model was getting the form right and the
+subtype wrong, and the pricing line in that test case pulled it toward "some system is
+processing a request".
 
-*Do not raise the pass bar to 15/16 to make the suite green.* The flake is the finding.
+*Fixed* with the same pattern that fixed incumbency — exemplars, not a longer definition.
+Added a three-way set keyed on **who is absent**: a named human on leave until a date
+(`out_of_office`, pricing line explicitly called out as the distractor), a ticket
+acknowledgement, and an unmonitored mailbox (both `automated_reply`). The test in one
+line: **out_of_office means a person is temporarily absent and will be back;
+automated_reply means a machine answered and nobody is absent at all.**
+
+*Verified:* **16 consecutive clean runs.** At the observed ~25% failure rate that would
+happen by chance about 1% of the time, so the fix is real rather than a lucky streak.
+
+*Do not raise the pass bar to 15/16 to make the suite green.* The flake was the finding.
 
 ## A shareable reference for the ten intents — NOT STARTED (requested 2026-09-09)
 
