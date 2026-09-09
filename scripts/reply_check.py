@@ -108,7 +108,8 @@ def defaults() -> dict:
     global _DEFAULTS
     if _DEFAULTS is None:
         cfg = load_config(REPLY_CONFIG)
-        for key in ("recycle_not_now_days", "recycle_not_interested_days"):
+        for key in ("recycle_not_now_days", "recycle_not_interested_days",
+                    "resume_ooo_default_days"):
             if not isinstance(cfg.get(key), int) or cfg[key] < 0:
                 raise RuntimeError(
                     f"{REPLY_CONFIG.name}: {key} must be a non-negative integer, "
@@ -168,6 +169,56 @@ def recycle_date(intent: str, reply_at: str, named: str | None,
         except ValueError:
             pass
     return candidate.isoformat()
+
+
+def resume_date(intent: str, reply_at: str, named: str | None,
+                cfg: dict | None = None) -> str | None:
+    """The day an out-of-office lead should have its sequence restarted, or None.
+
+    **Why this exists at all.** `out_of_office` used to carry `resume: False`, on the
+    stated grounds that Smartlead had its own OOO auto-pause with an auto-restart. That
+    was never verified and looks wrong: no such setting is exposed on the campaign,
+    `stop_lead_settings` is REPLY_TO_AN_EMAIL so ANY reply ends the lead, and seven test
+    replies Smartlead itself labelled out-of-office all landed COMPLETED rather than
+    PAUSED. If nothing restarts them, a prospect who was merely on holiday receives email
+    1 and is never contacted again -- and the lead reads COMPLETED, exactly like a
+    genuine non-replier, so nothing ever surfaces it.
+
+    So the wait is ours to keep, not the vendor's. **The auto-responder itself carries
+    the answer**: it nearly always says when they are back. Reading the date out of the
+    message is the only part of this that needs a model, and it has already happened by
+    the time this runs.
+
+    Rules, deliberately parallel to recycle_date():
+
+      1. ONLY out_of_office. `automated_reply` resumes immediately (nobody is absent) and
+         every human intent is a real reply that must never be restarted by a machine.
+      2. A date NAMED in the auto-responder wins. That is the whole point.
+      3. No date named -> reply date + resume_ooo_default_days.
+      4. Computed from the REPLY date, never the processing date, so a poll running three
+         days late does not silently extend the wait.
+      5. **A named date already in the past resolves to tomorrow, not to today or to the
+         past.** Auto-responders outlive the absence they describe -- a poll catching one
+         a week late would otherwise resume instantly, which is the one behaviour a
+         *dated* resume exists to avoid. Tomorrow is the earliest honest answer.
+    """
+    if intent != "out_of_office":                                   # rule 1
+        return None
+    cfg = cfg or load_defaults()
+    try:
+        anchor = dt.date.fromisoformat((reply_at or "")[:10])
+    except ValueError:
+        anchor = dt.datetime.now(dt.timezone.utc).date()            # rule 4
+
+    candidate = anchor + dt.timedelta(days=cfg["resume_ooo_default_days"])  # rule 3
+    if named:
+        try:
+            candidate = dt.date.fromisoformat(named[:10])           # rule 2
+        except ValueError:
+            pass
+
+    tomorrow = dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=1)
+    return max(candidate, tomorrow).isoformat()                     # rule 5
 
 # Candidate body fields on a message-history item. Smartlead documents `direction`, `id`,
 # `subject`, `sent_at` and `received_at`, but not the body, so this tries the plausible
@@ -366,7 +417,16 @@ PRECEDENCE, highest wins, because one reply can carry several signals:
 7. not_now.
 8. not_interested is the default decline when nothing stronger is present.
 
-named_return_date: ONLY for not_now, and only when the prospect names a time you can
+named_return_date ON out_of_office: set it to THE DAY THEY SAY THEY ARE BACK. "I am on
+leave until 14 March", "back in the office Monday the 3rd", "returning after the 20th"
+-> resolve it against the reply's own date and give the date. This is the single most
+useful thing you can extract from an auto-responder: it is what schedules the follow-up
+to restart, so a prospect who was merely on holiday is contacted again instead of being
+dropped forever. If they give no return date, leave it EMPTY and a default wait applies
+-- never guess one, and never use a date that is only mentioned in passing (a meeting,
+a deadline, an event) rather than as the day they return.
+
+named_return_date OTHERWISE: ONLY for not_now, and only when the prospect names a time you can
 resolve to a date ("after the summer", "ask me in Q1", "next March", "our contract runs
 through June"). A CONTRACT END DATE IS THE MOST VALUABLE CASE -- capture it. Resolve it
 relative to the reply's own date, which is in the thread. Leave it empty if they named
@@ -780,6 +840,29 @@ def _self_test() -> int:
         check(f"action map agrees with the doc for {intent} (sequence)",
               INTENTS[intent]["resume"], want["resume"])
 
+    # -- resume_date: an out-of-office must come back, and only out_of_office may
+    _today = dt.datetime.now(dt.timezone.utc).date()
+    _far = (_today + dt.timedelta(days=400)).isoformat()
+    check("a named return date wins",
+          resume_date("out_of_office", "2026-09-01", _far, cfg), _far)
+    check("no named date falls back to the configured wait",
+          resume_date("out_of_office", "2026-09-01", None, cfg),
+          (dt.date(2026, 9, 1) + dt.timedelta(days=cfg["resume_ooo_default_days"]))
+          .isoformat())
+    # A stale auto-responder must not resume instantly just because its date has passed.
+    check("a named date in the past resolves to tomorrow, never today or earlier",
+          resume_date("out_of_office", "2020-01-01", "2020-01-05", cfg),
+          (_today + dt.timedelta(days=1)).isoformat())
+    check("an unparseable named date falls back rather than raising",
+          resume_date("out_of_office", "2026-09-01", "whenever", cfg),
+          (dt.date(2026, 9, 1) + dt.timedelta(days=cfg["resume_ooo_default_days"]))
+          .isoformat())
+    # Only out_of_office. automated_reply resumes immediately; a human reply never does.
+    for _i in INTENTS:
+        if _i != "out_of_office":
+            check(f"{_i} gets no resume date",
+                  resume_date(_i, "2026-09-01", "2026-09-20", cfg), None)
+
     # -- guarantee 5, structurally
     check("native opt-out is not writable", "hs_email_optout" in HubSpotWriter.write.__doc__
           if HubSpotWriter.write.__doc__ else False, False)
@@ -928,6 +1011,15 @@ def main(argv=None) -> int:
                 held = existing.get("outbound_recycle_after")
                 if held and str(held)[:10] == recycle:
                     print("      recycle: keeping the later date already on the contact")
+            # An out-of-office pauses the sequence rather than ending the relationship,
+            # so it gets a date to come back on instead of a recycle window. Written
+            # here, acted on by scripts/resume_sequences.py once the date arrives.
+            resume_on = resume_date(intent, newest["at"], res.get("named_return_date"))
+            if resume_on:
+                props["outbound_resume_after"] = resume_on
+                named = (res.get("named_return_date") or "").strip()
+                print(f"      resume: {resume_on} "
+                      f"({'they named it' if named else 'default wait, no date given'})")
             if cidhs:
                 print(f"      hubspot: {hs.write(cidhs, props)}")
             else:
@@ -937,8 +1029,15 @@ def main(argv=None) -> int:
                 print(f"      smartlead: {sl.resume(cid, lead_id)}  "
                       f"(not a real reply, lead not advanced)")
             elif intent == "out_of_office":
-                print("      smartlead: NOT resuming. Its own OOO auto-pause restarts "
-                      "this after N days; resuming now would mail someone still away.")
+                # Not resuming NOW, because they are still away. Not never, either:
+                # outbound_resume_after was just written and resume_sequences.py acts on
+                # it when the date arrives. Deferring to a Smartlead auto-restart is what
+                # this used to do, and that restart appears not to exist.
+                print(f"      smartlead: not resuming yet; scheduled for {resume_on} "
+                      "(resume_sequences.py picks it up)"
+                      if resume_on and cidhs else
+                      "      smartlead: not resuming, and NOTHING SCHEDULED -- no HubSpot "
+                      "contact to hold the date, so this lead will not restart itself.")
             if intent == "asked_to_stop":
                 print(f"      smartlead: {sl.unsubscribe(cid, lead_id)}")
 

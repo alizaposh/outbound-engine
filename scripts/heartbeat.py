@@ -67,9 +67,16 @@ PY = sys.executable
 # see the whole day's sends in one Slack line -- where replies trickling out at three
 # separate times of day is harder to audit and no faster in any way that matters.
 # Adding it to another slot is a one-line change if same-day turnaround is wanted.
+#
+# `resume_sequences` runs AFTER `close_sequences`, and that order is load-bearing rather
+# than tidy: both read the same out-of-office lead, `outbound_resume_after` is the only
+# thing distinguishing it from a finished non-responder, close_sequences refuses to close
+# while that date is set, and resume_sequences clears it. Reverse them and the date is
+# gone before close_sequences looks, so it closes the lead that was just revived. See the
+# docstring in resume_sequences.py.
 SLOTS = {
     "morning":   ["send_replies", "reply_check", "sync_unsubscribes", "sync_bounces",
-                   "close_sequences", "sync_sends"],
+                   "close_sequences", "resume_sequences", "sync_sends"],
     "midday":    ["reply_check"],
     "afternoon": ["reply_check"],
 }
@@ -77,7 +84,8 @@ JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sy
               "sync_bounces": "Bounce sync",
               "close_sequences": "Sequence close-out",
               "sync_sends": "Activity logging",
-              "send_replies": "Approved replies"}
+              "send_replies": "Approved replies",
+              "resume_sequences": "Out-of-office restarts"}
 
 # Extra arguments per job. `send_replies` is capped because the heartbeat runs it
 # unattended and nobody reads a dry run first: a reviewer who drag-fills `Approve` down
@@ -101,6 +109,8 @@ SUMMARY_PATTERNS = [
     re.compile(r"^no finished sequences.*$", re.M),
     re.compile(r"^\d+ engagement\(s\) (?:written|would be written).*$", re.M),
     re.compile(r"^\d+ sent, \d+ skipped, \d+ failed.*$", re.M),   # send_replies
+    re.compile(r"^\d+ resumed, \d+ blocked.*$", re.M),            # resume_sequences
+    re.compile(r"^no contact has a resume date.*$", re.M),
 ]
 
 

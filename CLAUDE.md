@@ -114,6 +114,7 @@ laptop is.
 | Contact ⇄ Smartlead lead | **Email is the join key.** Both systems key on it; no mapping table needed |
 | Reply outcome / lifecycle | `outbound_status`, `outbound_reply_intent` on the contact |
 | Suppression, recycle date | `outbound_suppressed`, `outbound_recycle_after` on the contact |
+| A sequence paused by an out-of-office | `outbound_resume_after` on the contact — the day to restart. Cleared once restarted, so set = still waiting |
 | Which replies are already handled | `smartlead_message_id` in the Reply Review Queue Sheet (`config/review-surfaces.md`) |
 | Generated message versions | The review CSV in `reviews/`, plus what is live in the Smartlead campaign |
 | Approval | The Slack thread where it was given, plus the Smartlead campaign it produced |
@@ -178,7 +179,13 @@ scripts/                   ← Python (stdlib + anthropic only)
                              see our sends: both vendor paths are unavailable
   close_sequences.py       ← finished sequences -> outbound_status=no_response, so a
                              non-replier is contactable again instead of stuck
-                             in_sequence forever. DRY RUN BY DEFAULT
+                             in_sequence forever. DRY RUN BY DEFAULT. Will NOT close a
+                             contact with outbound_resume_after set: that sequence is
+                             paused for an absence, not finished
+  resume_sequences.py      ← restarts a sequence an out-of-office froze, on the date the
+                             auto-reply named. Without it a prospect who was merely on
+                             holiday gets email 1 and is never contacted again. Runs
+                             AFTER close_sequences (see its docstring). DRY RUN BY DEFAULT
   sync_bounces.py          ← Smartlead bounces -> HubSpot outbound_status=bounced.
                              DRY RUN BY DEFAULT. Never sets outbound_suppressed: a
                              bounce is a deliverability fact, not a consent decision

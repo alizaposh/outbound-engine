@@ -650,7 +650,7 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
-## `out_of_office` may be a permanent dead end — OPEN, found 2026-09-09. **Decide this**
+## `out_of_office` was a permanent dead end — FIXED 2026-09-09 (`resume_sequences.py`)
 
 The bigger half of the OOO problem, surfaced when Aliza reported that **Smartlead's OOO
 detection labelled all seven of her human replies as out-of-office.**
@@ -705,6 +705,46 @@ has come, which slots into the morning heartbeat beside the other syncs.
 mode instead of narrowing it. "Never resumes" stops being reachable at all, whatever the
 classifier decides — and the flake below is proof that the classifier will sometimes
 decide wrong.
+
+### BUILT 2026-09-09 — `scripts/resume_sequences.py`
+
+Built without waiting for the clean test, by decision: the dated resume is correct
+whichever way that test comes out, and the test only establishes how urgent it was.
+
+- `reply_check.py` reads the return date out of the auto-responder into
+  `named_return_date`, and `resume_date()` turns it into `outbound_resume_after`.
+- `resume_sequences.py` restarts the lead when the day arrives and **clears the date**,
+  so it is idempotent and a value present means "still waiting".
+- New HubSpot property **`outbound_resume_after`** (date), created 2026-09-09.
+- `resume_ooo_default_days: 14` in `config/reply-defaults.md` for auto-responders that
+  name no date. Two weeks because **the errors are not symmetric**: resuming early mails
+  someone still away, resuming late costs a few days on a lead that was otherwise lost.
+
+**Three things this build turned up that were not in the plan:**
+
+1. **`close_sequences.py` would have killed the leads this recovers.** An out-of-office
+   lead is `COMPLETED` in Smartlead and `in_sequence` in HubSpot — byte-identical to a
+   finished non-responder — so it was being closed to `no_response` before its resume
+   date, flipping the status `resume_sequences` requires. Fixed with a guard (any
+   `outbound_resume_after` blocks closing) **and** slot ordering: close runs FIRST, while
+   the date is still there to protect the lead, because this job is what clears it. Both
+   halves are needed; either alone leaves a window.
+2. **A named date already in the past must resolve to tomorrow, not today.**
+   Auto-responders outlive the absence they describe, so a poll catching a stale one
+   would resume instantly — the exact behaviour a *dated* resume exists to prevent.
+3. **HubSpot returns `date` properties as epoch milliseconds from the search API** and as
+   ISO strings elsewhere, and search *filters* need millis or they 400. Compared as a raw
+   string, `"1788…"` sorts below any ISO date and **every contact reads as overdue**. All
+   reads go through `as_date()`; both shapes are covered in the self-test.
+
+**Verified:** both self-tests pass; a live round trip on a real contact showed the due
+contact found, the `replied` guard refusing it, `UNMATCHED` refusing to guess a lead id,
+and the contact restored (confirmed by an authoritative object read, not the lagging
+search index).
+
+**Still worth running the clean test** — one lead, a real auto-responder, read the lead
+status. `PAUSED` would mean Smartlead does have the auto-restart after all and this job is
+belt-and-braces; `COMPLETED` confirms it was load-bearing. Either way it is now safe.
 
 ## FIXED 2026-09-09: `out_of_office` sometimes classified as `automated_reply`
 

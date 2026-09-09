@@ -58,7 +58,7 @@ are no longer in the enum, and **nothing routes to either**:
 | not_qualified | disqualified | no | stop | Mark disqualified; excluded from future campaigns by the eligibility status filter (reversible) |
 | wrong_contact | disqualified (old contact) | no | stop | Old contact excluded; named replacement created as a **referral lead only — never enrolled, never sent**. See below |
 | asked_to_stop | opted_out | YES (+ opt_out_date) | stop | Confirm removal. The ONLY classifier-driven suppression |
-| out_of_office | unchanged | no | **Smartlead resumes it, we do not** | Ignore; do NOT advance the lead or write status=replied. See "Who resumes an out-of-office" below |
+| out_of_office | unchanged | no | **we resume it, on a date** | Do NOT advance the lead or write status=replied. Write `outbound_resume_after` from the return date in the auto-reply (else +14d); `resume_sequences.py` restarts it then. See "Who resumes an out-of-office" below |
 | automated_reply | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
 
 ### Recycle windows — `outbound_recycle_after` (set on not_now / not_interested)
@@ -400,31 +400,61 @@ python scripts/reply_check.py --campaign 123 --limit 5
 - **It never writes `hs_email_optout`.** Only `outbound_suppressed` +
   `outbound_opt_out_date`, plus a Smartlead unsubscribe. Asserted in code.
 
-## Who resumes an out-of-office (revised 2026-09-02)
+## Who resumes an out-of-office (rewritten 2026-09-09 — **the engine does, on a date**)
 
-**Smartlead has its own OOO auto-pause**, which pauses the lead and **auto-restarts after
-N days**, then sends the follow-up. Confirmed by the person running outbound.
+**The engine schedules the restart itself and depends on Smartlead for none of it.**
 
-**So the engine no longer resumes `out_of_office`.** It used to, and that was wrong in a
-way that is easy to miss: Smartlead's pause encodes "they are away until roughly then",
-and resuming immediately overrides that wait and mails someone who is still out — the
-precise thing the auto-pause exists to prevent. Two systems both trying to be helpful
-would have produced a worse outcome than either alone.
+    out_of_office -> read the return date out of the auto-reply
+                  -> write outbound_resume_after on the contact
+                  -> scripts/resume_sequences.py restarts the lead when the day arrives
 
-**`automated_reply` still resumes, and the distinction is the point.** Smartlead's feature
-is out-of-office *specifically*. A ticketing autoresponder, a delivery notification, a
-"your ticket has been received" — none of those are away messages, so Smartlead will not
-pause-and-restart for them. Stop-on-reply halts the sequence and **nothing else would ever
-restart it**, so the engine's resume is the only thing that unfreezes that lead.
+`resume_ooo_default_days` (14) covers an auto-responder that names no date. A date it
+*does* name always wins. Both live in `config/reply-defaults.md`.
 
-**The intent is still classified and still written** to `outbound_reply_intent` for both.
-Handing the resume to Smartlead does not mean not noticing.
+### What this replaced, and why it was wrong
 
-### The residual risk, recorded rather than solved
-If Smartlead **misses** an out-of-office and reads it as a real reply, it will not pause
-or restart — and the engine no longer resumes either. That lead stays frozen and nobody is
-told. Our classification is the only signal that it happened, so an `out_of_office` intent
-appearing on a lead whose sequence never continues is worth looking at. **If that turns
-out to be common, the fix is to resume only when Smartlead has not already paused**, which
-needs the lead status value Smartlead sets on an OOO pause — not knowable without
-observing a real one.
+The previous rule was **"Smartlead resumes it, we do not"**, resting on a single premise:
+that Smartlead has an OOO auto-pause which auto-restarts after N days. That premise does
+not survive contact with the system:
+
+- **No OOO auto-pause or auto-restart setting is exposed on the campaign object.** The
+  only related field is `stop_lead_settings`, and ours is `REPLY_TO_AN_EMAIL`.
+- **`REPLY_TO_AN_EMAIL` stops the lead on ANY reply** — and an auto-responder is a reply.
+- Seven test replies **Smartlead itself labelled out-of-office** all finished as
+  `COMPLETED`. **Not one was `PAUSED`.**
+- Smartlead's OOO detection is separately unreliable: those seven were ordinary human
+  replies, and it called every one of them out-of-office.
+
+**If nothing restarts those leads, a prospect who was merely on holiday receives email 1
+and is never contacted again.** That is the worst shape a bug here can take. It is silent
+— the lead reads `COMPLETED`, exactly like a genuine non-replier — and it strikes the most
+recoverable non-response there is. The old "residual risk" note called this a rare case
+where Smartlead *misses* an OOO; the evidence says it is the ordinary path.
+
+### Why a date rather than better detection
+
+The auto-responder tells us itself: they nearly always say when they are back. Reading
+that date needs no vendor feature and no second signal, and it **deletes the "never
+resumes" failure mode** rather than narrowing it — which matters, because the classifier
+is not perfect and `out_of_office` has already been observed slipping to
+`automated_reply`. Behaviour that depends on getting a label exactly right will
+eventually get it wrong.
+
+`automated_reply` is unchanged and still resumes **immediately**: nobody is absent, so
+there is nothing to wait for.
+
+### The safety rules that matter
+
+An absence is often weeks, and the date is written before it starts. `resume_sequences.py`
+therefore re-reads everything at resume time and **only restarts a contact still sitting
+at `in_sequence`** — the one status an out-of-office leaves behind. Anything else means
+something happened while they were away. The important member of that set is `replied`:
+resuming there would push sequence step 2 into a live conversation, as a persona who is
+supposedly already corresponding with them.
+
+**`close_sequences.py` will not close a contact while `outbound_resume_after` is set**,
+and the morning slot runs it **before** `resume_sequences.py`. Both halves are required:
+an out-of-office lead is `COMPLETED` in Smartlead and `in_sequence` in HubSpot, which is
+indistinguishable from a finished non-responder, and that date is the only thing telling
+them apart. Since this job clears the date, running it first would remove the very
+protection the other job depends on.

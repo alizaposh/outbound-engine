@@ -12,7 +12,7 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
 
 | Slot | Time (America/New_York) | Days | Jobs |
 |---|---|---|---|
-| `morning` | 09:45 | Mon–Fri | **approved replies (SENDS)** + reply check + unsubscribe sync + bounce sync + sequence close-out + activity logging |
+| `morning` | 09:45 | Mon–Fri | **approved replies (SENDS)** + reply check + unsubscribe sync + bounce sync + sequence close-out + **out-of-office restarts** + activity logging |
 | `midday` | 13:05 | Mon–Fri | reply check |
 | `afternoon` | 16:25 | Mon–Fri | reply check |
 
@@ -32,6 +32,13 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
   a full day. Three slots keep the worst case to about four working hours, and each poll
   is only a handful of API calls.
 - **Weekdays only.** Nobody reviews the queue at the weekend. Monday morning catches it.
+- **`resume_sequences` runs AFTER `close_sequences`, and the order is load-bearing.** Both
+  read the same out-of-office lead — `COMPLETED` in Smartlead, `in_sequence` in HubSpot,
+  indistinguishable from a finished non-responder — and `outbound_resume_after` is the
+  only thing telling them apart. `close_sequences` refuses to close while that date is
+  set; `resume_sequences` clears it. Reverse them and the date is gone before
+  `close_sequences` looks, so it closes the lead that was just revived. **Do not reorder
+  the morning slot without reading the docstring in `resume_sequences.py`.**
 - **The morning slot SENDS MAIL, and it is the only one that does** (added 2026-09-09).
   `send_replies` runs first in that slot, so replies a human marked `Approve` in the
   review Sheet go out at the top of the business day instead of waiting for someone to

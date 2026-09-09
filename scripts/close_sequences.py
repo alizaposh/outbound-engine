@@ -42,7 +42,7 @@ from eligibility import HubSpot, env_token, env_value  # noqa: E402
 from reply_check import HubSpotWriter  # noqa: E402
 
 SL_BASE = "https://server.smartlead.ai/api/v1"
-READ_PROPS = ["email", "outbound_status", "outbound_suppressed"]
+READ_PROPS = ["email", "outbound_status", "outbound_suppressed", "outbound_resume_after"]
 # The only Smartlead lead status this acts on. See guarantee 3.
 DONE_STATUS = "COMPLETED"
 # The only HubSpot status it will move. See guarantee 2.
@@ -57,6 +57,16 @@ def decide(smartlead_status: str, existing: dict) -> tuple[str, dict, str]:
         return "not finished", {}, f"Smartlead status is {smartlead_status!r}, not COMPLETED"
     if status == TO_STATUS:
         return "already closed", {}, f"already outbound_status={TO_STATUS}"
+    if (existing.get("outbound_resume_after") or "").strip():
+        # An out-of-office lead is COMPLETED in Smartlead and still `in_sequence` here,
+        # so without this it looks exactly like a finished non-responder and gets closed
+        # -- which flips the status `resume_sequences.py` requires and kills the very
+        # lead that job exists to recover. A pending resume date means the sequence is
+        # waiting, not finished. Any date blocks closing, not just a future one: a date
+        # still present means the resume has not happened yet.
+        return ("waiting to resume", {},
+                f"outbound_resume_after is {str(existing['outbound_resume_after'])[:10]}; "
+                "the sequence is paused for an absence, not finished")
     if status != FROM_STATUS:
         # Guarantee 2. A lead who replied is COMPLETED in Smartlead as well, so without
         # this a reply, a booked meeting or an opt-out would be overwritten by a
@@ -153,7 +163,7 @@ def main(argv=None) -> int:
     writer = HubSpotWriter(env_token(), a.apply)
     contacts = hs_read.search_by_email(sorted(finished), READ_PROPS)
     counts = {"close": 0, "already closed": 0, "leave alone": 0, "not finished": 0,
-              "unmatched": 0}
+              "waiting to resume": 0, "unmatched": 0}
     print(f"\n{len(finished)} finished lead(s), {len(contacts)} matched in HubSpot\n")
 
     for email, sl_status in sorted(finished.items()):
@@ -165,7 +175,8 @@ def main(argv=None) -> int:
         outcome, props, note = decide(sl_status, existing)
         counts[outcome] += 1
         label = {"close": "CLOSED  ", "already closed": "CURRENT ",
-                 "leave alone": "KEPT    ", "not finished": "SKIP    "}[outcome]
+                 "leave alone": "KEPT    ", "not finished": "SKIP    ",
+                 "waiting to resume": "WAITING "}[outcome]
         print(f"  {label} {email:42} {note or f'{FROM_STATUS} -> {TO_STATUS}'}")
         if props:
             print(f"           {writer.write(existing['hs_object_id'], props)}")
@@ -207,6 +218,20 @@ def _self_test() -> int:
         outcome, props, _ = decide(st, {"outbound_status": "in_sequence"})
         check(f"Smartlead {st or '(empty)'} does not close",
               (outcome, props), ("not finished", {}))
+
+    # An out-of-office lead is COMPLETED + in_sequence, indistinguishable from a finished
+    # non-responder without this. Closing it would break resume_sequences.py.
+    check("a pending resume date blocks closing",
+          decide("COMPLETED", {"outbound_status": "in_sequence",
+                               "outbound_resume_after": "2026-09-20"})[:2],
+          ("waiting to resume", {}))
+    check("a resume date already due ALSO blocks closing",
+          decide("COMPLETED", {"outbound_status": "in_sequence",
+                               "outbound_resume_after": "2020-01-01"})[0],
+          "waiting to resume")
+    check("an empty resume date does not block",
+          decide("COMPLETED", {"outbound_status": "in_sequence",
+                               "outbound_resume_after": ""})[0], "close")
 
     # Guarantee 5.
     check("already closed is a no-op",

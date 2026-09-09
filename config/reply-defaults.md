@@ -24,6 +24,12 @@ convey.
 recycle_not_now_days: 90
 recycle_not_interested_days: 180
 
+# How long to wait before restarting a sequence halted by an out-of-office
+# auto-responder that named NO return date. A date the auto-responder DOES name always
+# wins over this. Applies to out_of_office only: automated_reply resumes immediately,
+# because nobody is absent. See resume_date() and scripts/resume_sequences.py.
+resume_ooo_default_days: 14
+
 # Which classified intents may be auto-sent WITHOUT a human reading the reply first.
 # DELIBERATELY EMPTY, and the script asserts it is empty at startup rather than merely
 # reading it. Emptying is not the same as unimplemented: reply_check.py contains no
@@ -43,6 +49,12 @@ auto_send_intents: []
 - **Lengthening either is safe. Shortening is not**, and not because of the code — the
   code handles it fine. Shortening means contacting people sooner after they declined,
   which is a deliverability and reputation decision, not a config tweak.
+- **`resume_ooo_default_days = 14`** is a fallback, not the normal path: most
+  auto-responders state a return date and that date wins. It only covers the ones that
+  say "I am away" with no "until". Two weeks is chosen to be longer than a typical
+  holiday, because **the two errors are not symmetric**: resuming too early mails someone
+  who is still away and looks careless, while resuming too late costs a few days on a
+  lead that would otherwise have been lost entirely. Lengthen freely; shorten with care.
 - **`objection` has no recycle window on purpose in v1**, so a contract expiry does not
   schedule its own return. That is a known gap, deferred by decision on 2026-08-31 — see
   "V2: give `objection` a recycle date of its own" in `BACKLOG.md`. Do not add a value
