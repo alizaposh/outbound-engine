@@ -345,8 +345,9 @@ The ten intents:
 - interested: wants to engage, learn more, or meet. ALSO covers a request for materials,
   pricing, a deck, or a demo, which are buying signals.
 - question: asking something before deciding, with no buying lean.
-- objection: has a concern to address.
-- not_interested: a decline, with nothing stronger present.
+- objection: a concern a reply could address. THIS INCLUDES A NAMED INCUMBENT -- "we
+  already use X", "we're happy with X" -- because a stated reason is a concern.
+- not_interested: a BARE decline that gives no reason. If they said WHY, it is objection.
 - not_now: positive or neutral but explicitly later.
 - not_qualified: structural non-fit (out of business, does not run ticketed events).
 - wrong_contact: the sender has left, or is not the right person.
@@ -396,6 +397,22 @@ different replies from the ones you will be given; apply the reasoning, not the 
 
   "How does your payout schedule work?"
   -> question. Asking how the product behaves, with nothing about cost or switching.
+
+  "We're happy on Tixr, but thanks for reaching out."
+  -> objection, NOT not_interested. Naming an incumbent IS the concern, and "we already
+     have someone" is the most workable objection in this market -- it is a comparison a
+     reply can engage, which is exactly what an objection is. The friendly, final-sounding
+     wording makes this the easiest miss on the whole list, so classify on what the
+     sentence CONTAINS, not on how politely it lands. The "but" is doing real work.
+     There is no contract and no date here, which is what separates it from the Tixr
+     example further up: a contract you must wait out is not_now, a preference you could
+     change is objection.
+
+  "Not interested, thanks."
+  -> not_interested. The contrast with the line directly above is the entire test, and it
+     is the only thing that separates these two intents: this reply gives NO REASON. The
+     moment a decline names why -- an incumbent, a price, a missing feature, a bad past
+     experience -- it stops being a bare decline and becomes an objection.
 
 A COST ASK FROM A HUMAN IS ALWAYS interested. It holds even when the same reply also
 defers ("send pricing, I'll look next week"), carries an objection, or is two words long.

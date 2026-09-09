@@ -19,8 +19,10 @@ value (enum in `config/hubspot-properties.md`):
 - **`interested`** — wants to engage / learn more / meet. **Also covers a request for
   materials, pricing, a deck, or a demo** — those are buying signals, not questions.
 - **`question`** — asking something before deciding, with no buying lean.
-- **`objection`** — has a concern to address.
-- **`not_interested`** — a decline, with nothing stronger present.
+- **`objection`** — a concern a reply could address. **Includes a named incumbent**
+  ("we already use X", "we're happy with X"): a stated reason is a concern.
+- **`not_interested`** — a **bare** decline that gives no reason. If they said why, it is
+  an `objection`.
 - **`not_now`** — positive or neutral, but explicitly later.
 - **`not_qualified`** — structural non-fit (out of business, doesn't run ticketed events).
 - **`wrong_contact`** — the sender has left, or isn't the right person.
@@ -339,6 +341,27 @@ python scripts/reply_check.py --campaign 123 --limit 5
 
   The test between the two is now clean: **a contract or a season they must wait out is
   `not_now`; a doubt about us that an answer would resolve is `objection`.**
+- **`objection` vs `not_interested` on satisfied incumbency — FIXED 2026-09-09, found in
+  the first live accuracy test.** *"We're happy on tixr, but thanks for reaching out."*
+  classified as **`not_interested`**, so the drafted reply was a polite goodbye. It should
+  be **`objection`**.
+
+  **Naming an incumbent is the most workable objection this engine will receive** — it is
+  a comparison a reply can engage — and it was being routed to a sign-off. Two costs, not
+  one: the draft closes a live conversation, and the two intents recycle on different
+  clocks, so the come-back date was wrong too.
+
+  The model was classifying on **tone**. "Happy on X, thanks anyway" is friendly and
+  sounds final, while the content is a switching conversation; the word *but* carried the
+  whole signal and was dropped. Note that this sits directly beneath the contract-lock
+  rule above and is a different case: **a contract you must wait out is `not_now`; a
+  preference you could change is `objection`.**
+
+  Fixed with an exemplar and its contrast pair in the classifier prompt, not a longer
+  definition — the repeated lesson in this repo. The pair is the whole test:
+  *"We're happy on Tixr, but…"* → `objection` (gives a reason) vs *"Not interested,
+  thanks."* → `not_interested` (gives none). **`not_interested` is the intent for a
+  decline with nothing in it to answer.**
 
 ### What this script deliberately does not do
 

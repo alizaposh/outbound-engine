@@ -594,11 +594,11 @@ and prints the three UI-only settings it cannot check so they get eyeballed.
 ## Reply-draft accuracy: first live test — 2026-09-09. **Two real misses**
 
 Seven replies sent by hand from `aliza.mayer+*@gmail.com` into campaign 3930942, one per
-intent, then classified and drafted by `reply_check.py`. **5 of 7 correct. 7 of 7 drafts
-populated, none hallucinated a claim, none breached positioning.** The two misses both
-lose a live lead, which is the expensive kind.
+intent, then classified and drafted by `reply_check.py`. **6 of 7 correct. 7 of 7 drafts
+populated, none hallucinated a claim, none breached positioning.** One real miss, and it
+loses a live lead — the expensive kind.
 
-**MISS 1 — competitor incumbency reads as `not_interested`. Fix this one.**
+**THE MISS — competitor incumbency reads as `not_interested`. FIXED 2026-09-09.**
 
 | | |
 |---|---|
@@ -617,24 +617,96 @@ model dropped it.**
 Also downstream: `not_interested` and `objection` recycle on different clocks, so the
 miss silently sets the wrong come-back date too (see the `objection` recycle-date item).
 
-*Fix:* the intent list needs an exemplar, not a longer definition — the recurring lesson
-in this repo. Add the incumbency case verbatim to the `objection` entry in
-`instructions/reply-handling.md`, plus the contrast pair (`"we're happy on tixr, but…"`
-→ objection; `"not interested, please remove me"` → not_interested). Re-run these seven.
+*Fixed* with an exemplar and its contrast pair in the classifier prompt, not a longer
+definition — the recurring lesson in this repo. `"We're happy on Tixr, but…"` → objection
+(gives a reason) against `"Not interested, thanks."` → not_interested (gives none), plus
+tightened definitions: `objection` names incumbency explicitly, `not_interested` is now
+"a **bare** decline that gives no reason". Mirrored into
+`instructions/reply-handling.md` so the doc and the prompt cannot drift — that divergence
+is what caused the 5-of-7 empty-draft bug.
 
-**MISS 2 — a direct product question gets deflected to a call.**
+**NOT A MISS, recorded because it looks like one — the payout deflection is correct.**
 
 | | |
 |---|---|
 | Prospect wrote | *"can you tell me more about posh? how do payouts work with posh?"* |
-| Classified | `interested` (defensible — they are interested) |
+| Classified | `interested` |
 | Drafted | *"Payout timing and terms are worth discussing properly on a call…"* |
 
-Two direct questions, neither answered. This is the SDR reflex that makes prospects stop
-replying: they asked a factual thing, and got a booking link. Payout terms are in
-`config/positioning.md` and are safe to state. **The draft should answer in one line,
-then offer the call.** Lower priority than miss 1 but the same root cause: no exemplar of
-a question being *answered*.
+This was first written up here as a second miss, on the reasoning that the terms are in
+`config/positioning.md` and should just be stated. **Both halves of that were wrong.**
+`positioning.md` does not state payout terms anywhere — the only occurrence of the word
+is in a list of operational pain points — and the draft prompt already carries an
+explicit rule that **"deferring to the call is never a failure"**, sitting under
+`NEVER INVENT A FACT ABOUT POSH`. The model has no product documentation in its prompt
+by design, because drafts are **not** machine-checked against an approved claims list the
+way cold copy is.
+
+So the deflection is the fabrication guard working exactly as intended, and "answer it in
+one line" would have loosened that guard with no source of truth behind it. **Worth
+keeping as a caution: an output that looks like under-performance can be a guardrail
+holding.** Check what the prompt forbids before calling a deflection a defect.
+
+The real gap this exposes is a **content** one, not a classifier one — see the approved-
+answers item below. Until that exists, deflecting is the only safe response.
+
+## A shareable reference for the ten intents — NOT STARTED (requested 2026-09-09)
+
+**Trigger:** none needed; do this whenever there is a spare slot. It is a writing task,
+not an engineering one.
+
+**What Aliza asked for:** a plain-English description of each of the ten classifications,
+in a form the sales team can read and comment on, so they can propose changes for v2.
+
+**Why it does not exist yet.** The definitions live in two places, and neither is
+shareable. The classifier prompt in `reply_check.py` is written *at a model* — precedence
+rules, worked exemplars, contrast pairs — and the table in `instructions/reply-handling.md`
+is written at whoever maintains the code. A rep asked "what counts as an objection?"
+cannot answer it from either. **That matters because reps are the people best placed to
+say a boundary is drawn wrong**, and the incumbency miss above is the proof: it was found
+by testing, but any SDR would have said immediately that "we're happy on Tixr" is a
+conversation, not a no.
+
+**What to write**, one block per intent:
+- What the prospect is doing, in a sentence a rep would recognise.
+- One or two **real** example replies — pull them from the live queue as they accumulate,
+  not invented ones. Real examples are what make the boundaries arguable.
+- What the engine does in response: does the sequence stop, what does HubSpot get, does
+  it come back later and when, does a draft go out.
+- **The nearest neighbouring intent and the line between them.** This is the part reps
+  will actually have opinions about. The three live pairs today: `objection` vs
+  `not_interested` (a reason vs a bare no), `not_now` vs `objection` (a wait you must
+  serve vs a preference you could change), and `interested` vs `question` (a cost or
+  switching ask is always interested).
+
+**Keep it generated, not hand-maintained.** A fourth hand-written copy of these
+definitions will drift from the other three, and the drift will be silent — that is
+exactly how the empty-draft bug happened. Derive the doc from `INTENTS` plus the
+`status` / `resume` / `queue` flags so the mechanical half cannot go stale, and let a
+human write only the prose. A stale reference shown to the team is worse than none,
+because they will review the wrong thing and sign off on behaviour that is not real.
+
+**Where it goes:** a Google Doc or a Sheet tab the team can comment on. Not a file in
+this repo, which nobody outside it will open.
+
+## Approved answers for common factual questions — NOT STARTED
+
+**Trigger:** prospects asking the same factual question often enough that deflecting to a
+call is costing replies. One instance so far (payouts), which is not yet enough.
+
+Drafts cannot state a product fact, correctly (above). The consequence is that *every*
+factual question routes to a call, including easy ones where a one-line answer would earn
+more goodwill than a booking link. Closing this needs two things, in order:
+
+1. An **approved answers** section in `config/positioning.md` — short, literal, safe-to-
+   send answers to the handful of questions that actually recur. This is a content task
+   for a human who knows the product, not something to generate.
+2. Injecting only that section into the draft prompt, with the existing hard rule intact:
+   answer **only** from the approved list, defer everything else.
+
+**Do not skip step 1.** Giving the model latitude to answer without an approved list is
+precisely the failure the current rule prevents, and drafts have no machine check to
+catch it.
 
 **Correct, and worth recording so they are not "fixed" later:** `not_now` grounded its
 come-back in the prospect's own words (*"our festival in november"* → *"after your
