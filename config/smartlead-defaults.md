@@ -145,8 +145,26 @@ Smartlead exposes **"BCC to CRM Settings — add a BCC email address to forward 
 sent by this sender account to your CRM"** at the account level. Set it on all 12
 mailboxes to HubSpot's portal BCC address.
 
-**Copy the address from HubSpot**, do not construct it: Settings → Objects → Activities →
-Email → BCC address. A wrong address fails silently, which is the worst failure mode here.
+**Use the BCC address, NOT the forwarding address.** HubSpot exposes two and they are not
+interchangeable:
+
+| HubSpot address | Purpose | Use it? |
+|---|---|---|
+| `<portal>@bcc.hubspot.com` | logs emails **you send** (outgoing) | **YES** |
+| `<portal>@forward.hubspot.com` | logs emails **you receive** (incoming) | **NO** |
+
+**Why the forwarding address is worse than logging nothing** (checked 2026-09-09, it was
+the one found first):
+- It logs the activity as **INCOMING**, so our outbound sends appear on the timeline as
+  though the prospect emailed us. A rep reading that draws the opposite conclusion about
+  who initiated contact.
+- HubSpot's own description: *"If no contact is found, a new one will be created."* That
+  breaks the standing no-new-contacts decision. Prospects would match existing records,
+  but the message also carries our sender address, so HubSpot may create contacts for the
+  12 sending mailboxes and pollute the CRM with our own infrastructure.
+
+**Copy it from HubSpot, do not construct it.** A wrong address fails silently, which is
+the worst failure mode available here.
 
 **Why this is better than logging the activity ourselves.** It uses each vendor's intended
 mechanism, adds no code, and creates nothing to maintain. Writing engagements from our
@@ -154,6 +172,16 @@ side was proven feasible (a `/crm/v3/objects/emails` engagement moves
 `notes_last_contacted` within ~20 seconds) and was the fallback — but it would make this
 repo the system of record for send activity, duplicating a vendor integration, and would
 double-log if Smartlead ever changes its position.
+
+### Roll out to ONE mailbox first, never twelve
+Set it on a single sender, send one test to a contact that already exists in HubSpot, and
+check three things before touching the other eleven:
+1. the activity appears on the contact;
+2. its direction reads **outgoing**, not incoming;
+3. **no new contact was created** for the sender address.
+
+Twelve mailboxes configured with a wrong address is twelve times the cleanup, and one of
+the failure modes creates CRM records.
 
 ### Two things the verification must settle
 1. **Our senders are not HubSpot users.** `carl.newmark@vibeposhvip.com` is not a seat in
