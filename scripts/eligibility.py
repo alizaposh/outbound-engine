@@ -63,6 +63,9 @@ GATED = {
     "notes_last_updated": "gate 9 recency",
     "notes_last_contacted": "gate 9 recency",
     "hs_last_sales_activity_timestamp": "gate 9 recency",
+    # Read so gate 9 can tell OUR OWN logged send apart from a rep's activity. Not gated
+    # on itself; it only changes the reason string.
+    "outbound_last_logged_send": "gate 9 reason attribution",
 }
 # Carried through for generation and review, not gated on.
 # prospect_org is the organizer's brand name and the single strongest personalization
@@ -355,11 +358,20 @@ def evaluate(p: dict, cfg: dict, owner_ids: dict[str, str], now: dt.datetime,
         return Decision("EXCLUDED", "in HubSpot sequence", "soft")
 
     # -- gate 9: recency. Empty means never and passes. ---------------------------
+    # Since 2026-09-09 this gate can fire on OUR OWN activity: scripts/sync_sends.py logs
+    # engine sends to the contact timeline, which moves notes_last_contacted. That is
+    # desirable -- it gives a mailed contact a 30-day cooldown they previously did not
+    # have -- but the reason must not claim a human is working them, because the whole
+    # point of this gate's reason is to tell a reader WHO is on the contact.
     window = int(cfg["recency_window_days"])
+    ours = as_date(g("outbound_last_logged_send"))
     for f in cfg["recency_fields"]:
         d = as_date(g(f))
         if d and (now - d).days < window:
-            return Decision("EXCLUDED", f"active in last {window}d ({f})", "soft")
+            engine = ours and abs((d - ours).days) <= 1
+            why = (f"mailed by the engine in last {window}d ({f})" if engine
+                   else f"active in last {window}d ({f})")
+            return Decision("EXCLUDED", why, "soft")
 
     return Decision("ELIGIBLE", "", "")
 
