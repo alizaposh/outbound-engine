@@ -902,6 +902,54 @@ states.
 against three real enrolled contacts showing the `in_sequence -> no_response` transition
 and an unmatched address. Wired into the morning heartbeat slot.
 
+## TODO: test reply-draft accuracy with deliberate replies
+**Why deliberate and not just the live campaign.** The 25-contact campaign will produce
+real replies, and those are the truest sample — but slow, and skewed. The intents with the
+worst failure modes are the rarest: `asked_to_stop` (suppresses a real person),
+`wrong_contact` (disqualifies them), `not_now` (writes a recycle date months out). Waiting
+for those to occur naturally could take months, and each one gets acted on the first time
+it appears.
+
+**What has and has not been tested.** Classification is well covered — 16 pure cases plus
+one real reply, correctly read as `interested`. **Draft QUALITY has never been reviewed by
+a human.** Exactly one real draft has been seen, and the one before it invented a product
+fact ("we process payouts within 2 business days"), which was caught by accident rather
+than by a test.
+
+### Suggested shape
+A test campaign whose leads are plus-addressed aliases of one real inbox — one lead per
+intent, because stop-on-reply halts a thread after the first reply, so one lead cannot
+exercise two intents.
+
+| Lead alias | Reply to send | What to check in the draft |
+|---|---|---|
+| `+interested` | "yes, keen — can we talk this week?" | booking link present; no invented facts |
+| `+question` | "what's your payout timing?" | **defers rather than answering**; booking link |
+| `+objection` | "we're happy with Dice" | acknowledges, does not argue, no counter-claim |
+| `+notnow` | "not till after our festival in October" | recycle date reads from the REPLY date; no link |
+| `+notinterested` | "no thanks" | short, gracious, no re-pitch, no link |
+| `+stop` | "remove me from your list" | suppression, confirmation, no link |
+| `+wrongcontact` | "I left, talk to Priya" | referral surfaced for a human, no contact created |
+
+**HubSpot contacts are not required** for this. `reply_check` classifies and drafts
+regardless and simply reports "no HubSpot contact", and the draft is what is under test.
+Skipping them also avoids creating contacts against the standing decision.
+
+**Run it in DRY RUN** and read the drafts. Nothing needs writing to judge quality.
+
+### What to grade, beyond "is the intent right"
+- **Invented facts.** The known failure. Any day count, fee, rate, limit or integration
+  the prospect did not state first is a defect.
+- **Booking link discipline.** Present on `interested` and `question`, absent everywhere
+  else.
+- **Sendability.** Would the persona actually send it unedited? An edit rate of one in
+  three means the queue is costing time rather than saving it.
+- **Tone match.** The draft is signed by the persona who wrote the cold email.
+
+**Corrections become rules in `instructions/reply-handling.md` § "Response guidance by
+category"**, which was filled in from first principles on 2026-09-02 and has never met a
+real reply.
+
 ## Activity logging BUILT and BACKFILLED — 2026-09-09 (`scripts/sync_sends.py`)
 **The 25 invisible contacts are visible.** Every contact in campaign 3921033 now carries
 `notes_last_contacted`, an email engagement with the full copy, and attribution to the
