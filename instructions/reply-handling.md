@@ -52,7 +52,7 @@ are no longer in the enum, and **nothing routes to either**:
 |---|---|---|---|---|
 | interested | replied | no | stop | Answer (send any materials asked for) **in the persona's voice**; share the **meeting owner's** booking link from `config/meeting-routing.md` |
 | question | replied | no | stop | Answer the question, then share the **meeting owner's** booking link (`config/meeting-routing.md`) — persona stays the correspondent |
-| objection | replied | no | stop | Handle the objection, keep engaging |
+| objection | replied | no | stop | Acknowledge, leave the door open, **no call and no link** — see below |
 | not_now | replied | no | stop | Acknowledge; **set `outbound_recycle_after`** (see recycle windows below); nurture later |
 | not_interested | replied | no | stop | Polite close; **set `outbound_recycle_after`**; stays recyclable. Flag firm/definitive rejections for optional human review — a human may manually suppress, automation does not |
 | not_qualified | disqualified | no | stop | Mark disqualified; excluded from future campaigns by the eligibility status filter (reversible) |
@@ -362,6 +362,34 @@ python scripts/reply_check.py --campaign 123 --limit 5
   *"We're happy on Tixr, but…"* → `objection` (gives a reason) vs *"Not interested,
   thanks."* → `not_interested` (gives none). **`not_interested` is the intent for a
   decline with nothing in it to answer.**
+
+- **An `objection` draft proposes no meeting and carries no link — CHANGED 2026-09-09.**
+  The guidance used to read *"acknowledge the concern, do NOT argue it, offer the call.
+  No link, and never counter with a claim."* Three of those four clauses were right.
+
+  **The CTA never made sense.** If the draft may not argue the objection and may not
+  counter with a claim, the proposed call has no stated purpose: it asks someone who just
+  said "we're happy with X" to book thirty minutes to discuss nothing we are allowed to
+  raise. "Offer the call" and "no link" also contradicted each other outright, and the
+  model resolved that by pasting the link.
+
+  **The CTA was also generating fabrications, which is the real reason it had to go.** A
+  meeting you are forbidden to justify forces you to invent a justification. Asked to
+  handle *"your platform can't do reserved seating, can it?"*, the prompt drafted
+  **"Reserved seating is actually something we handle well"** — a capability claim, for a
+  real prospect, from a model with no product documentation in its context and no
+  approved-claims check on its output. `positioning.md` says nothing about reserved
+  seating. The instruction to sell is what produced the lie; removing it removes the
+  pressure.
+
+  **What an objection draft does now:** acknowledge it, leave the door open, stop. The
+  come-back is `outbound_recycle_after`, not a CTA — the draft does not have to win
+  anything back today, and trying is how it invents things.
+
+  Note this does **not** cost us the legitimate call offers. A prospect who *asks* us
+  something classifies as `question` or `interested`, both of which still carry the link.
+  The line is clean: **a call is offered in answer to a question, never in answer to a
+  no.**
 
 ### What this script deliberately does not do
 

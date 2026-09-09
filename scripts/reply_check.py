@@ -443,8 +443,19 @@ an empty draft makes a human write from scratch, which is most of what the queue
 save. What each one says (from instructions/reply-handling.md):
 
   interested / question -> warm, one line, PLUS the booking link above.
-  objection             -> acknowledge the concern, do NOT argue it, offer the call. No
-                           link, and never counter with a claim.
+  objection             -> acknowledge it, leave the door open, and STOP. Do not argue
+                           it, do not counter with a claim, DO NOT PROPOSE A CALL and do
+                           not paste the booking link. They told you no and gave a
+                           reason; asking them to book a meeting is a non-sequitur.
+                           **The CTA is also what makes this intent dangerous.** A
+                           meeting you are forbidden to justify forces you to invent a
+                           justification: told to offer a call, this prompt drafted
+                           "reserved seating is actually something we handle well" for a
+                           real prospect, a capability claim from a model that has never
+                           seen the product documentation. Removing the CTA removes the
+                           pressure that produced it. The engine comes back on its own
+                           via outbound_recycle_after -- this draft does not have to win
+                           anything back today, and trying is how it lies.
   not_now               -> acknowledge their timing, say you will come back then, name
                            the time they gave. No link, no pitch.
   not_interested        -> short and gracious. No re-pitch, no link, no "just one more

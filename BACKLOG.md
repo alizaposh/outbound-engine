@@ -650,6 +650,35 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
+## FLAKY: `out_of_office` sometimes classifies as `automated_reply` — found 2026-09-09
+
+**Roughly 2 runs in 8** of the `--self-test` suite, on this one case:
+
+> *P2: an auto-responder that ASKS for pricing is still an auto-responder. Classify by
+> form, do not mine the body.*
+
+Pre-existing, and unrelated to the objection work that surfaced it — nothing in that
+change touches this pair. **Easy to miss because the suite still reports 15/16 and the
+failure line reads `WRONG`, which a grep for `MISS`/`FAIL` will not catch.**
+
+**Why it is not cosmetic.** These two intents differ in exactly one field, `resume`:
+
+| | `resume` | effect |
+|---|---|---|
+| `out_of_office` | `False` | Smartlead's own OOO auto-pause runs its course and restarts on its own |
+| `automated_reply` | `True` | we restart the sequence immediately |
+
+So the misclassification **mails someone who is still out of the office**, overriding an
+intentional wait — the precise failure the 2026-09-02 change to `out_of_office` was made
+to prevent. It is silent: nothing downstream can tell that the resume was wrong.
+
+*Likely cause:* the case is adversarial by construction — an auto-responder whose body
+contains a buying signal — so it sits exactly on the form-versus-content boundary that
+precedence rule 2 exists to settle. The fix is probably to make that case an exemplar in
+the prompt rather than only a test of it, which is the pattern that fixed incumbency.
+
+*Do not raise the pass bar to 15/16 to make the suite green.* The flake is the finding.
+
 ## A shareable reference for the ten intents — NOT STARTED (requested 2026-09-09)
 
 **Trigger:** none needed; do this whenever there is a spare slot. It is a writing task,
@@ -707,6 +736,17 @@ more goodwill than a booking link. Closing this needs two things, in order:
 **Do not skip step 1.** Giving the model latitude to answer without an approved list is
 precisely the failure the current rule prevents, and drafts have no machine check to
 catch it.
+
+**An `objection` draft no longer proposes a call — changed 2026-09-09 on Aliza's
+challenge, and it removed a fabrication.** Asked why we would propose a meeting after an
+objection at all, which the guidance had said to do. We would not: the draft may not
+argue the objection and may not counter with a claim, so the call had no purpose it was
+allowed to state. Worse, the CTA was *generating* invented claims — told to offer a call
+on *"your platform can't do reserved seating, can it?"*, the prompt drafted **"Reserved
+seating is actually something we handle well"**, a capability claim absent from
+`positioning.md`, in an output with no machine check. Removing the CTA removed the
+pressure that produced it. See `instructions/reply-handling.md`; the rule is now **a call
+is offered in answer to a question, never in answer to a no.**
 
 **Correct, and worth recording so they are not "fixed" later:** `not_now` grounded its
 come-back in the prospect's own words (*"our festival in november"* → *"after your
