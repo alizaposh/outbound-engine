@@ -125,3 +125,58 @@ One-time optimization to investigate: whether Smartlead offers an account/
 workspace-level default that turns activity logging on for all new campaigns. If
 it exists, set it once and keep the per-campaign verification as the safety net.
 That's the only lever that reduces the manual burden — worth 10 minutes to check.
+
+---
+
+## HubSpot activity logging: the toggle does not work, use BCC-to-CRM (2026-09-09)
+
+**Smartlead support, 2026-09-09: "HubSpot syncing cannot be enabled for leads that are
+added through an API import. There are no API parameters available to enable this setting
+during the import process."**
+
+Every lead this engine sends to is added by API, so **the per-campaign HubSpot activity
+logging gate can never be satisfied.** Confirmed in practice first: campaign 3921033 sent
+25 emails and all 25 contacts had `notes_last_contacted`,
+`hs_last_sales_activity_timestamp`, `notes_last_updated`, `num_contacted_notes` and
+`hs_email_last_send_date` all `None`. A rep opening any of them saw no evidence of contact.
+
+### The replacement: BCC to CRM, set per sender account
+Smartlead exposes **"BCC to CRM Settings — add a BCC email address to forward all emails
+sent by this sender account to your CRM"** at the account level. Set it on all 12
+mailboxes to HubSpot's portal BCC address.
+
+**Copy the address from HubSpot**, do not construct it: Settings → Objects → Activities →
+Email → BCC address. A wrong address fails silently, which is the worst failure mode here.
+
+**Why this is better than logging the activity ourselves.** It uses each vendor's intended
+mechanism, adds no code, and creates nothing to maintain. Writing engagements from our
+side was proven feasible (a `/crm/v3/objects/emails` engagement moves
+`notes_last_contacted` within ~20 seconds) and was the fallback — but it would make this
+repo the system of record for send activity, duplicating a vendor integration, and would
+double-log if Smartlead ever changes its position.
+
+### Two things the verification must settle
+1. **Our senders are not HubSpot users.** `carl.newmark@vibeposhvip.com` is not a seat in
+   the portal, and HubSpot derives the "logged by" user from the sending address. Whether
+   it logs an email from an unrecognised sender, logs it unowned, or drops it is unknown.
+   **If it drops them, this approach is dead** and the fallback is
+   `/crm/v3/objects/emails` from our side.
+2. **It does not backfill.** The 25 emails already sent will never be logged. Either
+   accept that for round one, or backfill from Smartlead message history using the
+   engagement API.
+
+### The verification gate, unchanged from the version written for the old toggle
+> After enabling, confirm on a test contact that a Smartlead send appears as an EMAIL
+> activity AND moved native "Last Contacted" (not only "Last Activity Date"). Only then
+> release the full lead set.
+
+A natural test arrives on its own: **email 2 of campaign 3921033 sends ~2026-09-11** to
+all 25 contacts. Re-run the activity check then. A single test send settles it sooner.
+
+### If it works, a side effect to expect and probably want
+`notes_last_contacted` is one of gate 9's `recency_fields` with a 30-day window, so a
+contact we mail becomes **gate 9 excluded for 30 days after their last send**. Today there
+is NO cooldown after `close_sequences` moves a non-replier to `no_response` — they become
+re-contactable immediately, which is worse. The cost is semantic: gate 9's reason will
+read "recently touched" when it was our own engine, which misleads whoever reads the
+exclusion report. Worth correcting the reason string once this is confirmed working.

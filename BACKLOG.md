@@ -902,6 +902,39 @@ states.
 against three real enrolled contacts showing the `in_sequence -> no_response` transition
 and an unmatched address. Wired into the morning heartbeat slot.
 
+## HubSpot activity: the toggle is impossible, BCC-to-CRM is the fix — 2026-09-09
+**Smartlead support: HubSpot syncing cannot be enabled for API-imported leads, and no API
+parameter exists to enable it.** Every lead this engine sends is API-imported, so the
+mandatory per-campaign gate in `campaign-creation.md` **can never be satisfied**. That
+gate has been unsatisfiable since it was written; the 25-send blackout confirmed it.
+
+**The fix is Smartlead's account-level "BCC to CRM Settings"**, set per sender account to
+HubSpot's portal BCC address. HubSpot matches the BCC'd email to a contact and logs it as
+an email engagement.
+
+**Chosen over building our own logger, deliberately.** Writing engagements ourselves was
+proven feasible — a `/crm/v3/objects/emails` engagement moved `notes_last_contacted`
+within 20 seconds in a live test — and rejected because it would make this repo the system
+of record for send activity, duplicate a vendor integration, and double-log if Smartlead
+changes its position. BCC uses each vendor's intended mechanism and adds no code. The
+engagement API stays the documented fallback.
+
+**Two open questions the verification must answer**, recorded in
+`config/smartlead-defaults.md`:
+1. Our senders are not HubSpot seats, and HubSpot derives "logged by" from the sending
+   address. If it drops mail from unrecognised senders, BCC is dead and the fallback is
+   needed.
+2. No backfill: the 25 already-sent emails will never appear. Accept, or backfill from
+   Smartlead message history.
+
+**Natural test: email 2 sends ~2026-09-11** to all 25. Re-run the activity check then.
+
+**Expected side effect if it works, and probably desirable:** `notes_last_contacted` is a
+gate 9 recency field with a 30-day window, so mailing a contact gate-9 excludes them for
+30 days. There is currently NO cooldown after `no_response`, so this closes a real gap.
+The cost is that gate 9's reason will say "recently touched" when it was our own engine —
+worth correcting once confirmed.
+
 ## CONFIRMED GAP 2026-09-08: 25 emails sent, ZERO HubSpot activity logged
 Asked what enrolment writes back, and whether last-activity dates were being missed. The
 answer surfaced a live problem on campaign 3921033.
