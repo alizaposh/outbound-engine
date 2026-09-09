@@ -4,7 +4,7 @@
 Invoked by the Claude Desktop scheduled task described in
 `instructions/scheduled-tasks.md`. Business-hours cadence, weekdays.
 
-    slot=morning   -> reply check + unsubscribe sync
+    slot=morning   -> approved replies, then reply check + the four syncs
     slot=midday    -> reply check
     slot=afternoon -> reply check
 
@@ -29,8 +29,15 @@ Five guarantees:
   4. IT NEVER SILENTLY SKIPS SLACK. An unconfigured or rejected Slack post is a loud
      failure with a non-zero exit, not a shrug. A heartbeat that quietly stops
      heartbeating is worse than having none, because it reads as healthy.
-  5. IT ADDS NO NEW POWERS. It only shells the two existing scripts. It cannot send mail,
-     launch a campaign, or write anything they would not write.
+  5. IT CAN SEND MAIL, AND THAT IS THE ONE POWER TO WATCH. Until 2026-09-09 this script
+     could only read and write records, and this guarantee said so. Adding `send_replies`
+     to the morning slot means an unattended scheduled run can now put a message in a
+     prospect's inbox, so the old wording would have been a lie left in place.
+     **What makes that safe is not the heartbeat.** It is `send_replies` guarantee 2: a
+     row sends only if a human typed `Approve` into it. The heartbeat contributes no
+     judgement of its own and must never be given any — it decides *when to look*, never
+     *what to send*. Do not add a job here that originates a message.
+     It still cannot launch a campaign or write anything the jobs would not write.
 """
 from __future__ import annotations
 
@@ -53,8 +60,15 @@ PY = sys.executable
 # Which jobs run in which slot. The unsubscribe sync walks every lead on every campaign,
 # so it is the expensive one and runs once a day; the reply check is cheap (it only pulls
 # message history for leads already marked replied) and runs every slot.
+#
+# `send_replies` runs FIRST, and only in the morning. First because approvals left in the
+# sheet overnight should go out at the top of the business day rather than after several
+# minutes of syncing. Morning-only because one daily batch is legible -- a reviewer can
+# see the whole day's sends in one Slack line -- where replies trickling out at three
+# separate times of day is harder to audit and no faster in any way that matters.
+# Adding it to another slot is a one-line change if same-day turnaround is wanted.
 SLOTS = {
-    "morning":   ["reply_check", "sync_unsubscribes", "sync_bounces",
+    "morning":   ["send_replies", "reply_check", "sync_unsubscribes", "sync_bounces",
                    "close_sequences", "sync_sends"],
     "midday":    ["reply_check"],
     "afternoon": ["reply_check"],
@@ -62,7 +76,16 @@ SLOTS = {
 JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sync",
               "sync_bounces": "Bounce sync",
               "close_sequences": "Sequence close-out",
-              "sync_sends": "Activity logging"}
+              "sync_sends": "Activity logging",
+              "send_replies": "Approved replies"}
+
+# Extra arguments per job. `send_replies` is capped because the heartbeat runs it
+# unattended and nobody reads a dry run first: a reviewer who drag-fills `Approve` down
+# the decision column would otherwise fan out every row of the sheet in one unsupervised
+# burst, as real messages to real prospects. The cap turns that mistake into a slow and
+# visible one instead of an irreversible one. Rows over the cap are left untouched and
+# reported, never silently dropped.
+JOB_ARGS = {"send_replies": ["--limit", "25"]}
 
 # Pulled out of each job's stdout for the Slack summary. Best-effort by design: if a
 # pattern stops matching, the message gets less pretty, never wrong -- the raw tail is
@@ -77,12 +100,14 @@ SUMMARY_PATTERNS = [
     re.compile(r"^\d+ closed, \d+ already current.*$", re.M),   # close_sequences
     re.compile(r"^no finished sequences.*$", re.M),
     re.compile(r"^\d+ engagement\(s\) (?:written|would be written).*$", re.M),
+    re.compile(r"^\d+ sent, \d+ skipped, \d+ failed.*$", re.M),   # send_replies
 ]
 
 
 def run_job(name: str, apply_changes: bool) -> dict:
     """Run one job in its own process. Never raises: a crash is a reported result."""
-    cmd = [PY, str(ROOT / "scripts" / f"{name}.py")] + (["--apply"] if apply_changes else [])
+    cmd = ([PY, str(ROOT / "scripts" / f"{name}.py")]
+           + (["--apply"] if apply_changes else []) + JOB_ARGS.get(name, []))
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=ROOT)
         out = (p.stdout or "") + (p.stderr or "")
@@ -112,6 +137,11 @@ ATTENTION_COUNTS = [
     re.compile(r"(\d+) unmatched"),              # sync: unsubscribes HubSpot cannot record
     re.compile(r"(\d+) recorded"),               # bounces newly written
     re.compile(r"(\d+) unmatched"),              # a finished lead with no contact
+    # A reply a human approved that did NOT go out. Both of these mean a prospect is
+    # waiting on an answer someone already signed off, which is the worst kind of silence
+    # this system can produce, so they light the amber.
+    re.compile(r"(\d+) failed"),                 # send_replies: refused by Smartlead
+    re.compile(r"(\d+) approved row\(s\) NOT sent"),   # send_replies: over the cap
 ]
 
 

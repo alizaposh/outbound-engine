@@ -149,7 +149,7 @@ def main(argv=None) -> int:
         return (r[i] if i < len(r) else "").strip()
 
     hs = HubSpot(env_token())
-    sent = skipped = failed = 0
+    sent = skipped = failed = capped = 0
     seen_threads: set[str] = set()
 
     for n, row in enumerate(rows, start=2):
@@ -163,9 +163,6 @@ def main(argv=None) -> int:
             print(f"  row {n} {email}: already stamped {cell(row,'sent_at')!r}; skipped")
             skipped += 1
             continue
-        if a.limit and sent >= a.limit:
-            break
-
         body = cell(row, "draft_response")
         stats_id = cell(row, "smartlead_stats_id")
         campaign = cell(row, "campaign")
@@ -181,6 +178,15 @@ def main(argv=None) -> int:
         if problems:
             print(f"  row {n} {email}: SKIPPED, {'; '.join(problems)}")
             skipped += 1
+            continue
+
+        # The cap sits HERE, below the well-formedness checks and above the send, so a
+        # capped row is one that would genuinely have gone out. Counting it rather than
+        # breaking out of the loop is the point: `--limit` is what the unattended
+        # heartbeat run uses, and a cap that stops quietly would leave approved replies
+        # unsent with nothing in the Slack report to say so.
+        if a.limit and sent >= a.limit:
+            capped += 1
             continue
 
         # Guarantee 5. The row was written when the reply arrived; consent can change.
@@ -228,7 +234,13 @@ def main(argv=None) -> int:
             print(f"      sent. {detail}")
             sent += 1
 
-    print(f"\n{sent} sent, {skipped} skipped, {failed} failed")
+    print(f"\n{sent} sent, {skipped} skipped, {failed} failed"
+          + (f", {capped} over the cap" if capped else ""))
+    if capped:
+        print(f"{capped} approved row(s) NOT sent: the --limit {a.limit} cap was reached. "
+              "They are untouched and go out on the next run. If that number is a "
+              "surprise, check whether the decision column was drag-filled by mistake "
+              "BEFORE raising the cap.")
     if not a.apply:
         print("DRY RUN: nothing was sent. Nothing was stamped.")
     if failed:

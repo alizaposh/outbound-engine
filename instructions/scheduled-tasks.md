@@ -12,7 +12,7 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
 
 | Slot | Time (America/New_York) | Days | Jobs |
 |---|---|---|---|
-| `morning` | 09:45 | Mon–Fri | reply check **+ unsubscribe sync + bounce sync + sequence close-out + activity logging** |
+| `morning` | 09:45 | Mon–Fri | **approved replies (SENDS)** + reply check + unsubscribe sync + bounce sync + sequence close-out + activity logging |
 | `midday` | 13:05 | Mon–Fri | reply check |
 | `afternoon` | 16:25 | Mon–Fri | reply check |
 
@@ -32,6 +32,23 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
   a full day. Three slots keep the worst case to about four working hours, and each poll
   is only a handful of API calls.
 - **Weekdays only.** Nobody reviews the queue at the weekend. Monday morning catches it.
+- **The morning slot SENDS MAIL, and it is the only one that does** (added 2026-09-09).
+  `send_replies` runs first in that slot, so replies a human marked `Approve` in the
+  review Sheet go out at the top of the business day instead of waiting for someone to
+  run the script by hand. Before this, `Approve` set a cell and nothing else happened —
+  the dropdown promised an automation that did not exist, and the first real approval
+  sat unsent until it was noticed.
+  - **This does not weaken golden rule 1.** Nothing is *auto-sent*: a person still reads
+    the draft and types `Approve`. What is automated is the delivery of a decision a
+    human already made, not the decision.
+  - **Morning only, on purpose.** One daily batch is auditable in a single Slack line.
+    Sends trickling out at three times of day are harder to review and no faster in any
+    way that matters, since the prospect is not waiting on minutes.
+  - **Capped at 25 per run** (`JOB_ARGS` in `heartbeat.py`). Unattended, the realistic
+    accident is a reviewer drag-filling `Approve` down the decision column; the cap makes
+    that a slow, visible mistake rather than an irreversible one. Rows over the cap are
+    left untouched, counted, and reported in the heartbeat — never dropped silently.
+    **Investigate a surprising capped count before raising the cap.**
 - **The unsubscribe and bounce syncs run once, in the morning.** The unsubscribe sync
   walks every lead on every campaign, so it is the expensive job; the bounce sync is
   cheap but there is no reason to run it three times a day. The reply check only pulls message history for

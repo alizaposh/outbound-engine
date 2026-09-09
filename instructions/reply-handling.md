@@ -179,6 +179,16 @@ python scripts/send_replies.py --apply    # SENDS
 python scripts/send_replies.py --row 7 --apply
 ```
 
+**Scheduled since 2026-09-09: you no longer have to run it.** `send_replies` is the first
+job in the `morning` heartbeat slot, capped at 25 sends per run. Marking `Approve` is now
+sufficient; the reply goes out at the next weekday morning run.
+
+This was added after the failure it prevents actually happened. On the first live test the
+reviewer marked `Approve`, correctly expected the reply to send, and nothing did — because
+until then a human also had to remember to run this script. A queue whose approval control
+does nothing on its own will strand replies, and the person marking the row is the last
+one who would think to check.
+
 **This does not weaken the auto-send allowlist above, and the distinction is the whole
 point.** Sending here requires a human to have read that specific text and marked the
 row. An entry in `auto_send_intents` would send with no human at all; that list stays

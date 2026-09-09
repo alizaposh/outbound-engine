@@ -26,6 +26,10 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 1. **Never launch or send anything without explicit human approval.** In v1, no
    campaign goes live without a recorded approval in Slack. No reply is auto-sent
    outside the categories explicitly allowed in `instructions/reply-handling.md`.
+   **A scheduled job delivering a reply a human marked `Approve` is not auto-sending**
+   — a person read that exact text and chose to send it; only the delivery is
+   automated. The `auto_send_intents` allowlist, which *would* send with no human, is
+   empty and stays empty.
 2. **Smartlead and HubSpot are the sources of truth. Never treat a CSV as
    authoritative.** CSVs and Google Sheets are *review surfaces for humans*. The one
    exception is narrow and explicit: the Reply Review Queue Sheet is also the record of
@@ -162,10 +166,13 @@ scripts/                   ← Python (stdlib + anthropic only)
   reply_check.py           ← WORKFLOW B. Polls Smartlead for replies, classifies,
                              updates outbound_* in HubSpot, resumes auto-responders,
                              queues the rest. DRY RUN BY DEFAULT; never sends a reply
-  heartbeat.py             ← THE SCHEDULED RUN. Shells the two polling jobs and posts
-                             to Slack EVERY run, so silence means broken
+  heartbeat.py             ← THE SCHEDULED RUN. Shells the polling + sync jobs, and in
+                             the morning slot send_replies, then posts to Slack EVERY
+                             run, so silence means broken
   send_replies.py          ← THE ONLY THING THAT SENDS TO A PROSPECT. Sends replies a
-                             human approved in the review Sheet. DRY RUN BY DEFAULT
+                             human approved in the review Sheet. DRY RUN BY DEFAULT.
+                             Runs in the morning heartbeat slot, capped at 25/run, so
+                             marking `Approve` is enough — see scheduled-tasks.md
   sync_sends.py            ← logs engine sends AND prospect replies to the HubSpot
                              contact timeline as email engagements. The ONLY way reps
                              see our sends: both vendor paths are unavailable

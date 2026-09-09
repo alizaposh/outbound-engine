@@ -9,8 +9,12 @@ until its trigger is met.
 
 *Replace this whole section on each checkpoint — do not append a second one.*
 
-**Last updated:** 2026-08-21. Copy-testing state is still the third 34-run; the
-reply-to-CRM state model landed since (`712a437`).
+**Last updated:** 2026-09-09. The reply loop is closed end to end and ran live: seven
+replies classified and queued, one approved and sent to a real inbox, correctly threaded,
+idempotent on re-run. `send_replies` is now scheduled in the morning slot, so `Approve` is
+sufficient. **Open item from that test: `objection` is being misclassified as
+`not_interested` when the prospect names an incumbent competitor** — see the accuracy
+section below; it is the next thing to fix.
 
 *No commit hash here on purpose.* It went stale three times; `git log --oneline -5` is
 always right and this line never was. Date the section, describe the state, and let git
@@ -587,7 +591,60 @@ and prints the three UI-only settings it cannot check so they get eyeballed.
 
 ---
 
-## Automate sending an approved reply — BUILT 2026-09-02 (`scripts/send_replies.py`)
+## Reply-draft accuracy: first live test — 2026-09-09. **Two real misses**
+
+Seven replies sent by hand from `aliza.mayer+*@gmail.com` into campaign 3930942, one per
+intent, then classified and drafted by `reply_check.py`. **5 of 7 correct. 7 of 7 drafts
+populated, none hallucinated a claim, none breached positioning.** The two misses both
+lose a live lead, which is the expensive kind.
+
+**MISS 1 — competitor incumbency reads as `not_interested`. Fix this one.**
+
+| | |
+|---|---|
+| Prospect wrote | *"we're happy on tixr, but thanks for reaching out."* |
+| Classified | `not_interested` |
+| Should be | `objection` |
+| Drafted | *"Thanks for letting me know, Aliza. If that ever changes, feel free to reach out."* |
+
+Naming an incumbent is the **most common and most workable objection in this market**,
+and it is being routed to a polite goodbye. `not_interested` gets a sign-off; `objection`
+gets "acknowledge, don't argue, offer the call". The classifier is reading the *tone* —
+"happy on X, thanks anyway" is friendly and terminal-sounding — where the *content* is a
+switching conversation. **The word "but" is doing real work in that sentence and the
+model dropped it.**
+
+Also downstream: `not_interested` and `objection` recycle on different clocks, so the
+miss silently sets the wrong come-back date too (see the `objection` recycle-date item).
+
+*Fix:* the intent list needs an exemplar, not a longer definition — the recurring lesson
+in this repo. Add the incumbency case verbatim to the `objection` entry in
+`instructions/reply-handling.md`, plus the contrast pair (`"we're happy on tixr, but…"`
+→ objection; `"not interested, please remove me"` → not_interested). Re-run these seven.
+
+**MISS 2 — a direct product question gets deflected to a call.**
+
+| | |
+|---|---|
+| Prospect wrote | *"can you tell me more about posh? how do payouts work with posh?"* |
+| Classified | `interested` (defensible — they are interested) |
+| Drafted | *"Payout timing and terms are worth discussing properly on a call…"* |
+
+Two direct questions, neither answered. This is the SDR reflex that makes prospects stop
+replying: they asked a factual thing, and got a booking link. Payout terms are in
+`config/positioning.md` and are safe to state. **The draft should answer in one line,
+then offer the call.** Lower priority than miss 1 but the same root cause: no exemplar of
+a question being *answered*.
+
+**Correct, and worth recording so they are not "fixed" later:** `not_now` grounded its
+come-back in the prospect's own words (*"our festival in november"* → *"after your
+November festival wraps"*) with nothing invented; `wrong_contact` apologised and stopped
+rather than pushing a stranger for a referral; `asked_to_stop` sent one line and
+triggered a real Smartlead unsubscribe (campaign + global, both 200).
+
+---
+
+## Automate sending an approved reply — BUILT 2026-09-02 (`scripts/send_replies.py`), SCHEDULED 2026-09-09
 Dry run by default. Reads rows marked `Approve` / `Edit & send`, sends the
 `draft_response` as edited in the Sheet, stamps `sent_at`.
 
@@ -613,6 +670,32 @@ against a real contact. Test rows removed; nothing was sent.
 crash therefore leaves `sending`, which blocks a retry and asks for a human. That biases
 towards a missing reply rather than a duplicate one, because a duplicate from a supposed
 person is the worse failure. A timeout is likewise treated as sent.
+
+### Scheduled 2026-09-09, after the half-built version stranded a real approval
+
+`send_replies` now runs first in the `morning` heartbeat slot with `--apply --limit 25`.
+
+**The trigger was the failure itself.** On the first live test the reviewer marked
+`Approve`, correctly expected the reply to send, and nothing happened — because a human
+also had to remember to run this script, and the person who marks the row is the last one
+who would think to check. **A control that does nothing on its own is worse than no
+control**: it reads as done. Building the sender in September and leaving it unscheduled
+had quietly recreated the exact gap it was built to close, one step further along.
+
+- **Morning only.** One daily batch is auditable in a single Slack line; sends trickling
+  out at three times of day are harder to review and no faster in any way that matters.
+- **Capped at 25/run** (`JOB_ARGS` in `heartbeat.py`). Unattended, the realistic accident
+  is a reviewer drag-filling `Approve` down the decision column. The cap makes that slow
+  and visible instead of irreversible. Rows over the cap are counted and reported, never
+  dropped silently — `--limit` was changed from `break` to a counted `continue` for
+  exactly this, since a cap that stops quietly would strand approved replies with nothing
+  in the heartbeat to say so.
+- **Heartbeat guarantee 5 was rewritten, not quietly amended.** It claimed the heartbeat
+  "cannot send mail". That is now false, and the honest version names `send_replies`
+  guarantee 2 — a human typed `Approve` — as the thing that makes it safe, plus the rule
+  that no job originating a message may ever be added to a slot.
+- **Golden rule 1 holds.** A scheduled job delivering a decision a human already made is
+  not auto-sending. `auto_send_intents` stays empty and asserted.
 
 ### Original item
 
