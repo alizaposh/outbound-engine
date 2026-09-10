@@ -21,6 +21,21 @@ there before tuning anything here.
 # NOT enough to compare two variants, which needs thousands. See the note below.
 min_delivered_for_rate: 200
 
+# Campaign IDs the weekly report ignores entirely: not counted, not written to history,
+# and not warned about. For TEST campaigns being kept around deliberately -- a demo, a
+# reference, a copy experiment -- whose numbers would otherwise pollute every real total.
+#
+# Excluding is reported in the output, never silent. A campaign quietly missing from a
+# report is worse than one that shouldn't be there: the first is invisible, the second
+# is at least arguable.
+#
+# 3930942 is the reply-handling draft-quality test from 2026-09-09. Seven replies, all
+# sent by hand from aliza.mayer+*@gmail.com to exercise the ten intents. Those addresses
+# are not HubSpot contacts, so the report could see Smartlead's 7 replies but classify
+# none of them, and raised "7 unaccounted replies" every run. Kept in Smartlead on
+# purpose to demonstrate how the test worked.
+exclude_campaigns: [3930942]
+
 # Confidence level for every interval printed. 0.95 -> the familiar 95% interval.
 confidence: 0.95
 

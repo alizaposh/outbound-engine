@@ -110,6 +110,11 @@ def load_analysis_config() -> dict:
     if not 0 < cfg["confidence"] < 1:
         raise RuntimeError(f"{ANALYSIS_CONFIG.name}: confidence must be between 0 and 1 "
                            f"(0.95, not 95), got {cfg['confidence']!r}")
+    # Compared as strings, because Smartlead campaign ids arrive as ints from the API and
+    # as text from a Sheet, and `3930942 != "3930942"` would silently exclude nothing.
+    cfg["exclude_campaigns"] = [str(x).strip()
+                                for x in (cfg.get("exclude_campaigns") or [])
+                                if str(x).strip()]
     return cfg
 
 
@@ -224,7 +229,7 @@ def write_history(rows: list[dict], cfg: dict, today: str, apply_changes: bool) 
 
     if not apply_changes:
         return (f"would write {len(rows)} row(s) to {tab!r} "
-                f"({len(existing)} row(s) there now)")
+                f"({max(0, len(existing) - 1)} data row(s) there now)")
 
     if not existing:
         # Create the tab on first use rather than making it a manual setup step.
@@ -447,8 +452,28 @@ def main(argv=None) -> int:
              if a.campaign else sl.campaigns())
     if not a.campaign and not a.include_completed:
         camps = [c for c in camps if (c.get("status") or "").upper() != "COMPLETED"]
+
+    # Excluded campaigns are dropped here, before anything reads them, so they cannot
+    # reach a count, a history row or a warning. Asking for one BY ID still works --
+    # `--campaign 3930942` is an explicit request and the exclusion list is about what
+    # lands in the routine weekly numbers, not about hiding a campaign from someone who
+    # named it.
+    dropped = []
+    if not a.campaign and cfg["exclude_campaigns"]:
+        keep = []
+        for c in camps:
+            (dropped if str(c.get("id")) in cfg["exclude_campaigns"] else keep).append(c)
+        camps = keep
+    if dropped:
+        # Said out loud, never silently. A campaign quietly missing from a report is
+        # worse than one that should not be there: the first is invisible.
+        print("excluded by config/analysis-defaults.md (exclude_campaigns): " +
+              ", ".join(f"{c.get('id')} {c.get('name','')!r}" for c in dropped))
+        print("  Not counted, not written to history, not warned about. "
+              "`--campaign <id>` still reports one directly.")
+
     if not camps:
-        print("no campaigns to report on. Use --include-completed to see finished ones.")
+        print("\nno campaigns to report on. Use --include-completed to see finished ones.")
         return 0
 
     print(f"CAMPAIGN REVIEW  ({len(camps)} campaign(s))")
