@@ -233,6 +233,62 @@ DEFAULT_MAX_SPARSE_SHARE = 0.6
 SPARSE_FLOOR = 5      # below this, a high share is just a small sample
 
 
+# The fields that actually change what an email can say. first_name is excluded on
+# purpose: it personalises the greeting and nothing else, and a list of names with no
+# other data produces the generic email with a name on top -- which is precisely the case
+# this report exists to make visible.
+ENRICHMENT_FIELDS = (
+    ("prospect_org", lambda c: c.prospect_org or c.company),
+    ("city", lambda c: c.city),
+    ("current_competitor", lambda c: c.current_competitor
+     and c.current_competitor.strip().lower() not in UNUSABLE_COMPETITOR),
+    ("vertical", lambda c: c.vertical),
+    ("estimated_gmv_usd", lambda c: c.estimated_gmv_usd is not None),
+)
+
+
+def enrichment_report(contacts: list[Contact]) -> str:
+    """How much this list can actually be personalised, said out loud before generating.
+
+    **Measured 2026-09-10 and the reason this exists.** The list whose copy was approved
+    carried `prospect_org`, `city`, `current_competitor` and `vertical` on 34 of 34
+    contacts. A broad HubSpot sample carried them on 1 of 27, 0, 0 and 0 -- eligible
+    contacts in that portal have a first name and essentially nothing else.
+
+    The engine does not fail on those. It produces the generic email, competently, with a
+    name at the top -- and five of them shared one subject line and one opening sentence.
+    That is a quiet, compounding problem: weak copy, and near-identical bulk content is a
+    deliverability signal besides. **Nobody would notice from the run output**, which
+    reports 15 of 15 passed, because every email is individually fine.
+
+    So this prints coverage up front. It does not block: generic copy for a thin contact
+    is a deliberate decision (see route branch 3). It just refuses to let a list's real
+    ceiling be discovered after someone has read thirty bland drafts.
+    """
+    n = len(contacts)
+    if not n:
+        return ""
+    counts = {name: sum(1 for c in contacts if get(c)) for name, get in ENRICHMENT_FIELDS}
+    generic = sum(1 for c in contacts if route(c)[1].startswith("fallback"))
+    lines = [f"list enrichment ({n} contact(s)) -- what the copy has to work with:"]
+    for name, _ in ENRICHMENT_FIELDS:
+        got = counts[name]
+        bar = "#" * round(10 * got / n) + "." * (10 - round(10 * got / n))
+        lines.append(f"  {name:20} {got:4}/{n:<4} {bar}")
+    if generic:
+        lines.append(
+            f"  {generic} of {n} contact(s) have too little to personalise beyond a name, "
+            f"so their emails\n  will be the generic pitch. That is by design, but it is "
+            f"the list's ceiling, not the engine's.")
+        if generic / n > 0.5:
+            lines.append(
+                "  MOSTLY GENERIC: expect near-identical copy across this list. Worth "
+                "asking for\n  organization name and current platform before sending at "
+                "volume -- identical bulk\n  content is a deliverability signal, not just "
+                "a quality one.")
+    return "\n".join(lines)
+
+
 def check_sparse_share(contacts: list[Contact], limit: float) -> None:
     """Abort when almost the whole batch has no personalization data.
 
@@ -1188,6 +1244,12 @@ def main(argv=None) -> int:
             print(f"  e.g. {shown}")
             print(f"  These are GUESSES. They never override a HubSpot value, and each "
                   f"one is in the review CSV as org_inferred / city_inferred.")
+
+    # After inference, so it reports what the copy will ACTUALLY have rather than what
+    # HubSpot happened to hold -- a recovered org counts, because the email can use it.
+    report = enrichment_report(contacts)
+    if report:
+        print("\n" + report)
 
     print(f"\n{len(contacts)} contacts | model {model} | mailbox {a.mailbox}\n")
 

@@ -818,6 +818,52 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## Before the next test: the LIST is the bottleneck, not the engine — measured 2026-09-10
+
+Asked what else was worth hardening before the SDR's list arrives. Measured it rather
+than guessing, and the answer is not in the code.
+
+**Eligibility on 100 contacts the engine had never enrolled: 27 ELIGIBLE, 0 hard
+exclusions.** The soft exclusions are almost entirely *existing customer (has_group)* (61)
+and *has CSM* (12) — HubSpot holds Posh's customer base, not a prospect pool, so a broad
+pull is mostly people we already sell to. **Budget roughly 1 in 4 surviving the gates** on
+an uncurated list.
+
+**The real finding is what the survivors carry.** The 27 eligible contacts are gmail
+addresses with a first name and essentially nothing else:
+
+| field | Test12 list (copy Aliza approved) | broad HubSpot sample |
+|---|---|---|
+| `prospect_org` | **34/34** | 1/27 |
+| `city` | **34/34** | 0/27 |
+| `current_competitor` | **34/34** | 0/27 |
+| `vertical` | **34/34** | 0/27 |
+| `estimated_gmv_usd` | 25/34 | 1/27 |
+
+**List 1764 was curated and enriched. That is why that copy was good.** The engine does
+not fail on thin contacts — it competently writes the generic pitch with a name on top.
+Generating for five of them produced **one subject line shared by three** and the
+identical opening sentence on all five, and the run reported *15 of 15 passed*, because
+every email is individually fine. Near-identical bulk content is a deliverability signal
+as well as weak copy, and **nothing in the output would have told anyone.**
+
+Domain inference cannot rescue this: these are `gmail.com` addresses, correctly filtered
+as free-mail. There is no organization name hiding in `maishachowdhury22@gmail.com`.
+
+### What was built in response
+
+`enrichment_report()` prints coverage **before** generating, per field, with a warning
+when over half the list is generic. It does **not** block — generic copy for a thin
+contact is a deliberate decision — it just refuses to let a list's ceiling be discovered
+after someone has read thirty bland drafts.
+
+### What a human has to do, and it is the whole ballgame
+
+**The SDR's list needs `prospect_org` at minimum, and ideally `current_competitor` and
+`city`.** With them the engine produces the copy that was approved; without them it
+produces the generic pitch, and the test measures the plumbing rather than the copy.
+No amount of prompt work substitutes for the field being populated.
+
 ## Weekly campaign review — BUILT 2026-09-10 (`scripts/campaign_report.py`)
 
 The weekly cadence was decided 2026-09-02 with no script behind it. Built ahead of the
