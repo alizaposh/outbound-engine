@@ -330,6 +330,17 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
     work = ROOT / "reviews"
     work.mkdir(exist_ok=True)
     leads = work / f"intake-{list_id}-{stamp}-leads.csv"
+    # TWO files, and mixing them up is the bug this comment exists to prevent.
+    #   annotated -- EVERY lead with a `decision` column, for the review Sheet and for
+    #                the exclusion breakdown reported back to the rep.
+    #   eligible  -- ONLY the ELIGIBLE rows. This is what generation must receive.
+    # Until 2026-09-10 the annotated file was passed to `run_generation --contacts`, so
+    # copy would have been written for contacts the filter had just excluded -- people
+    # mid-sequence, and hard exclusions such as opted-out -- and that copy flows to the
+    # review Sheet where it can be approved into a live campaign. It went unnoticed
+    # because the only list ever run through here had zero eligible leads, so the
+    # zero-eligible guard stopped the run before generation was reached.
+    annotated = work / f"intake-{list_id}-{stamp}-annotated.csv"
     elig = work / f"intake-{list_id}-{stamp}-eligible.csv"
     gen = work / f"intake-{list_id}-{stamp}-generated.csv"
     tab = f"Intake-{list_id}-{stamp}"
@@ -377,7 +388,8 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
 
     steps = [
         ("eligibility", [PY, str(ROOT / "scripts/eligibility.py"), "--leads", str(leads),
-                         "--out", str(elig), "--sender", mailbox.split(".")[0]]),
+                         "--out", str(annotated), "--eligible-out", str(elig),
+                         "--sender", mailbox.split(".")[0]]),
         ("generation", [PY, str(ROOT / "scripts/run_generation.py"), "--contacts",
                         str(elig), "--mailbox", mailbox, "--out", str(gen), "--quiet"]
                        + (["--angle", angle] if angle else [])),
@@ -401,9 +413,19 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
             # generation" -- which is both wrong and useless. Observed on a real
             # resubmission of a list already in flight: 35 members, 0 eligible.
             import csv as _csv
-            rows = list(_csv.DictReader(elig.open(encoding="utf-8")))
+            # Counts come from the ANNOTATED file, which is the only one carrying the
+            # excluded rows and their reasons. Generation reads `elig`, written directly
+            # by --eligible-out.
+            #
+            # This used to write both to one path and then overwrite it in place with
+            # the eligible rows. That was correct about what reached generation, but it
+            # destroyed the annotated list in the process -- and core workflow step 2 in
+            # CLAUDE.md wants exactly that list preserved, every EXCLUDED contact and its
+            # reason, so targeting decisions stay visible. Two paths, no overwrite.
+            rows = list(_csv.DictReader(annotated.open(encoding="utf-8")))
             keep = [r for r in rows if (r.get("decision") or "") == "ELIGIBLE"]
             out["eligible"] = len(keep)
+            out["annotated_csv"] = str(annotated)
             counts: dict[str, int] = {}
             for r in rows:
                 if (r.get("decision") or "") != "ELIGIBLE":
@@ -414,11 +436,6 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
                 out["steps"]["generation"] = "skipped"
                 out["steps"]["export"] = "skipped"
                 return out
-            # Generation reads the ELIGIBLE-only rows.
-            with elig.open("w", newline="", encoding="utf-8") as fh:
-                w = _csv.DictWriter(fh, fieldnames=list(rows[0]))
-                w.writeheader()
-                w.writerows(keep)
     return out
 
 

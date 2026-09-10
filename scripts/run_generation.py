@@ -25,6 +25,7 @@ import os
 import pathlib
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -750,32 +751,79 @@ def to_row(r: ContactResult, sender_name: str = "", mailbox: str = "") -> dict:
 
 
 def load_contacts(path: pathlib.Path) -> list[Contact]:
+    """Contacts from a CSV.
+
+    **Refuses a row the eligibility filter excluded.** `eligibility.py` writes two files
+    -- an annotated one carrying every lead with a `decision` column, and an
+    ELIGIBLE-only one meant for this script (`--eligible-out`). Hand it the annotated
+    file by mistake and, without this guard, it generates copy for people the filter just
+    excluded: contacts mid-sequence, and hard exclusions such as opted-out. That copy
+    then flows to the review Sheet and can be approved into a live campaign.
+
+    That is not hypothetical -- `slack_intake.run_pipeline` did exactly this, and it went
+    unnoticed because the only list it had been run against had zero eligible leads, so
+    an earlier guard stopped the run before generation. So the check lives HERE rather
+    than only at the call site: it protects every caller, including the next one.
+
+    A CSV with no `decision` column is accepted unchanged, so a hand-made contact list
+    still works.
+    """
     def clean(v):
         v = (v or "").strip()
         return v or None
 
     out = []
     with path.open(encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            gmv = clean(row.get("estimated_gmv_usd"))
-            out.append(Contact(
-                hs_object_id=clean(row.get("hs_object_id")) or "",
-                first_name=clean(row.get("first_name")),
-                last_name=clean(row.get("last_name")),
-                email=clean(row.get("email")) or "",
-                jobtitle=clean(row.get("job_title")) or clean(row.get("jobtitle")),
-                company=clean(row.get("company")),
-                prospect_org=clean(row.get("prospect_org")),
-                city=clean(row.get("city")),
-                current_competitor=clean(row.get("current_competitor")),
-                estimated_gmv_usd=int(float(gmv)) if gmv else None,
-                vertical=clean(row.get("vertical")),
-                # Default to "none" when the column is absent: an un-enriched
-                # eligible.csv must still run and simply produce cold opens.
-                callback_tier=(clean(row.get("callback_tier")) or "none").lower(),
-                callback_detail=clean(row.get("callback_detail")) or "",
-                callback_source_id=clean(row.get("callback_source_id")) or "",
-                callback_last_date=clean(row.get("callback_last_date")) or ""))
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+    cols = set(reader.fieldnames or [])
+    # The annotated file is recognisable by shape, and this is the check that matters.
+    # Its rows can be marked ELIGIBLE, so the decision check below waves them through --
+    # but it carries NONE of the personalization columns, so every contact loads with
+    # first_name/prospect_org/company empty and route() returns "flag: insufficient".
+    # The run then completes, reports success, and produces a review sheet in which every
+    # single contact is flagged and no copy exists. Silent, total, and easy to misread as
+    # "the model refused" rather than "the wrong file was passed".
+    if rows and {"decision", "exclusion_tier"} <= cols and not (
+            {"first_name", "prospect_org", "company"} & cols):
+        raise RuntimeError(
+            f"{path.name} has the ANNOTATED shape: it carries 'decision'/'exclusion_tier' "
+            f"but none of first_name / prospect_org / company.\n"
+            f"  Every contact would load with no personalization data and route to "
+            f"'flag: insufficient', producing a run with zero usable copy.\n"
+            f"  Pass the file written by eligibility.py --eligible-out instead.")
+    if rows and "decision" in cols:
+        bad = [r for r in rows if (r.get("decision") or "").strip().upper() != "ELIGIBLE"]
+        if bad:
+            reasons = Counter((r.get("reason") or "(no reason)").strip() for r in bad)
+            raise RuntimeError(
+                f"{path.name} carries a 'decision' column and {len(bad)} of {len(rows)} "
+                f"row(s) are NOT ELIGIBLE. Refusing to generate copy for contacts the "
+                f"eligibility filter excluded.\n"
+                f"  by reason: {dict(reasons)}\n"
+                f"  This is almost certainly the ANNOTATED file. Re-run eligibility.py "
+                f"with --eligible-out and pass THAT file to --contacts.")
+
+    for row in rows:
+        gmv = clean(row.get("estimated_gmv_usd"))
+        out.append(Contact(
+            hs_object_id=clean(row.get("hs_object_id")) or "",
+            first_name=clean(row.get("first_name")),
+            last_name=clean(row.get("last_name")),
+            email=clean(row.get("email")) or "",
+            jobtitle=clean(row.get("job_title")) or clean(row.get("jobtitle")),
+            company=clean(row.get("company")),
+            prospect_org=clean(row.get("prospect_org")),
+            city=clean(row.get("city")),
+            current_competitor=clean(row.get("current_competitor")),
+            estimated_gmv_usd=int(float(gmv)) if gmv else None,
+            vertical=clean(row.get("vertical")),
+            # Default to "none" when the column is absent: an un-enriched
+            # eligible.csv must still run and simply produce cold opens.
+            callback_tier=(clean(row.get("callback_tier")) or "none").lower(),
+            callback_detail=clean(row.get("callback_detail")) or "",
+            callback_source_id=clean(row.get("callback_source_id")) or "",
+            callback_last_date=clean(row.get("callback_last_date")) or ""))
     return out
 
 

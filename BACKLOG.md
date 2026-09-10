@@ -650,6 +650,57 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
+## Intake pipeline would have produced ZERO copy — FIXED 2026-09-10, before it ran
+
+Found by exercising `slack_intake.run_pipeline` against list 1764 while waiting for a
+real list, rather than waiting for the rep's submission to be the first execution.
+
+**`run_pipeline` never passed `--eligible-out`.** It wrote the annotated file via `--out`
+and then overwrote that same path with the ELIGIBLE rows before generation. The rows were
+therefore correctly filtered — but they carried `OUT_COLUMNS`, the eligibility shape:
+
+    email, hubspot_contact_id, decision, reason, exclusion_tier, notes_last_updated,
+    notes_last_contacted, hs_last_sales_activity_timestamp, lifecyclestage,
+    hs_lead_status, owner, outbound_status, outbound_recycle_after
+
+**Not one personalization field.** `eligibility.py` already writes the correct shape via
+`--eligible-out` (`ELIGIBLE_COLUMNS`: first_name, prospect_org, company, city,
+current_competitor, estimated_gmv_usd, vertical) and its own comment says "the shape
+run_generation.py --contacts expects". Nothing called it.
+
+Demonstrated rather than reasoned about:
+
+    OLD shape -> route() -> (None, 'flag: insufficient', False)
+    NEW shape -> route() -> ('Pro', 'gmv', True)
+
+`route()` needs one of first_name / last_name / company / jobtitle / vertical to
+establish identity. With none present **every contact in the list flags**, so the rep's
+first submission would have returned a review sheet where every row is flagged and no
+copy exists — a run that reports success and produces nothing usable. Easy to misread as
+"the model refused" rather than "the wrong file was passed".
+
+**Fixed in two layers:**
+
+1. `run_pipeline` passes `--out` (annotated) and `--eligible-out` (generation input) as
+   two separate paths, and the in-place overwrite is gone. That overwrite also destroyed
+   the annotated list, which core workflow step 2 in `CLAUDE.md` wants preserved so every
+   EXCLUDED contact and its reason stays visible.
+2. `load_contacts` in `run_generation.py` now refuses the annotated shape outright —
+   `decision` + `exclusion_tier` present, personalization columns absent — and separately
+   refuses any file whose rows are not ELIGIBLE. **The guard lives in the callee** so it
+   protects every caller, not just intake.
+
+**Also verified by the same exercise, and these are the reasons to run it:** the HubSpot
+list fetch and batched email lookup work (35 members), the zero-eligible guard fires
+correctly and skips generation and export with a legible reason breakdown
+(25 in sequence, 9 in HubSpot sequence, 1 existing customer), and the annotated list now
+survives the run.
+
+**Still unexercised:** the branch where SOME contacts are eligible. Every contact
+reachable today is excluded, so generation and export have not run *from intake*. That
+branch executes on the rep's list — it is the thing to watch on the first real
+submission.
+
 ## Weekly campaign review — BUILT 2026-09-10 (`scripts/campaign_report.py`)
 
 The weekly cadence was decided 2026-09-02 with no script behind it. Built ahead of the
