@@ -818,6 +818,61 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## Win-back for former organizers — NOT POSSIBLE YET, investigated 2026-09-10
+
+**Asked:** could the engine pick up a prior message like *"It's been a minute since Events
+by Maxwell Social was on Posh — a lot has changed on our end since you guys were on the
+platform"* and reference the fact that they were previously a customer?
+
+**The angle is right and the data is not there.** Three separate blockers, found by
+reading the actual records (`patricia@maxwellsocial.com` / `kyle@maxwellsocial.com`, the
+UI record id 50950747 maps to API ids 207228851823 / 207274090506).
+
+**1. That message is OUTBOUND, so callbacks ignore it — correctly.** Both timeline
+engagements are `EMAIL`, not `INCOMING_EMAIL`. Neither contact ever replied.
+`enrich_callbacks` guarantee 2 exists for exactly this: a prior send is not a prior
+conversation, and "good to reconnect" to someone who ignored us reads false. Relaxing
+that guarantee to mine our own sends would be the wrong fix.
+
+**2. The email body cannot be trusted per contact.** That body opens *"Hey David"* while
+being attached to **both** Patricia and Kyle, and the second engagement on both contacts
+opens *"Hi Joelle!"*. These are bulk-logged emails associated with multiple contacts and
+mismatched salutations. **A fact extracted from that text and attributed to the contact
+it is attached to would be wrong more often than it is right.** The company-level fact
+("Maxwell Social was on Posh") survives; the per-contact attribution does not.
+
+**3. No structural former-customer signal exists.** Every candidate property was checked:
+
+| field | value on these contacts | verdict |
+|---|---|---|
+| `has_group` | `''` (enum is Yes/No) | empty, so unknown |
+| `is_group_member` | `'true'` | **useless — 146,484 contacts have it** |
+| `hs_current_customer` | `None` | unpopulated |
+| `owner_gmv` | `None` | unpopulated |
+| `customer_success_manager` | populated | means they have a CSM, not that they churned |
+
+Nothing distinguishes **current** from **former**, which is the entire distinction — you
+do not cold-pitch a current customer.
+
+**4. And these contacts are excluded anyway.** Run through eligibility they come back
+`2 EXCLUDED — has CSM` (gate 5). Under current gates the example never reaches generation.
+
+### What it would actually take
+
+**A data decision first, not code.** Someone who owns HubSpot has to produce a reliable
+"was an organizer, no longer is" signal with a date — either a real property, or a derived
+one from group history. Until that exists there is nothing honest to write from.
+
+**Then it is a separate campaign type, not a callback tier.** *"A lot has changed since
+you were on the platform"* is a different pitch from cold outreach, not a warm opener
+bolted onto it: different message shapes (they know the product), a different sequence,
+and **inverted gates** — the CSM and customer exclusions that protect cold outbound are
+exactly the filters that would remove every win-back target. That is a campaign type to
+scope deliberately, and probably a valuable one: a former customer who left over a
+missing feature is a better prospect than a stranger.
+
+*Trigger:* a former-organizer field existing in HubSpot with a churn date.
+
 ## Prior-interaction callbacks wired into intake — 2026-09-10, on Aliza's prompt
 
 Asked whether previous HubSpot conversations could enrich the copy so it sounds less
