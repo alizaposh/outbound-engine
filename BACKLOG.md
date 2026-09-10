@@ -818,6 +818,51 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## Prior-interaction callbacks wired into intake — 2026-09-10, on Aliza's prompt
+
+Asked whether previous HubSpot conversations could enrich the copy so it sounds less
+machine-written. **The capability already existed and the automated path was skipping
+it.** `scripts/enrich_callbacks.py` reads a contact's timeline and emits a callback for
+§9 warm opens; `CLAUDE.md` core workflow step 3 calls it "optional", and
+`slack_intake.run_pipeline` ran eligibility → generation → export straight past it.
+
+So every rep request would have produced a cold open even for contacts we have a real
+prior conversation with — the single strongest defence the engine has against sounding
+machine-written, unused, for the cost of one read-only pass.
+
+**Verified live.** Five contacts with Gong-logged inbound replies from March–September
+all classified `soft` ("inbound email — contact replied"), and generation opened:
+
+> "Hey Cam, I'm Carl, I run partnerships at Posh. **Good to reconnect.** We do a lot of
+> work with organizers in Chicago."
+
+against the cold version's bare "Hey Cam, I'm Carl, I run partnerships at Posh. Are you
+locked in…". `callbacks` is now a pipeline step between eligibility and generation, and
+is in the zero-eligible skip list alongside the others.
+
+**Guarantee 2 in that script is the load-bearing one:** a prior SEND is not a prior
+conversation. Only `INCOMING_EMAIL` counts, so "good to reconnect" can never land on
+someone who ignored us — which is the version of this feature that would actively lose
+leads.
+
+### Two bugs this exposed
+
+**`enrichment_report` over-warned, badly.** It counted a contact as "generic" whenever
+`route()` returned a `fallback:` basis, but `fallback: neutral` only means no persona
+could be chosen — a contact with an organization name and a city is perfectly
+personalisable. It was printing MOSTLY GENERIC over the pair whose emails opened "Good to
+reconnect… organizers in Chicago". Now measured on the personalization fields themselves.
+
+**Domain inference mis-parsed one org.** `wearethesetcollective.com` → "We Are These",
+producing the subject "ticketing setup for We Are These". The real name is The SET
+Collective, visible in that contact's own Gong subject line. Not corrected in code —
+the parse is a guess and some will be wrong — but it is **why `org_inferred` exists as a
+separate review column**, and a reason to skim that column before approving a batch.
+
+*Note on scope:* the sampled cold contacts had no timeline at all (27 of 27, "no logged
+emails"), so callbacks will fire rarely on genuinely cold lists. It costs one pass and
+pays off exactly on the contacts where a cold open would have been most wrong.
+
 ## Before the next test: the LIST is the bottleneck, not the engine — measured 2026-09-10
 
 Asked what else was worth hardening before the SDR's list arrives. Measured it rather

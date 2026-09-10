@@ -269,7 +269,14 @@ def enrichment_report(contacts: list[Contact]) -> str:
     if not n:
         return ""
     counts = {name: sum(1 for c in contacts if get(c)) for name, get in ENRICHMENT_FIELDS}
-    generic = sum(1 for c in contacts if route(c)[1].startswith("fallback"))
+    # "Generic" means NO personalization field at all -- not merely that route() fell
+    # through to a fallback basis. Those are different things and conflating them was
+    # wrong: `fallback: neutral` only says no persona could be chosen, and a contact
+    # carrying an organization name and a city is perfectly personalisable. Measured on
+    # real contacts this over-reported badly, warning MOSTLY GENERIC about a pair whose
+    # emails opened "Good to reconnect... organizers in Chicago".
+    generic = sum(1 for c in contacts
+                  if not any(get(c) for _, get in ENRICHMENT_FIELDS))
     lines = [f"list enrichment ({n} contact(s)) -- what the copy has to work with:"]
     for name, _ in ENRICHMENT_FIELDS:
         got = counts[name]

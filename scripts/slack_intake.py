@@ -342,6 +342,9 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
     # zero-eligible guard stopped the run before generation was reached.
     annotated = work / f"intake-{list_id}-{stamp}-annotated.csv"
     elig = work / f"intake-{list_id}-{stamp}-eligible.csv"
+    # eligible + prior-interaction callbacks. This, not `elig`, is what generation reads.
+    enriched = work / f"intake-{list_id}-{stamp}-enriched.csv"
+    cb_review = work / f"intake-{list_id}-{stamp}-callbacks-review.csv"
     gen = work / f"intake-{list_id}-{stamp}-generated.csv"
     tab = f"Intake-{list_id}-{stamp}"
 
@@ -390,8 +393,22 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
         ("eligibility", [PY, str(ROOT / "scripts/eligibility.py"), "--leads", str(leads),
                          "--out", str(annotated), "--eligible-out", str(elig),
                          "--sender", mailbox.split(".")[0]]),
+        # Prior-interaction callbacks. CLAUDE.md core workflow step 3 calls this
+        # "optional" and the automated path simply left it out, so every intake request
+        # would have produced cold opens even for contacts we have a real prior
+        # conversation with. On a rep's list that is the difference between "Hey Cam,
+        # I'm Carl..." and "Hey Cam, I'm Carl. Good to reconnect." -- verified live on
+        # five contacts with Gong-logged replies, all of which came back tier `soft`.
+        #
+        # It is the strongest defence the engine has against sounding machine-written,
+        # and it costs one read-only pass. Nothing about it is optional on a list a
+        # human will read.
+        ("callbacks", [PY, str(ROOT / "scripts/enrich_callbacks.py"), "--eligible",
+                       str(elig), "--out", str(enriched),
+                       "--review-out", str(cb_review)]),
         ("generation", [PY, str(ROOT / "scripts/run_generation.py"), "--contacts",
-                        str(elig), "--mailbox", mailbox, "--out", str(gen), "--quiet"]
+                        str(enriched), "--mailbox", mailbox, "--out", str(gen),
+                        "--quiet"]
                        + (["--angle", angle] if angle else [])),
         ("export", [PY, str(ROOT / "scripts/export_review.py"), "--csv", str(gen),
                     "--mailbox", mailbox, "--tab", tab]),
@@ -433,8 +450,11 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
                     counts[reason] = counts.get(reason, 0) + 1
             out["exclusions"] = counts
             if not keep:
-                out["steps"]["generation"] = "skipped"
-                out["steps"]["export"] = "skipped"
+                # Every downstream step, or the report claims a step is still pending
+                # when it will never run. `callbacks` was added to this list at the same
+                # time it was added to `steps`; the two must stay in sync.
+                for later in ("callbacks", "generation", "export"):
+                    out["steps"][later] = "skipped"
                 return out
     return out
 

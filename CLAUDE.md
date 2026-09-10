@@ -228,8 +228,12 @@ reviews/                   ← exported review CSV/Sheet links (git-ignored)
    This step absorbs the old dedupe-and-create pass: email is the match key, and a lead
    with no HubSpot record is eligible and gets created there (that file's Step 4).
 3. Research each prospect using available company + contact data. See
-   `instructions/research.md`. **Optionally** run `scripts/enrich_callbacks.py` on the
-   ELIGIBLE list first: it reads each contact's logged email history in HubSpot and adds
+   `instructions/research.md`. Run `scripts/enrich_callbacks.py` on the ELIGIBLE list
+   first — **not optional as of 2026-09-10**, and it is a step in
+   `slack_intake.run_pipeline`. It was described as optional here and the automated path
+   duly skipped it, so every rep request produced cold opens even for contacts with a
+   real prior conversation. It is the strongest defence against sounding
+   machine-written and costs one read-only pass: it reads each contact's logged email history in HubSpot and adds
    `callback_tier` / `callback_detail` columns, so email 1 can open on a real prior
    interaction (`instructions/message-generation.md` §9). A prior *send* with no reply
    is not an interaction; uncertain always means no callback.
