@@ -88,17 +88,22 @@ needed. Set **working folder** to this repo; Desktop will ask you to trust it. L
 worktree toggle **off**: these jobs read live credentials and write to real systems, so
 an isolated copy of the repo is not wanted.
 
-### Current state: created, verified, PAUSED (2026-08-31)
+### Current state: LIVE (2026-09-10)
 
-All three routines exist and all three have been run once via **Run now**, green, with
-their permissions approved. They are deliberately **Paused** until closer to the first
-campaign launch, to avoid three "nothing to do" heartbeats a day while there is nothing
-to poll.
+All three routines exist, are un-paused, and the first real morning run posted to Slack
+on 2026-09-10. They were paused from 2026-08-31 until the first campaign launched.
 
-**Un-pausing is a step in the launch procedure** (`instructions/campaign-creation.md`,
-Launch section), not something to remember. A paused routine is the one failure mode the
-heartbeat cannot report: there is no missing message, because there is no message —
-the channel looks identical to a healthy quiet day.
+**A paused routine is the one failure mode the heartbeat cannot report:** there is no
+missing message, because there is no message, and the channel looks identical to a
+healthy quiet day. Un-pausing is therefore a step in the launch procedure
+(`instructions/campaign-creation.md`, Launch section) rather than something to remember.
+
+**Check the saved routine text matches the prompts below, exactly.** The first live run
+went out as a **dry run** because the saved `outbound-morning` routine had been created
+without `--apply`, so nothing was written or sent and the Slack post still looked
+healthy. The repo's copy of the prompt is not what executes — the text saved in Claude
+Desktop is — so the two can drift silently and only the italic `_dry run_` in the Slack
+header gives it away.
 
 ### Do this immediately after creating each one, or it will silently stall
 
@@ -143,10 +148,20 @@ From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
 
 Then stop and report only the summary it printed.
 
-Do not run any other command. Do not edit any file. Do not create, modify, or launch a
-Smartlead campaign. Do not send any email or reply. If the command fails, report the
-error verbatim and do NOT retry it — the heartbeat has already posted the failure to
-Slack, and a retry would post a second time and muddy the signal.
+The --apply flag is REQUIRED and must not be dropped. Without it every job runs in dry
+mode: nothing is written to HubSpot, no approved reply is sent, and the run still looks
+successful. That is a silent no-op, not a safe default.
+
+This command DOES send email, and that is intended. The morning slot runs send_replies,
+which delivers replies a HUMAN already read and marked "Approve" in the review Sheet. It
+originates nothing and cannot send anything a person did not approve. Do not drop
+--apply to avoid this.
+
+Do not run any other command. Do not edit any file in the repo. Do not create, modify,
+or launch a Smartlead campaign. Do not compose or send any message yourself — running
+the command above is the only action to take. If the command fails, report the error
+verbatim and do NOT retry it — the heartbeat has already posted the failure to Slack,
+and a retry would post a second time and muddy the signal.
 ```
 
 `outbound-midday` — Weekdays, 1:05 PM:
@@ -160,10 +175,18 @@ From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
 
 Then stop and report only the summary it printed.
 
-Do not run any other command. Do not edit any file. Do not create, modify, or launch a
-Smartlead campaign. Do not send any email or reply. If the command fails, report the
-error verbatim and do NOT retry it — the heartbeat has already posted the failure to
-Slack, and a retry would post a second time and muddy the signal.
+The --apply flag is REQUIRED and must not be dropped. Without it the reply check runs in
+dry mode: nothing is written to HubSpot and nothing is queued for review, and the run
+still looks successful. That is a silent no-op, not a safe default.
+
+This slot runs the reply check only. It writes to HubSpot and to the review Sheet; it
+does not send email.
+
+Do not run any other command. Do not edit any file in the repo. Do not create, modify,
+or launch a Smartlead campaign. Do not compose or send any message yourself — running
+the command above is the only action to take. If the command fails, report the error
+verbatim and do NOT retry it — the heartbeat has already posted the failure to Slack,
+and a retry would post a second time and muddy the signal.
 ```
 
 `outbound-afternoon` — Weekdays, 4:25 PM:
@@ -177,10 +200,18 @@ From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
 
 Then stop and report only the summary it printed.
 
-Do not run any other command. Do not edit any file. Do not create, modify, or launch a
-Smartlead campaign. Do not send any email or reply. If the command fails, report the
-error verbatim and do NOT retry it — the heartbeat has already posted the failure to
-Slack, and a retry would post a second time and muddy the signal.
+The --apply flag is REQUIRED and must not be dropped. Without it the reply check runs in
+dry mode: nothing is written to HubSpot and nothing is queued for review, and the run
+still looks successful. That is a silent no-op, not a safe default.
+
+This slot runs the reply check only. It writes to HubSpot and to the review Sheet; it
+does not send email.
+
+Do not run any other command. Do not edit any file in the repo. Do not create, modify,
+or launch a Smartlead campaign. Do not compose or send any message yourself — running
+the command above is the only action to take. If the command fails, report the error
+verbatim and do NOT retry it — the heartbeat has already posted the failure to Slack,
+and a retry would post a second time and muddy the signal.
 ```
 
 The prompt is deliberately narrow. A scheduled agent with repo access could do far more
