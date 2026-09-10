@@ -650,6 +650,52 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
+## First real scheduled run, 2026-09-10 — two findings
+
+The 09:45 heartbeat fired at 09:47 and reported. Six of seven jobs succeeded.
+
+**1. A transient Sheets 503 killed `send_replies` for the whole day — FIXED.**
+
+> `HttpError 503 ... "The service is currently unavailable."`
+
+**Not a laptop or connectivity problem, and worth recording how that was established:**
+the run happened, six jobs reached Smartlead and HubSpot successfully, and — decisively —
+`reply_check` read **the same spreadsheet** seconds later without trouble, since its
+dedup store (`SheetProcessedIds`) hits the same API. A 503 that clears within one run is
+Google's, not ours.
+
+No Sheets call had any retry: `googleapiclient` defaults `num_retries` to **0**. Fixed by
+passing `SHEETS_RETRIES = 5` at all 12 call sites across `review_queue.py`,
+`send_replies.py` and `export_review.py`.
+
+**The lesson is about unattended jobs, not about Sheets.** A human hitting a 503 re-runs
+the command without thinking. A scheduler has no such instinct, and `send_replies` runs
+**once a day** — so one blip meant every approved reply waited another 24 hours. Any job
+that runs unattended on a daily cadence has to survive the ordinary flakiness of the APIs
+it depends on.
+
+*Not a duplicate-send risk, checked:* the `sending` stamp is written **before** the POST,
+so a 503 on the post-send stamp leaves the row reading `sending`, which blocks a retry
+and asks for a human. Guarantee 4 already covers this.
+
+**2. The whole run was a DRY RUN — OPEN, needs a human.** The Slack header read
+`_dry run_` and the jobs reported `WOULD be queued` / `would be written`, so
+`heartbeat.py` ran without `--apply`. **Nothing was written or sent all morning**, which
+also means the reply approved on 2026-09-09 would not have gone out even without the 503.
+
+The routine text in this file (line ~142) does specify `--apply`. So either the Claude
+Desktop routine was saved without it, or the agent executing the routine chose to
+dry-run despite "execute exactly". **A scheduled task that silently runs in dry mode is
+the same failure class as the queue's dead `Approve` button**: it looks operational and
+does nothing. Worth asserting rather than eyeballing — see below.
+
+### Consider: make the heartbeat refuse to run silently in dry mode
+Not built, because it needs a decision. A dry-run heartbeat is legitimate for setup
+testing but is a silent no-op on a schedule. Options: have the morning slot exit non-zero
+without `--apply`, or make the Slack line say **"DRY RUN — NOTHING WAS WRITTEN"** loudly
+rather than a quiet italic. The second is probably right: the first would break the
+documented setup-test path.
+
 ## `out_of_office` was a permanent dead end — FIXED 2026-09-09 (`resume_sequences.py`)
 
 The bigger half of the OOO problem, surfaced when Aliza reported that **Smartlead's OOO

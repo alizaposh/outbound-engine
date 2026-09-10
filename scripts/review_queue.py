@@ -36,6 +36,18 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "config" / "review-surfaces.md"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
+# Passed to every Sheets call. googleapiclient retries 5xx and rate-limit responses with
+# exponential backoff when given num_retries; the default is 0, meaning no retries.
+#
+# **This is not defensive padding, it cost a real run.** On 2026-09-10 the 09:45
+# heartbeat died on a bare `HttpError 503: The service is currently unavailable` from
+# Sheets. It was transient -- the very next job in the same run read the SAME spreadsheet
+# successfully seconds later -- but `send_replies` runs once a day, so one blip meant
+# every approved reply waited another 24 hours. An unattended daily job must survive the
+# ordinary flakiness of the APIs it depends on; a human running it by hand would simply
+# have re-run it, and the scheduler has no such instinct.
+SHEETS_RETRIES = 5
+
 # Order is the contract with the sheet's header row. Index 11/12 (decision, notes) are
 # the human's and are always written empty.
 # APPEND-ONLY. DECISION_COL and MSG_ID_COL are positional, so inserting rather than
@@ -194,7 +206,7 @@ class SheetProcessedIds(ProcessedIdStore):
             col = chr(ord("A") + MSG_ID_COL)        # N
             r = self.service.spreadsheets().values().get(
                 spreadsheetId=self.sheet_id,
-                range=f"{self.tab}!{col}2:{col}").execute()
+                range=f"{self.tab}!{col}2:{col}").execute(num_retries=SHEETS_RETRIES)
             self._cache = {v[0].strip() for v in r.get("values", [])
                            if v and v[0].strip()}
         return self._cache
@@ -284,7 +296,7 @@ def append_reply(reply: dict, service=None, cfg=None, store=None,
             # OVERWRITE writes into the next already-existing empty row, keeping the
             # validation that was applied to rows 2+. Safe here because the queue is
             # append-only: the rows below the last entry are always empty.
-            body={"values": [row]}).execute()
+            body={"values": [row]}).execute(num_retries=SHEETS_RETRIES)
     except HttpError as e:
         raise _explain_http_error(e, sheet_id, client_email) from None
 
@@ -298,7 +310,7 @@ def append_reply(reply: dict, service=None, cfg=None, store=None,
 # ---- one-time sheet setup -----------------------------------------------------
 
 def tab_id(service, sheet_id: str, tab: str) -> int:
-    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute(num_retries=SHEETS_RETRIES)
     for s in meta.get("sheets", []):
         if s["properties"]["title"] == tab:
             return s["properties"]["sheetId"]
@@ -319,7 +331,7 @@ def set_decision_validation(service, sheet_id: str, tab: str) -> None:
                  "strict": True,        # reject anything not in the list
                  "showCustomUi": True}}}
     service.spreadsheets().batchUpdate(
-        spreadsheetId=sheet_id, body={"requests": [req]}).execute()
+        spreadsheetId=sheet_id, body={"requests": [req]}).execute(num_retries=SHEETS_RETRIES)
 
 
 def delete_row(service, sheet_id: str, tab: str, row: int) -> None:
@@ -329,12 +341,12 @@ def delete_row(service, sheet_id: str, tab: str, row: int) -> None:
     gid = tab_id(service, sheet_id, tab)
     service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests": [
         {"deleteDimension": {"range": {"sheetId": gid, "dimension": "ROWS",
-                                       "startIndex": row - 1, "endIndex": row}}}]}).execute()
+                                       "startIndex": row - 1, "endIndex": row}}}]}).execute(num_retries=SHEETS_RETRIES)
 
 
 def verify_header(service, sheet_id: str, tab: str) -> list[str]:
     r = service.spreadsheets().values().get(
-        spreadsheetId=sheet_id, range=f"{tab}!A1:O1").execute()
+        spreadsheetId=sheet_id, range=f"{tab}!A1:O1").execute(num_retries=SHEETS_RETRIES)
     got = [c.strip() for c in (r.get("values") or [[]])[0]]
     if got != COLUMNS:
         raise RuntimeError("HEADER MISMATCH: the sheet's header row does not match the "

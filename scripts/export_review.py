@@ -130,10 +130,10 @@ def main(argv=None) -> int:
     from googleapiclient.errors import HttpError
     try:
         got = svc.spreadsheets().values().get(
-            spreadsheetId=sheet_id, range=f"{tab}!A1:AZ1").execute().get("values", [[]])
+            spreadsheetId=sheet_id, range=f"{tab}!A1:AZ1").execute(num_retries=rq.SHEETS_RETRIES).get("values", [[]])
         header = [h.strip() for h in (got[0] if got else [])]
         existing = svc.spreadsheets().values().get(
-            spreadsheetId=sheet_id, range=f"{tab}!A2:A").execute().get("values", [])
+            spreadsheetId=sheet_id, range=f"{tab}!A2:A").execute(num_retries=rq.SHEETS_RETRIES).get("values", [])
     except HttpError as e:
         raise rq._explain_http_error(e, sheet_id, who) from None
 
@@ -177,7 +177,7 @@ def main(argv=None) -> int:
 
     resp = svc.spreadsheets().values().append(
         spreadsheetId=sheet_id, range=f"{tab}!A2", valueInputOption="RAW",
-        body={"values": payload}).execute()
+        body={"values": payload}).execute(num_retries=rq.SHEETS_RETRIES)
     print(f"wrote {(resp.get('updates') or {}).get('updatedRows')} rows to "
           f"{(resp.get('updates') or {}).get('updatedRange')}")
     print(f"\nhttps://docs.google.com/spreadsheets/d/{sheet_id}/edit")

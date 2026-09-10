@@ -128,7 +128,7 @@ def main(argv=None) -> int:
 
     hdr_rng = f"{tab}!A1:{col_letter(len(rq.COLUMNS) - 1)}1"
     hdr = (svc.spreadsheets().values().get(spreadsheetId=sid, range=hdr_rng)
-           .execute().get("values") or [[]])[0]
+           .execute(num_retries=rq.SHEETS_RETRIES).get("values") or [[]])[0]
     idx = {h: i for i, h in enumerate(hdr)}
     missing = [c for c in ("decision", "draft_response", "campaign",
                            "smartlead_stats_id", "sent_at", "email") if c not in idx]
@@ -139,7 +139,7 @@ def main(argv=None) -> int:
 
     rows = (svc.spreadsheets().values()
             .get(spreadsheetId=sid, range=f"{tab}!A2:{col_letter(len(hdr)-1)}")
-            .execute().get("values") or [])
+            .execute(num_retries=rq.SHEETS_RETRIES).get("values") or [])
     print("APPLY: replies will be SENT" if a.apply
           else "DRY RUN: nothing will be sent or stamped. Re-run with --apply to send.")
     print(f"{len(rows)} row(s) in {tab!r}\n")
@@ -218,7 +218,7 @@ def main(argv=None) -> int:
         def stamp(value):
             svc.spreadsheets().values().update(
                 spreadsheetId=sid, range=stamp_rng, valueInputOption="RAW",
-                body={"values": [[value]]}).execute()
+                body={"values": [[value]]}).execute(num_retries=rq.SHEETS_RETRIES)
 
         # Guarantee 4: claim the row BEFORE sending. If this process dies mid-request the
         # row reads "sending", which blocks a retry and asks a human to check.
