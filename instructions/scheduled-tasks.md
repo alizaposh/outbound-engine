@@ -15,6 +15,7 @@ Cloud-hosted scheduling is the v2 option, recorded in the same file.
 | `morning` | 09:45 | Mon–Fri | **approved replies (SENDS)** + reply check + unsubscribe sync + bounce sync + sequence close-out + **out-of-office restarts** + activity logging |
 | `midday` | 13:05 | Mon–Fri | reply check |
 | `afternoon` | 16:25 | Mon–Fri | reply check |
+| `weekly` | 10:15 | **Mondays** | campaign review — writes history + posts the report |
 
 **Why this shape:**
 
@@ -75,13 +76,15 @@ the sidebar (or under **More**) → **New routine** → choose **Local**. A loca
 on this machine with access to this repo; a remote one runs in the cloud from a fresh
 clone and would not have `.env` (see `BACKLOG.md`).
 
-Create **three** routines, identical except for the slot and time:
+Create **four** routines. The first three are identical except for the slot and time;
+the weekly one runs a different job and has its own prompt.
 
 | Name | Schedule | Instructions |
 |---|---|---|
 | `outbound-morning` | **Weekdays**, 9:45 AM | prompt below with `morning` |
 | `outbound-midday` | **Weekdays**, 1:05 PM | prompt below with `midday` |
 | `outbound-afternoon` | **Weekdays**, 4:25 PM | prompt below with `afternoon` |
+| `outbound-weekly` | **Mondays**, 10:15 AM | prompt below with `weekly` |
 
 **Weekdays** is a built-in preset (Daily, skipping Sat/Sun) with a time picker — no cron
 needed. Set **working folder** to this repo; Desktop will ask you to trust it. Leave the
@@ -90,8 +93,12 @@ an isolated copy of the repo is not wanted.
 
 ### Current state: LIVE (2026-09-10)
 
-All three routines exist, are un-paused, and the first real morning run posted to Slack
-on 2026-09-10. They were paused from 2026-08-31 until the first campaign launched.
+The three daily routines exist, are un-paused, and the first real morning run posted to
+Slack on 2026-09-10. They were paused from 2026-08-31 until the first campaign launched.
+
+**`outbound-weekly` is NOT created yet** — added to this file on 2026-09-10 and needs
+making in Claude Desktop. Until it exists, run the review by hand:
+`./.venv/bin/python scripts/heartbeat.py --slot weekly --apply`
 
 **A paused routine is the one failure mode the heartbeat cannot report:** there is no
 missing message, because there is no message, and the channel looks identical to a
@@ -111,7 +118,7 @@ Click **Run now** and answer the permission prompt with **always allow**. A task
 permission mode that hits an un-approved tool does not fail — it *stalls*, waiting for a
 human, and the heartbeat never posts. That failure looks exactly like the one the
 heartbeat exists to expose, so approve the Bash command once, up front, on each of the
-three. You can review or revoke these later from the task's detail page.
+four. You can review or revoke these later from the task's detail page.
 
 ### Two behaviours worth knowing
 
@@ -336,3 +343,38 @@ Promotion required:
 
 Both jobs are idempotent, so a promoted task that double-runs, or a slot that gets
 missed, costs nothing but time. The next run catches up completely.
+
+`outbound-weekly` — **Mondays only**, 10:15 AM:
+
+```
+Run the outbound engine's WEEKLY campaign review.
+
+From /Users/alizamayer/Desktop/email-engine/outbound-engine, execute exactly:
+
+    ./.venv/bin/python scripts/heartbeat.py --slot weekly --apply
+
+Then stop and report only the summary it printed.
+
+The --apply flag is REQUIRED and must not be dropped. Without it no history row is
+written and no report is posted, and the run still looks successful.
+
+This slot posts TWO Slack messages, and that is correct: the campaign review itself,
+and the heartbeat's health line confirming the job ran. Do not treat the second as a
+duplicate.
+
+Do not run any other command. Do not edit any file. Do not create, modify, or launch a
+Smartlead campaign. Do not compose or send any message yourself — running the command
+above is the only action to take. If the command fails, report the error verbatim and
+do NOT retry it — the heartbeat has already posted the failure to Slack, and a retry
+would post a second time and muddy the signal.
+```
+
+**Monday at 10:15, after the morning slot.** The review reads state the morning jobs
+have just refreshed — the reply check, the syncs and the close-out all feed the numbers
+it reports — so running it first would report Friday's picture.
+
+**Why weekly and not daily.** Appending six near-identical rows a week would bury the
+signal the history exists to show, and a cold sequence spans a week anyway: email 2
+lands three days after email 1, email 3 four days after that. A daily read measures
+email 1 alone.
+

@@ -30,12 +30,24 @@ Four things it does that the Smartlead dashboard cannot:
   4. **Rates on DELIVERED, not sent.** A bounce never reached a human; leaving bounces in
      the denominator understates the true rate.
 
-Weekly, per `instructions/campaign-analysis.md`. Not in the heartbeat: this is a report a
-person sits down and reads, not a job that keeps state correct.
+**Where it goes.** `--write` appends one row per campaign to the Campaign Report tab, and
+`--slack` posts the headline. Both need `--apply`. Without either flag it just prints.
+
+The Sheet is the important half: **a single run is a snapshot and cannot show a trend**,
+and the useful question is almost never "what is the rate today" but "is it moving".
+Rows accumulating week over week is what makes that answerable, and what lets a human
+chart it with none of this code involved. The `reply_rate` cell is left EMPTY below the
+threshold rather than written and flagged -- a number in a cell gets charted and quoted
+by someone who never saw the caveat, and an empty cell cannot be plotted.
+
+Runs in the `weekly` heartbeat slot on Mondays. Two Slack messages land that morning by
+design: this report's own detailed post, and the heartbeat's health line confirming the
+job ran. They answer different questions and neither replaces the other.
 """
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import math
 import pathlib
@@ -168,6 +180,109 @@ def pct(x: float) -> str:
     return f"{x * 100:.1f}%"
 
 
+SHEET_COLUMNS = ["run_date", "campaign_id", "campaign_name", "status", "leads", "sent",
+                 "bounced", "delivered", "human_replies", "positive", "negative",
+                 "deferred", "machine", "unaccounted", "reply_rate", "rate_low",
+                 "rate_high"]
+
+
+def sheet_row(r: dict, cfg: dict, today: str) -> list:
+    """One history row. **The rate cells stay EMPTY below the threshold.**
+
+    Not written-and-flagged, empty. A number in a spreadsheet cell gets charted,
+    averaged and quoted in a meeting by someone who never saw the caveat attached to it,
+    and "4%" from one reply in 25 is exactly the figure that starts an argument about
+    copy. An empty cell cannot be plotted. Every count beside it is real and always
+    written, so nothing is lost by waiting.
+    """
+    d, h = r["delivered"], r["human_replies"]
+    show = d >= cfg["min_delivered_for_rate"]
+    lo, hi = wilson(h, d, cfg["confidence"]) if show else (None, None)
+    unaccounted = max(0, r["sl_replies"] - (h + r["machine"]))
+    return [today, str(r["id"]), r["name"], r["status"], r["leads"], r["sent"],
+            r["bounced"], d, h, r["positive"], r["negative"], r["neutral"],
+            r["machine"], unaccounted,
+            round(h / d, 4) if show and d else "",
+            round(lo, 4) if show else "", round(hi, 4) if show else ""]
+
+
+def write_history(rows: list[dict], cfg: dict, today: str, apply_changes: bool) -> str:
+    """Append one row per campaign to the Campaign Report tab. Idempotent per day."""
+    import review_queue as rq
+    svc, _ = rq.sheets_service()
+    surfaces = rq.load_surface_config()
+    sid = surfaces["REPLY_REVIEW_SHEET_ID"]
+    tab = surfaces.get("CAMPAIGN_REPORT_TAB") or "Campaign Report"
+
+    existing = []
+    try:
+        existing = (svc.spreadsheets().values()
+                    .get(spreadsheetId=sid, range=f"{tab}!A1:Q")
+                    .execute(num_retries=rq.SHEETS_RETRIES).get("values") or [])
+    except Exception:
+        existing = []                      # tab does not exist yet
+
+    if not apply_changes:
+        return (f"would write {len(rows)} row(s) to {tab!r} "
+                f"({len(existing)} row(s) there now)")
+
+    if not existing:
+        # Create the tab on first use rather than making it a manual setup step.
+        try:
+            svc.spreadsheets().batchUpdate(
+                spreadsheetId=sid,
+                body={"requests": [{"addSheet": {"properties": {"title": tab}}}]}
+            ).execute(num_retries=rq.SHEETS_RETRIES)
+        except Exception:
+            pass                            # already exists but is empty
+        svc.spreadsheets().values().update(
+            spreadsheetId=sid, range=f"{tab}!A1",
+            valueInputOption="RAW", body={"values": [SHEET_COLUMNS]}
+        ).execute(num_retries=rq.SHEETS_RETRIES)
+        existing = [SHEET_COLUMNS]
+
+    # Idempotence on (run_date, campaign_id): a re-run after a failure adds nothing.
+    already = {(r[0], r[1]) for r in existing[1:] if len(r) > 1}
+    new = [sheet_row(r, cfg, today) for r in rows
+           if (today, str(r["id"])) not in already]
+    if not new:
+        return f"{tab!r}: already has today's row for every campaign; nothing appended"
+    svc.spreadsheets().values().append(
+        spreadsheetId=sid, range=f"{tab}!A1",
+        valueInputOption="RAW", insertDataOption="INSERT_ROWS",
+        body={"values": new}).execute(num_retries=rq.SHEETS_RETRIES)
+    return f"appended {len(new)} row(s) to {tab!r} ({len(existing) - 1} were there)"
+
+
+def slack_summary(rows: list[dict], cfg: dict, today: str) -> str:
+    """The weekly nudge. Headline only -- the Sheet holds the detail and the history."""
+    floor = cfg["min_delivered_for_rate"]
+    d = sum(r["delivered"] for r in rows)
+    h = sum(r["human_replies"] for r in rows)
+    p = sum(r["positive"] for r in rows)
+    unacc = sum(max(0, r["sl_replies"] - (r["human_replies"] + r["machine"]))
+                for r in rows)
+    lines = [f"📊 *Weekly campaign review* · {today}",
+             f"{len(rows)} campaign(s) · {d} delivered · {h} human repl(y/ies) · "
+             f"{p} positive"]
+    if d < floor:
+        lo, hi = wilson(h, d, cfg["confidence"]) if d else (0, 0)
+        lines.append(f"*No rate yet* — {d} delivered is below the {floor} needed. "
+                     f"{h}/{d} is anywhere from {pct(lo)} to {pct(hi)}.")
+        lines.append(f"~{floor - d} more delivered before this can be read. "
+                     f"The counts are real; the rate is not.")
+    else:
+        lo, hi = wilson(h, d, cfg["confidence"])
+        lines.append(f"*Human reply rate {pct(h / d)}*  [{pct(lo)} – {pct(hi)}]")
+        lines.append("Read the interval, not the point estimate.")
+    if unacc:
+        lines.append(f"⚠️ *{unacc} unaccounted repl(y/ies)* — Smartlead saw more than we "
+                     f"classified. Usually a lead with no HubSpot contact.")
+    lines.append("_Full history, one row per campaign per week, is in the "
+                 "Campaign Report tab._")
+    return "\n".join(lines)
+
+
 def report_campaign(sl: Smartlead, hs: HubSpot, camp: dict, cfg: dict) -> dict:
     """Everything for one campaign. Returns the numbers; printing is the caller's job."""
     cid = camp.get("id")
@@ -279,6 +394,12 @@ def main(argv=None) -> int:
     ap.add_argument("--campaign", help="one campaign id; default is every campaign")
     ap.add_argument("--include-completed", action="store_true",
                     help="also report campaigns that have finished")
+    ap.add_argument("--write", action="store_true",
+                    help="append this run to the Campaign Report tab (history).")
+    ap.add_argument("--slack", action="store_true",
+                    help="post the headline summary to the heartbeat channel.")
+    ap.add_argument("--apply", action="store_true",
+                    help="required alongside --write/--slack to actually write or post.")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the interval maths and the config guard, no API calls")
     a = ap.parse_args(argv)
@@ -324,7 +445,23 @@ def main(argv=None) -> int:
         print(f"  human reply rate {pct(tot_h / tot_d)}  [{pct(lo)} – {pct(hi)}]")
         print("  Comparing two variants needs thousands per variant, not hundreds. This "
               "total\n  supports 'is it working', not 'which copy is better'.")
-    print(f"\n{sl.calls} Smartlead calls, {hs.calls} HubSpot calls. Nothing was written.")
+    today = dt.date.today().isoformat()
+    if a.write:
+        print(f"\nhistory: {write_history(rows, cfg, today, a.apply)}")
+    if a.slack:
+        text = slack_summary(rows, cfg, today)
+        print("\n" + "-" * 78 + f"\n{text}\n" + "-" * 78)
+        if a.apply:
+            from heartbeat import post_to_slack
+            post_to_slack(text)
+            print("posted to Slack")
+        else:
+            print("(not posted: --slack needs --apply)")
+
+    print(f"\n{sl.calls} Smartlead calls, {hs.calls} HubSpot calls. "
+          f"Smartlead and HubSpot were only read from.")
+    if (a.write or a.slack) and not a.apply:
+        print("DRY RUN: --apply was not passed, so nothing was written or posted.")
     return 0
 
 

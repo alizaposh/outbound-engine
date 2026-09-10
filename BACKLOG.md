@@ -989,6 +989,31 @@ whichever way that test comes out, and the test only establishes how urgent it w
    string, `"1788…"` sorts below any ISO date and **every contact reads as overdue**. All
    reads go through `as_date()`; both shapes are covered in the self-test.
 
+### Given a home 2026-09-10: Sheet history + a Monday Slack post
+
+Built as a terminal script with no surface, which was a gap — the point is a weekly
+review someone sits down with. Aliza picked Sheet + Slack over Slack-only or Notion.
+
+**The Sheet is the important half, because a single run cannot show a trend.** The useful
+question is almost never "what is the rate today" but "is it moving", and only
+accumulating rows answer that. One row per campaign per run on a `Campaign Report` tab in
+the same spreadsheet as the reply queue, idempotent on `(run_date, campaign_id)` so a
+re-run after a failure is safe.
+
+**`reply_rate` is left EMPTY below the threshold rather than written and flagged.** A
+number in a spreadsheet cell gets charted, averaged and quoted in a meeting by someone
+who never saw the caveat attached to it. An empty cell cannot be plotted. Every count
+beside it is real and always written, so nothing is lost by waiting.
+
+Runs in a new `weekly` heartbeat slot (Mondays 10:15, after the morning slot so it reads
+state the morning jobs just refreshed). **Two Slack messages land that morning by
+design** — the report itself and the heartbeat's health line. "Did it run" and "what did
+it find" are different questions, and if the report dies the heartbeat is what tells you.
+
+*Verified live:* tab created, 2 rows appended, rate cells empty at 32 delivered, re-run
+appended nothing, Slack posted. **`outbound-weekly` still needs creating in Claude
+Desktop** — until then run it by hand.
+
 **Verified:** both self-tests pass; a live round trip on a real contact showed the due
 contact found, the `replied` guard refusing it, `UNMATCHED` refusing to guess a lead id,
 and the contact restored (confirmed by an authoritative object read, not the lagging

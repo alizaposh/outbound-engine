@@ -7,6 +7,7 @@ Invoked by the Claude Desktop scheduled task described in
     slot=morning   -> approved replies, then reply check + the four syncs
     slot=midday    -> reply check
     slot=afternoon -> reply check
+    slot=weekly    -> the campaign review (Mondays, its own routine)
 
 **The heartbeat is the point, and "every time" is what makes it one.** A report that
 only appears when something happened cannot be told apart from a job that never ran, and
@@ -79,13 +80,18 @@ SLOTS = {
                    "close_sequences", "resume_sequences", "sync_sends"],
     "midday":    ["reply_check"],
     "afternoon": ["reply_check"],
+    # Mondays only, via its own routine. Separate from the daily slots because it is a
+    # REPORT, not a job that keeps state correct -- running it daily would append six
+    # near-identical history rows a week and bury the weekly signal it exists to show.
+    "weekly":    ["campaign_report"],
 }
 JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sync",
               "sync_bounces": "Bounce sync",
               "close_sequences": "Sequence close-out",
               "sync_sends": "Activity logging",
               "send_replies": "Approved replies",
-              "resume_sequences": "Out-of-office restarts"}
+              "resume_sequences": "Out-of-office restarts",
+              "campaign_report": "Weekly campaign review"}
 
 # Extra arguments per job. `send_replies` is capped because the heartbeat runs it
 # unattended and nobody reads a dry run first: a reviewer who drag-fills `Approve` down
@@ -93,7 +99,13 @@ JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sy
 # burst, as real messages to real prospects. The cap turns that mistake into a slow and
 # visible one instead of an irreversible one. Rows over the cap are left untouched and
 # reported, never silently dropped.
-JOB_ARGS = {"send_replies": ["--limit", "25"]}
+JOB_ARGS = {"send_replies": ["--limit", "25"],
+            # Writes the history row AND posts its own detailed summary. That means two
+            # Slack messages on a Monday: the report itself, and the heartbeat's health
+            # line saying the job ran green. Deliberate -- "did it run" and "what did it
+            # find" are different questions, and if the report dies the heartbeat is
+            # still what tells you.
+            "campaign_report": ["--write", "--slack", "--include-completed"]}
 
 # Pulled out of each job's stdout for the Slack summary. Best-effort by design: if a
 # pattern stops matching, the message gets less pretty, never wrong -- the raw tail is
@@ -111,6 +123,7 @@ SUMMARY_PATTERNS = [
     re.compile(r"^\d+ sent, \d+ skipped, \d+ failed.*$", re.M),   # send_replies
     re.compile(r"^\d+ resumed, \d+ blocked.*$", re.M),            # resume_sequences
     re.compile(r"^no contact has a resume date.*$", re.M),
+    re.compile(r"^history: .*$", re.M),                          # campaign_report
 ]
 
 

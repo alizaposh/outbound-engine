@@ -152,3 +152,48 @@ A reply row appears only when **all three** are true:
 summary said "1 queued for review" in dry run, which the heartbeat printed into Slack
 every weekday while the sheet stayed empty — a reliable way to conclude the queue is
 broken. It now reads "1 WOULD be queued (dry run, sheet unchanged)".
+
+---
+
+## Campaign Report (weekly)
+
+One row **per campaign per run**, appended by `scripts/campaign_report.py --write`. Lives
+in the same spreadsheet as the reply queue, on its own tab.
+
+```
+CAMPAIGN_REPORT_TAB: Campaign Report
+```
+
+**Append-only, and that is the point.** A single run is a snapshot and cannot show a
+trend; the interesting question is almost never "what is the rate today" but "is it
+moving". History accumulating in rows is what makes that answerable, and what lets you
+chart it without any of this code being involved.
+
+| # | Column | Notes |
+|---|---|---|
+| 1 | `run_date` | the day the report ran, not the campaign's date |
+| 2 | `campaign_id` | |
+| 3 | `campaign_name` | |
+| 4 | `status` | Smartlead campaign status at run time |
+| 5 | `leads` | enrolled |
+| 6 | `sent` | emails sent, not people |
+| 7 | `bounced` | |
+| 8 | `delivered` | `sent - bounced`, the denominator for every rate |
+| 9 | `human_replies` | **excludes auto-responders**, unlike Smartlead's own count |
+| 10 | `positive` | |
+| 11 | `negative` | |
+| 12 | `deferred` | |
+| 13 | `machine` | auto-responders, counted but never in a rate |
+| 14 | `unaccounted` | replies Smartlead saw that we could not classify — **investigate any non-zero** |
+| 15 | `reply_rate` | **BLANK below the threshold** |
+| 16 | `rate_low` | low end of the confidence interval |
+| 17 | `rate_high` | high end |
+
+**`reply_rate` is deliberately left EMPTY until `min_delivered_for_rate` is met**, rather
+than written and flagged. A number in a spreadsheet cell gets charted, averaged and
+quoted in a meeting by someone who never saw the caveat attached to it — and "4%" from a
+single reply in 25 is exactly the figure that starts an argument about copy. An empty
+cell cannot be plotted. The counts beside it are real and always written.
+
+**Idempotent on `(run_date, campaign_id)`.** Running twice in a day updates nothing and
+adds nothing, so a re-run after a failure is safe.

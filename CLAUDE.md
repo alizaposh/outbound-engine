@@ -197,11 +197,14 @@ scripts/                   ← Python (stdlib + anthropic only)
   sync_unsubscribes.py     ← Smartlead unsubscribes -> HubSpot outbound_suppressed.
                              DRY RUN BY DEFAULT. Scoped suppression only, never the
                              native global opt-out
-  campaign_report.py       ← THE WEEKLY REVIEW. Read-only. Human reply rate (excludes
-                             auto-responders, unlike Smartlead's own count), outcome
-                             split, Wilson intervals. REFUSES to quote a rate below 200
-                             delivered — a "4%" from one reply in 25 invites a copy
-                             change built on a single email
+  campaign_report.py       ← THE WEEKLY REVIEW. Reads Smartlead + HubSpot, writes only
+                             to a Sheet. Human reply rate (excludes auto-responders,
+                             unlike Smartlead's own count), outcome split, Wilson
+                             intervals. REFUSES to quote a rate below 200 delivered — a
+                             "4%" from one reply in 25 invites a copy change built on a
+                             single email. --write appends history to the Campaign
+                             Report tab (the rate cell stays EMPTY below the floor, so
+                             nobody charts it); --slack posts the headline. Monday slot
   review_queue.py          ← appends replies needing a human decision to the review
                              Sheet. Never writes the decision/notes columns
   export_review.py         ← pushes a generation run to the review Sheet, one tab per run
