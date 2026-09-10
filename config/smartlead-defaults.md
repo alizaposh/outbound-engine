@@ -34,14 +34,28 @@ log_sends_enabled: true             # scripts/sync_sends.py writes engine sends 
                                     # only logs mail from a HubSpot seat. SET TO FALSE the
                                     # day Smartlead supports it, or every activity is
                                     # logged twice.
-max_leads_in_flight: 60             # INTAKE ceiling for scripts/slack_intake.py. Counts
+max_leads_in_flight: 100            # INTAKE ceiling for scripts/slack_intake.py. Counts
                                     # leads inside ACTIVE/DRAFTED/PAUSED campaigns, not
                                     # sends per day: a lead occupies capacity for about
                                     # the length of the sequence (~7 days at [0,3,4]), so
                                     # a per-day ceiling would let a week of campaigns all
                                     # start on one morning. Deliberately well under the
-                                    # 180/day the mailboxes could carry, because the
-                                    # domains are weeks old. Raise it as they age.
+                                    # 180/day the mailboxes could carry.
+                                    #
+                                    # RAISED 60 -> 100 on 2026-09-10, which the previous
+                                    # note anticipated ("raise it as they age"). A
+                                    # 41-lead request was being QUEUED behind the 25
+                                    # already in flight, 66 > 60, and would not have run.
+                                    # The arithmetic at 66 in flight: 50 sends still due
+                                    # on the existing 25 (emails 2 and 3) plus 123 for
+                                    # the new 41, so ~173 sends over ~10 days, about
+                                    # 17/day against the 180/day the fleet carries --
+                                    # roughly 10% utilisation. The ceiling was never
+                                    # about throughput; it paces young domains. 100
+                                    # keeps that pacing intent with room for one real
+                                    # campaign alongside one in flight.
+                                    # Still well short of 180/day. Raise further only
+                                    # with a reason, and never to clear a backlog.
 seq_delay_days: [0, 3, 4]           # email 1 immediately, 2 after 3 days, 3 after 4 more
 stop_lead_settings: REPLY_TO_AN_EMAIL   # stop-on-reply; already the Smartlead default
 track_settings: [DONT_EMAIL_OPEN, DONT_LINK_CLICK]   # BOTH off. Open tracking off
