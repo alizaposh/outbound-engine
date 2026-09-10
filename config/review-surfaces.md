@@ -197,3 +197,9 @@ cell cannot be plotted. The counts beside it are real and always written.
 
 **Idempotent on `(run_date, campaign_id)`.** Running twice in a day updates nothing and
 adds nothing, so a re-run after a failure is safe.
+
+**A finished campaign is recorded once and then left alone.** Its numbers cannot change
+again, so re-recording them every week would write an identical row forever — history
+that grows without carrying any information. The final row is kept, because that *is*
+the useful artefact; after that the campaign is skipped. An `ACTIVE` campaign is always
+re-recorded, since its movement is the entire point of the history.

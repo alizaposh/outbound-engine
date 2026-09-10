@@ -243,15 +243,38 @@ def write_history(rows: list[dict], cfg: dict, today: str, apply_changes: bool) 
 
     # Idempotence on (run_date, campaign_id): a re-run after a failure adds nothing.
     already = {(r[0], r[1]) for r in existing[1:] if len(r) > 1}
+
+    # A FINISHED campaign's numbers never change again, so re-recording them every week
+    # writes an identical row forever: history that grows without carrying information,
+    # and a finished campaign's static totals quietly dragged into every future
+    # cross-campaign summary. Its final row is kept -- that is the useful artefact -- and
+    # then it stops. A campaign that is still ACTIVE is always re-recorded, because its
+    # numbers are what the history exists to track.
+    last = {}
+    for r in existing[1:]:
+        if len(r) > 9:
+            last[r[1]] = r
+    def unchanged_and_done(r: dict) -> bool:
+        prev = last.get(str(r["id"]))
+        if not prev or (r["status"] or "").upper() != "COMPLETED":
+            return False
+        return ([prev[5], prev[7], prev[8]]
+                == [str(r["sent"]), str(r["delivered"]), str(r["human_replies"])])
+
+    skipped_done = [r for r in rows if unchanged_and_done(r)]
     new = [sheet_row(r, cfg, today) for r in rows
-           if (today, str(r["id"])) not in already]
+           if (today, str(r["id"])) not in already and not unchanged_and_done(r)]
+    done_note = (f"; {len(skipped_done)} finished campaign(s) already final"
+                 if skipped_done else "")
     if not new:
-        return f"{tab!r}: already has today's row for every campaign; nothing appended"
+        return (f"{tab!r}: nothing to append — today's rows are already there or the "
+                f"campaigns are finished{done_note}")
     svc.spreadsheets().values().append(
         spreadsheetId=sid, range=f"{tab}!A1",
         valueInputOption="RAW", insertDataOption="INSERT_ROWS",
         body={"values": new}).execute(num_retries=rq.SHEETS_RETRIES)
-    return f"appended {len(new)} row(s) to {tab!r} ({len(existing) - 1} were there)"
+    return (f"appended {len(new)} row(s) to {tab!r} "
+            f"({len(existing) - 1} were there){done_note}")
 
 
 def slack_summary(rows: list[dict], cfg: dict, today: str) -> str:
@@ -276,8 +299,16 @@ def slack_summary(rows: list[dict], cfg: dict, today: str) -> str:
         lines.append(f"*Human reply rate {pct(h / d)}*  [{pct(lo)} – {pct(hi)}]")
         lines.append("Read the interval, not the point estimate.")
     if unacc:
-        lines.append(f"⚠️ *{unacc} unaccounted repl(y/ies)* — Smartlead saw more than we "
-                     f"classified. Usually a lead with no HubSpot contact.")
+        # Name the campaigns. An aggregate "7 unaccounted" with no pointer sends someone
+        # hunting through an inbox for replies that are sitting on a finished test
+        # campaign -- which is exactly what happened the first time this fired.
+        where = ", ".join(
+            f"{r['name'] or r['id']} ({r['sl_replies'] - (r['human_replies'] + r['machine'])})"
+            for r in rows
+            if r["sl_replies"] > r["human_replies"] + r["machine"])
+        lines.append(f"⚠️ *{unacc} unaccounted repl(y/ies)* on {where} — Smartlead saw "
+                     f"more than we classified, so they are missing from the counts "
+                     f"above. Usually leads with no HubSpot contact.")
     lines.append("_Full history, one row per campaign per week, is in the "
                  "Campaign Report tab._")
     return "\n".join(lines)
