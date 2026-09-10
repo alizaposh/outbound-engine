@@ -15,10 +15,17 @@ Four guarantees:
 
   1. READ-ONLY. Nothing here writes to HubSpot. Same guarantee as eligibility.py, and
      the client is imported from it so auth, retry, and pacing are not reimplemented.
-  2. A PRIOR SEND IS NOT A PRIOR CONVERSATION. An outbound email with no reply is NOT
-     an interaction. hs_email_direction == INCOMING_EMAIL is the crux: that is a reply
-     from the contact. Many of these leads are old records with ignored outreach, and
-     "good to reconnect" on a one-way send reads false.
+  2. A PRIOR SEND IS NOT A PRIOR CONVERSATION -- but it is not nothing either.
+     `hs_email_direction == INCOMING_EMAIL` is still the crux for `soft` and `specific`:
+     only a reply earns "good to reconnect", which on a one-way send reads false.
+     **A send with no reply now earns the separate `attempt` tier** (added 2026-09-10),
+     which licenses "I know we tried to connect" and nothing more. The two claims are
+     genuinely different -- one asserts an exchange, the other only that we wrote -- and
+     collapsing them was costing an honest opener on every contact a colleague had
+     already chased. `attempt` carries a DATE and never a detail: our own logged sends
+     are bulk-associated and cannot be trusted per contact (one real body opens "Hey
+     David" while attached to two other people), so *that* we wrote is reliable and
+     *what* we wrote is not.
   3. ONLY THE PROSPECT'S OWN NEW WORDS ARE READ. An inbound reply carries the whole
      quoted thread beneath it, which is OUR text. One real example ran 7.7k chars of
      which the prospect wrote 105: the rest was our own message including "3% + $1.50
@@ -72,6 +79,13 @@ EMAIL_INBOUND = "INCOMING_EMAIL"
 
 # A future-dated email is not a memory (a scheduled send, or a bad timestamp).
 FUTURE_GRACE = dt.timedelta(hours=12)
+
+# How far back a prior SEND can be and still be worth acknowledging (tier `attempt`).
+# A year, because "we tried to reach you" stops being a courtesy and starts being odd
+# once the prospect has no memory of it -- and because a three-year-old send says more
+# about our CRM than about them. Shorter than this is safe; much longer reads as us
+# admitting we have been mailing them for years.
+ATTEMPT_MAX_AGE_DAYS = 365
 
 OUT_COLUMNS = ELIGIBLE_COLUMNS + ["callback_tier", "callback_detail",
                                   "callback_source_id", "callback_last_date"]
@@ -339,6 +353,36 @@ def classify(timeline: dict[str, list[dict]], client=None, model: str = "",
         (two_way if ok else rejected).append((e, why))
 
     if not two_way:
+        # TIER `attempt` (added 2026-09-10). No reply, but we DID write to them.
+        #
+        # "Good to reconnect" needs a reply and is what guarantee 2 protects. **"I know
+        # we tried to connect before" needs only a send, and is true whether or not they
+        # answered.** Those are different claims, and collapsing them was costing an
+        # honest and useful opener on every contact a colleague has already chased.
+        #
+        # **The fact only, NEVER the content.** Our own logged sends cannot be trusted
+        # per contact: on maxwellsocial.com one body opens "Hey David" while attached to
+        # both Patricia and Kyle, and a second opens "Hi Joelle!" on both. Bulk-logged
+        # mail with mismatched salutations means "we emailed this contact on <date>" is
+        # reliable while "we said X to them" is not. So this tier carries a DATE and no
+        # detail, and never reaches the LLM extractor.
+        outbound = [(e, _ts(e.get("hs_timestamp"))) for e in engagements
+                    if (e.get("hs_email_direction") or "").strip().upper()
+                    not in ("", EMAIL_INBOUND)]
+        dated = sorted([(t, e) for e, t in outbound if t], reverse=True)
+        if dated:
+            when, newest_out = dated[0]
+            age = (now - when).days
+            if 0 <= age <= ATTEMPT_MAX_AGE_DAYS:
+                return {**blank, "callback_tier": "attempt",
+                        "callback_last_date": when.date().isoformat(),
+                        "callback_source_id": str(newest_out.get("_id", "")),
+                        "interaction_kind": "outbound email, no reply",
+                        "evidence": f"{len(dated)} prior send(s); newest {when.date()}",
+                        "skipped_reason": ""}
+            reasons = (f"last send was {age} day(s) ago, over the "
+                       f"{ATTEMPT_MAX_AGE_DAYS}-day window for referencing an attempt")
+            return {**blank, "skipped_reason": reasons}
         reasons = "; ".join(sorted({why for _, why in rejected})) or "no qualifying engagement"
         return {**blank, "skipped_reason": f"nothing two-way: {reasons}"}
 

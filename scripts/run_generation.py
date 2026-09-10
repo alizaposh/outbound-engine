@@ -385,22 +385,38 @@ def callback_note(c: Contact) -> dict | None:
     cold: a callback is only ever offered when there is something real behind it.
     """
     tier = (c.callback_tier or "none").lower()
-    if tier not in ("specific", "soft"):
+    if tier not in ("specific", "soft", "attempt"):
         return None
     if tier == "specific" and not c.callback_detail:
         tier = "soft"
+    guidance = {
+        "specific": (
+            "A real prior interaction exists AND a concrete detail was logged. Open "
+            "email 1 with a faithful callback to that detail, per §9 'Specific "
+            "callback'. Paraphrase only what the detail says; never inflate it."),
+        "soft": (
+            "A real prior interaction exists but NO reusable detail was logged. Open "
+            "email 1 by acknowledging the reconnection only, per §9 'Soft callback'. "
+            "Assert nothing specific about what was discussed."),
+        # The claim here is narrower than 'soft' and the wording must be too.
+        "attempt": (
+            "WE EMAILED THEM AND THEY NEVER REPLIED. Open email 1 by acknowledging THE "
+            "ATTEMPT, per §9 'Attempt callback' -- e.g. 'I know we tried to connect a "
+            "while back, wanted to see if now is a better time.'\n"
+            "NEVER imply a conversation happened. 'Good to reconnect', 'great speaking', "
+            "'following up on our chat' are all FALSE here: they did not answer.\n"
+            "NEVER reference what our previous email SAID. Not the offer, not the "
+            "sender, not the subject. Our own logged sends are bulk-associated and "
+            "unreliable for any one contact -- that we wrote is known, what we wrote is "
+            "not.\n"
+            "No apology and no guilt. Not 'sorry to bother you again'. One clean line "
+            "about the gap, then the normal ask."),
+    }[tier]
     return {
         "tier": tier,
         "detail": c.callback_detail if tier == "specific" else None,
         "last_interaction_date": c.callback_last_date or None,
-        "guidance": (
-            "A real prior interaction exists AND a concrete detail was logged. Open "
-            "email 1 with a faithful callback to that detail, per §9 'Specific "
-            "callback'. Paraphrase only what the detail says; never inflate it."
-            if tier == "specific" else
-            "A real prior interaction exists but NO reusable detail was logged. Open "
-            "email 1 by acknowledging the reconnection only, per §9 'Soft callback'. "
-            "Assert nothing specific about what was discussed."),
+        "guidance": guidance,
         "rules": ("Email 1 only, never emails 2 or 3. If the date is long ago, "
                   "acknowledge the gap rather than implying it was recent. If in any "
                   "doubt, drop the callback and use the cold open."),

@@ -285,7 +285,7 @@ signal this isn't a cold blast, but a *fabricated* one is worse than none, so
 this runs on strict tiers.
 
 **The tier is computed upstream, not here.** `scripts/enrich_callbacks.py` reads the
-timeline and writes `callback_tier` (`specific` / `soft` / `none`) plus
+timeline and writes `callback_tier` (`specific` / `soft` / `attempt` / `none`) plus
 `callback_detail` and `callback_last_date` onto the contact CSV; generation receives
 them in the research note under `callback` and words them per the tiers below.
 Generation never reads HubSpot itself. If the columns are absent the tier defaults to
@@ -303,7 +303,24 @@ Generation never reads HubSpot itself. If the columns are absent the tier defaul
   - e.g. "Loved having you at Posh Blueprint earlier this year. How have you been feeling about your events since?"
 - **Soft callback:** a real prior interaction exists but no reusable detail was logged. Acknowledge the reconnection only; assert nothing specific.
   - e.g. "Good to reconnect," / "It's been a while since we last connected,"
-- **No callback:** no genuine prior interaction (or only ignored outbound). Use the normal cold open (§4, Email 1).
+- **Attempt callback** (`attempt`, added 2026-09-10): we emailed them within the last
+  year and they never replied. Acknowledge **the attempt**, never a conversation.
+  - e.g. "I know we tried to connect a while back — wanted to follow up and see if now's a better time."
+  - e.g. "We reached out earlier in the year and didn't catch you. Worth another try?"
+  - e.g. "I think you've heard from us before. If the timing was wrong then, it may not be now."
+  - **This is a different claim from a soft callback, and the difference is the whole
+    point.** "Good to reconnect" says we had an exchange and needs a reply to be true.
+    "We tried to reach you" says only that we wrote, which is true whether or not they
+    answered. Never use soft wording on this tier.
+  - **Reference the FACT, never the CONTENT of what we sent.** Do not paraphrase our
+    previous email, do not name what it offered, do not say who sent it. Our own logged
+    sends are bulk-associated and unreliable per contact — one real body opens "Hey
+    David" while attached to two other people — so "we emailed you" is trustworthy and
+    "we told you X" is not.
+  - **No apology and no guilt.** Not "sorry to bother you again", not "I know you've
+    ignored us". One clean line acknowledging the gap, then the normal ask.
+- **No callback:** no logged email at all, or a prior send older than a year. Use the
+  normal cold open (§4, Email 1).
 
 **Rules for the callback:**
 - Callback goes in **email 1 only.** Don't repeat it in emails 2 and 3.

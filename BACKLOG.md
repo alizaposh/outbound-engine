@@ -818,6 +818,65 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## `attempt` callback tier: reference a prior UNANSWERED send — 2026-09-10
+
+**Asked** whether an outbound email could be referenced, not just an inbound reply —
+e.g. Caroline's HubSpot-sequence line *"Last follow up, then I'll stop bothering you"* —
+so a later email could open *"I know we tried to connect in the past…"*.
+
+**A real distinction that guarantee 2 was flattening.** "Good to reconnect" asserts an
+exchange and needs a reply to be true. **"We tried to reach you" asserts only that we
+wrote**, which is true whether or not they answered. Collapsing the two was costing an
+honest opener on every contact a colleague had already chased — a large set, since most
+outreach goes unanswered.
+
+New tier `attempt`, between `soft` and `none`: **outbound send, no reply, within a year.**
+
+    specific  a reply AND a reusable detail   -> paraphrase the detail
+    soft      a reply, nothing reusable       -> "Good to reconnect"
+    attempt   a send, no reply, < 365 days    -> "I know we tried to connect"   NEW
+    none      nothing logged, or send > 1yr   -> cold open
+
+*Verified live* on `patricia@` / `kyle@maxwellsocial.com`, whose only engagements are
+outbound. Both now classify `attempt` and generate:
+
+> "Hey Patricia, I'm Carl, I run partnerships at Posh. **I know we tried to connect a
+> while back. Wanted to see if now is a better time.** Are you locked in on your
+> ticketing platform right now?"
+
+**Three guardrails, and the middle one is the load-bearing one:**
+
+1. **Never imply a conversation.** "Good to reconnect", "great speaking", "following up
+   on our chat" are all false on this tier and named as forbidden in the prompt.
+2. **The FACT only, never the CONTENT.** Do not paraphrase our previous email, name its
+   offer, or name its sender. Our own logged sends are bulk-associated and unreliable
+   per contact — one real body opens "Hey David" while attached to both Patricia and
+   Kyle, and another opens "Hi Joelle!" on both. *That* we wrote is reliable; *what* we
+   wrote is not. So the tier carries a date and no detail, and never reaches the LLM
+   extractor.
+3. **No apology, no guilt.** Not "sorry to bother you again". One clean line, then the
+   normal ask.
+
+**365-day window** (`ATTEMPT_MAX_AGE_DAYS`). Beyond that "we tried to reach you" stops
+being a courtesy and starts saying more about our CRM than about them.
+
+## `has_group` unknowns already pass — checked 2026-09-10, no change needed
+
+Asked to loosen the gate so contacts with an unknown `has_group` are mailable. **They
+already are.** Gate 4 fires only on an exact match against `has_group_exclude_value`
+(`"yes"`), so an empty value never triggers it. Measured across 100 contacts:
+
+| reason | has_group |
+|---|---|
+| 61 existing customer (has_group) | all `Yes` |
+| **27 ELIGIBLE** | all `(empty)` |
+| 12 has CSM | all `(empty)` |
+
+Every eligible contact in that sample got through *with* an empty `has_group`. The only
+thing excluding empty-`has_group` contacts is **gate 5 (has CSM)**, which is a different
+question and was not asked about — worth revisiting separately if 12% is judged too
+aggressive, since a CSM assignment is not proof of a live customer relationship.
+
 ## Win-back for former organizers — NOT POSSIBLE YET, investigated 2026-09-10
 
 **Asked:** could the engine pick up a prior message like *"It's been a minute since Events
