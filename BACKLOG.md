@@ -1039,8 +1039,17 @@ happen by chance about 1% of the time, so the fix is real rather than a lucky st
 
 ## A shareable reference for the ten intents — BUILT 2026-09-10
 
-**https://claude.ai/code/artifact/a0b42ba6-685c-48ac-8387-3fd27f20aa8b**
-(private until shared from the page's share menu; republish the same file to update it)
+Published in two places, both 2026-09-10:
+
+- **Notion** (the one to share with the team, since they can comment inline):
+  https://app.notion.com/p/3d7effd1823381a3b675cf9bdbaae48c
+  Created as a workspace-level private page; move it into the right teamspace.
+- **Artifact** (the same content as a standalone page):
+  https://claude.ai/code/artifact/a0b42ba6-685c-48ac-8387-3fd27f20aa8b
+  Private until shared from the page's share menu; republish the same file to update.
+
+**Two copies now, which is one more thing to drift.** If the intents change, update
+both — or delete the artifact and keep only Notion, which is where comments will land.
 
 Written for reps, not for whoever maintains the code — the two existing descriptions are
 a model prompt and a maintenance table, and neither answers "what counts as an
