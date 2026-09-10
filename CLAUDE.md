@@ -154,8 +154,13 @@ config/                    ← company-specific facts Claude relies on
   banned-phrases.md        ← phrasing the generator must never produce
   generation-failure-fallback.md  ← what to do when generation fails a prospect
   smartlead-defaults.md    ← schedule, limits, delays, HubSpot activity-logging gate
-  reply-defaults.md        ← recycle windows + the (empty, enforced) auto-send allowlist.
-                             Parsed by reply_check.py; the numbers live here only
+  reply-defaults.md        ← recycle windows, the OOO resume wait, and the (empty,
+                             enforced) auto-send allowlist. Parsed by reply_check.py;
+                             the numbers live here only
+  analysis-defaults.md     ← the 200-delivered floor below which no rate is quoted, and
+                             which intents count positive/negative/deferred. Parsed by
+                             campaign_report.py, which refuses to start if these buckets
+                             and INTENTS disagree
 
 scripts/                   ← Python (stdlib + anthropic only)
   eligibility.py           ← THE PRE-SEND FILTER. Run before generation. Read-only
@@ -192,6 +197,11 @@ scripts/                   ← Python (stdlib + anthropic only)
   sync_unsubscribes.py     ← Smartlead unsubscribes -> HubSpot outbound_suppressed.
                              DRY RUN BY DEFAULT. Scoped suppression only, never the
                              native global opt-out
+  campaign_report.py       ← THE WEEKLY REVIEW. Read-only. Human reply rate (excludes
+                             auto-responders, unlike Smartlead's own count), outcome
+                             split, Wilson intervals. REFUSES to quote a rate below 200
+                             delivered — a "4%" from one reply in 25 invites a copy
+                             change built on a single email
   review_queue.py          ← appends replies needing a human decision to the review
                              Sheet. Never writes the decision/notes columns
   export_review.py         ← pushes a generation run to the review Sheet, one tab per run

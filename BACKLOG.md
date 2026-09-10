@@ -650,6 +650,44 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
+## Weekly campaign review — BUILT 2026-09-10 (`scripts/campaign_report.py`)
+
+The weekly cadence was decided 2026-09-02 with no script behind it. Built ahead of the
+first review with real data accumulating on campaign 3921033.
+
+**Its defining property is a refusal.** Below `min_delivered_for_rate` (200) it prints
+counts and declines to quote a rate. On the first campaign — 25 contacts — one reply is
+"4%", a number whose 95% interval runs 0–20%: indistinguishable from zero and from triple
+itself, yet it reads as a fact and invites a copy change built on a single email. **The
+threshold will fire on the first review, and that is the correct output.**
+
+- Wilson intervals, not the normal approximation, which returns [0%, 0%] for zero replies
+  — "certainly zero" is both wrong and the most dangerous thing this could print.
+- 200 buys "is it working", **not** "which copy is better"; separating 2% from 5% needs
+  low thousands **per variant**. The report says so in its own output.
+- Rates on **delivered**, not sent.
+- **Human** reply rate: excludes `out_of_office` / `automated_reply` via our own
+  intents, so it means "people answered" rather than "mail came back". Smartlead's
+  dashboard cannot do this and reads higher as a result.
+- Outcome split positive / negative / deferred. `not_now` is deferred, not positive —
+  scoring postponements as wins would flatter the copy.
+
+**The reconciliation line was the valuable addition, and it was not in the plan.** Since
+replies are counted from HubSpot intents, a lead with no HubSpot contact contributes
+nothing and its reply is invisible. Running it live on the reply-test campaign showed
+**0 human replies where 7 had actually happened** — all seven test leads are Smartlead-only.
+The report now cross-checks against Smartlead's own `reply_count` and prints
+`** UNACCOUNTED REPLIES **` on any gap. Without it the report's most convincing output is
+a zero that means "we could not see them", presented identically to "nobody replied".
+
+*Config guard:* the four intent buckets must exactly partition `INTENTS` in
+`reply_check.py`, asserted at startup. An intent in neither list would silently vanish
+from every total — a reply that happened and appears nowhere.
+
+*Caught live:* `load_config` returns floats as strings, and `"0.95" * 100` is valid
+Python producing a 400-character string rather than an error. Coerced and range-checked,
+with a self-test case.
+
 ## First real scheduled run, 2026-09-10 — two findings
 
 The 09:45 heartbeat fired at 09:47 and reported. Six of seven jobs succeeded.
