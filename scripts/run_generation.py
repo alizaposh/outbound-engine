@@ -109,6 +109,12 @@ class Contact:
     callback_detail: str = ""
     callback_source_id: str = ""
     callback_last_date: str = ""
+    # Recovered from the email domain when HubSpot had nothing. Kept as separate fields
+    # purely so the review CSV can show WHICH values were guessed -- prospect_org and
+    # city themselves are overwritten in place, and without these a reviewer could not
+    # tell an inferred org from a real one.
+    org_inferred: str = ""
+    city_inferred: str = ""
 
     @property
     def display(self) -> str:
@@ -187,8 +193,14 @@ def route(c: Contact) -> tuple[str | None, str, bool]:
     if not c.email:
         return None, "flag: insufficient", platform_known
 
+    # prospect_org counts, and its absence here used to be a real gap: it is described
+    # elsewhere in this file as "the name a human would actually use for them" and is
+    # the strongest personalization lever available, yet a contact carrying only that
+    # was treated as having no identity at all. It also matters now that
+    # apply_domain_inference can supply one -- without this, a recovered org name would
+    # be written into the research note and still route as though nothing were known.
     has_identity = bool(c.first_name or c.last_name or c.company or c.jobtitle
-                        or c.vertical)
+                        or c.vertical or c.prospect_org)
     if not has_identity:
         return None, "fallback: minimal", platform_known
 
@@ -461,6 +473,119 @@ def pick_comparable(c: Contact) -> str:
     return options[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(options)]
 
 
+# Domains that say nothing about an organization. An inference from one of these would
+# be pure invention, so they never reach the model.
+FREE_MAIL = {
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "ymail.com",
+    "hotmail.com", "hotmail.co.uk", "outlook.com", "live.com", "msn.com",
+    "aol.com", "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com",
+    "gmx.com", "gmx.net", "mail.com", "zoho.com", "yandex.com", "comcast.net",
+    "verizon.net", "sbcglobal.net", "att.net", "bellsouth.net", "cox.net",
+}
+
+DOMAIN_INFER_PROMPT = """You are reading email DOMAINS and recovering, where it is
+genuinely recoverable, the organization name and the city the domain encodes.
+
+For each domain return an object with "org" and "city". Use null for anything you cannot
+recover confidently. **null is the correct and expected answer much of the time** -- a
+wrong guess is written into a real email to a real person, while a null simply means that
+email says less. Never reach.
+
+"org": the organization's name as a HUMAN would write it -- properly spaced and
+capitalised. This is the main job: the domain is a squashed lowercase string and the
+email must not read like one.
+  lanternroomkc.com      -> "Lantern Room"      (kc is the city, not the name)
+  graymatterexperience.com -> "Gray Matter Experience"
+  thegrovepresents.com   -> "The Grove"          ("presents" is a promoter suffix)
+  dogwoodarts.com        -> "Dogwood Arts"
+  magpartners.com        -> "MAG Partners"       (keep an acronym uppercase)
+  rosegoldrg.com         -> "Rose Gold"          (drop a trailing initialism)
+  simplespirits.co       -> "Simple Spirits"
+Drop corporate suffixes: inc, llc, corp, co, group, agency, media, marketing, events,
+productions, presents, and trailing initialisms that are clearly not part of the name.
+
+"city": ONLY when the domain plainly encodes a place, and expand it properly.
+  lanternroomkc.com -> "Kansas City"
+  murrietaca.gov    -> "Murrieta"
+  clintonms.org     -> "Clinton"
+  nycsoundworks.com -> "New York"
+Two-letter fragments are ambiguous and are usually a state or nothing at all. If the
+place is not obvious, null. Do NOT infer a city from the org name's meaning, only from a
+place actually written in the domain.
+
+Return ONLY a JSON object mapping each domain to {"org": ..., "city": ...}. No prose."""
+
+
+def infer_from_domain(domains, client, model) -> dict:
+    """{domain: {"org": str|None, "city": str|None}} for domains worth reading.
+
+    **One batched call per run, not one per contact.** Domains repeat across a list and
+    the answer never depends on which contact is asking, so this is both cheaper and
+    more consistent -- two contacts at the same company cannot be given different names
+    for it.
+
+    Whatever comes back is a GUESS and is treated as one: it fills a gap and never
+    overrides a real HubSpot field, and both values are written to the review CSV as
+    `org_inferred` / `city_inferred` so a human can see what was invented on their
+    behalf rather than discovering it in a sent email.
+
+    Failure is non-fatal by design. If the call errors or returns junk, every contact
+    simply keeps the data it already had, which is the behaviour from before this
+    existed. A nicety must not be able to take generation down.
+    """
+    usable = sorted({d.lower() for d in domains if d and d.lower() not in FREE_MAIL})
+    if not usable:
+        return {}
+    try:
+        resp = client.messages.create(
+            model=model, max_tokens=2000,
+            messages=[{"role": "user",
+                       "content": f"{DOMAIN_INFER_PROMPT}\n\nDomains:\n" +
+                                  "\n".join(usable)}])
+        raw = resp.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+        data = json.loads(raw.strip())
+    except Exception as e:
+        print(f"  domain inference unavailable ({type(e).__name__}); contacts keep the "
+              f"data they already have")
+        return {}
+    out = {}
+    for d in usable:
+        got = data.get(d) or {}
+        if not isinstance(got, dict):
+            continue
+        org = (got.get("org") or "").strip() or None
+        city = (got.get("city") or "").strip() or None
+        if org or city:
+            out[d] = {"org": org, "city": city}
+    return out
+
+
+def apply_domain_inference(contacts: list[Contact], inferred: dict) -> int:
+    """Fill ONLY empty fields. A real HubSpot value always wins.
+
+    That precedence is the whole safety property: inference is a fallback for a missing
+    field, never a correction of a present one. HubSpot is the source of truth and a
+    guess from a domain does not get to argue with it.
+    """
+    n = 0
+    for c in contacts:
+        dom = c.email.split("@")[-1].lower() if "@" in c.email else ""
+        got = inferred.get(dom)
+        if not got:
+            continue
+        if got["org"] and not (c.prospect_org or c.company):
+            c.prospect_org, c.org_inferred = got["org"], got["org"]
+            n += 1
+        if got["city"] and not c.city:
+            c.city, c.city_inferred = got["city"], got["city"]
+            n += 1
+    return n
+
+
 # Placeholders a shape exemplar may carry, mapped to what the contact must supply for
 # the line to be writable. Anything not listed here (%OFFER%, %CTA%, {sender.intro_line},
 # {comparable}) is always filled by code and is never a reason to drop a line.
@@ -626,6 +751,10 @@ def research_note(c: Contact, persona, basis, platform_known,
         "sparse_data_rules": ([
             "You know NOTHING about this organizer except their email address. That is "
             "the whole brief, and it is expected -- not a gap for you to fill.",
+            "The domain has ALREADY been read by a separate step that recovers an "
+            "organization name and city where they are recoverable. It found nothing "
+            "usable here. So there is no name waiting in the address for you to find: "
+            "that has been tried and it failed.",
             "Write the GENERIC value proposition, well. A clear, human, specific-about-"
             "POSH email is the correct output here.",
             "INVENT NOTHING. No venue, no city, no event name, no genre, no crowd size, "
@@ -835,6 +964,12 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
 
 COLUMNS = ["hs_object_id", "first_name", "last_name", "email", "job_title", "company",
            "prospect_org", "city",
+           # Populated only when the value was RECOVERED FROM THE EMAIL DOMAIN because
+           # HubSpot had none. A reviewer must be able to tell a guessed org from a real
+           # one; without these columns prospect_org looks equally authoritative either
+           # way, and an inferred name that is wrong reads as a data problem rather than
+           # an inference problem.
+           "org_inferred", "city_inferred",
            # Who signed this copy, and from which mailbox. Written so campaign creation
            # can HONOR the assignment instead of re-deciding it: a Smartlead campaign
            # rotates across its assigned mailboxes, so copy signed "Carl" could otherwise
@@ -854,6 +989,7 @@ def to_row(r: ContactResult, sender_name: str = "", mailbox: str = "") -> dict:
         "hs_object_id": c.hs_object_id, "first_name": c.first_name or "",
         "last_name": c.last_name or "", "email": c.email,
         "job_title": c.jobtitle or "", "company": c.company or "",
+        "org_inferred": c.org_inferred, "city_inferred": c.city_inferred,
         "persona": r.persona or "", "persona_basis": r.persona_basis,
         "platform_known": r.platform_known,
         "current_competitor": c.current_competitor or "",
@@ -964,6 +1100,9 @@ def main(argv=None) -> int:
                     help="abort if more than this share of contacts have an email and "
                          "no other data (default %(default)s). A whole list like that "
                          "is a wrong-input signal, not a thin list. 1 disables.")
+    ap.add_argument("--no-domain-inference", action="store_true",
+                    help="skip recovering org/city from the email domain. Contacts then "
+                         "keep only what HubSpot gave them.")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--angle", default="",
                     help="campaign-level direction from the requesting rep, e.g. "
@@ -992,6 +1131,11 @@ def main(argv=None) -> int:
     contacts = load_contacts(a.contacts)
     if a.limit:
         contacts = contacts[:a.limit]
+    # BEFORE domain inference, deliberately. Inference reads the email address, which
+    # the wrong-file case still has, so it would happily fill orgs from domains and make
+    # a broken input look healthy -- mailing people with guessed names while their real
+    # HubSpot data sat unread in a file we failed to open. The guard has to see the input
+    # as it arrived.
     check_sparse_share(contacts, a.max_sparse_share)
     failure_fallback = load_failure_fallback()
     shapes = load_shapes()
@@ -1027,6 +1171,24 @@ def main(argv=None) -> int:
     os.environ["AWS_REGION"] = region
     os.environ["AWS_BEARER_TOKEN_BEDROCK"] = bedrock_token
     client = anthropic.AnthropicBedrock(aws_region=region)
+
+    # Recover org and city from the email domain for contacts HubSpot left empty. Runs
+    # before routing and before shape assignment, because both read `city` -- a contact
+    # who gains one here draws a proper opening line instead of having it stripped.
+    if not a.no_domain_inference:
+        doms = {c.email.split("@")[-1] for c in contacts if "@" in c.email}
+        inferred = infer_from_domain(doms, client, model)
+        filled = apply_domain_inference(contacts, inferred)
+        if inferred:
+            shown = "; ".join(
+                f"{d} -> {v['org'] or '?'}" + (f", {v['city']}" if v["city"] else "")
+                for d, v in list(inferred.items())[:4])
+            print(f"domain inference: {len(inferred)} of {len(doms)} domain(s) read, "
+                  f"{filled} empty field(s) filled")
+            print(f"  e.g. {shown}")
+            print(f"  These are GUESSES. They never override a HubSpot value, and each "
+                  f"one is in the review CSV as org_inferred / city_inferred.")
+
     print(f"\n{len(contacts)} contacts | model {model} | mailbox {a.mailbox}\n")
 
     results, every_email = [], []

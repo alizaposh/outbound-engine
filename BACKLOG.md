@@ -650,6 +650,67 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
+## Org and city recovered from the email domain — 2026-09-10, on Aliza's call
+
+**Asked for:** using the domain is fine when the real field is missing — `kc` is very
+likely Kansas City. The objection was to the *rendering*: a subject reading
+`ticketing setup at lanternroomkc` is obviously a domain, where a person would write
+**Lantern Room**.
+
+This reverses the caution recorded directly above it. Recorded rather than rewritten,
+because the reasoning there is still right about the *risk* and only wrong about the
+tradeoff, which is the domain owner's call to make.
+
+**Why a model and not a regex.** The hard part is word segmentation on a squashed
+lowercase string, plus knowing which trailing fragment is a place, an initialism or part
+of the name. Real domains from list 1764: `graymatterexperience.com`, `murrietaca.gov`,
+`magpartners.com`, `rosegoldrg.com`, `aclipsemarketing.net`. No tractable rule set reads
+those; a model reads them easily.
+
+**One batched call per run, keyed by domain, not one per contact.** Domains repeat across
+a list and the answer never depends on who is asking, so batching is both cheaper and
+consistent — two contacts at one company cannot be handed different names for it.
+
+Measured against the real list-1764 domains, 12 of 16 yielded something:
+
+| domain | org | city |
+|---|---|---|
+| `lanternroomkc.com` | Lantern Room | Kansas City |
+| `graymatterexperience.com` | Gray Matter Experience | — |
+| `magpartners.com` | MAG Partners | — |
+| `rosegoldrg.com` | Rose Gold | — |
+| `murrietaca.gov` | — | Murrieta |
+| `kinkdownsouth.com`, `aclipsemarketing.net`, `babesonly.org` | — | — |
+
+The nulls matter as much as the hits: the prompt pushes hard toward null, because a wrong
+guess is written into a real email while a null only makes that email say less.
+
+**Three properties that keep it safe:**
+
+1. **A real HubSpot value always wins.** Inference fills empty fields only, never
+   corrects a populated one. Demonstrated live: `palmtreefest.com` inferred "Palm Tree
+   Fest" while the contact already held "Palm Tree Festival", and the real value stood.
+2. **Free-mail domains never reach the model**, filtered in code. An inference from
+   `gmail.com` would be pure invention.
+3. **Guesses are visible.** `org_inferred` / `city_inferred` are separate review-CSV
+   columns, because `prospect_org` alone looks equally authoritative whether it came from
+   HubSpot or from a domain, and a reviewer has to be able to tell.
+
+**Ordering, which is load-bearing:** `check_sparse_share` runs BEFORE inference. The
+wrong-file case still carries email addresses, so inference would fill orgs from domains
+and make a broken input look healthy — mailing people under guessed names while their
+real HubSpot data sat unread. The guard must see the input as it arrived.
+
+**Result:** subject went from `ticketing setup at lanternroomkc?` to
+**`ticketing setup for Lantern Room`**, and "organizers in Kansas City" is now backed by
+a recovered city rather than invented at the point of writing.
+
+Side effect worth noting: `prospect_org` now counts toward `has_identity` in `route()`.
+Its absence was a real gap — the file calls it "the strongest personalization lever
+available", yet a contact carrying only that routed as though nothing were known.
+
+`--no-domain-inference` disables the whole step.
+
 ## Sparse contacts now generate instead of flagging — 2026-09-10, on Aliza's call
 
 **Asked for:** the engine should stay automated, so a contact with missing data should
