@@ -96,6 +96,18 @@ any amount of sameness.
 
 Says only what the lead data supports, and **names no platform and no category**.
 
+**Every 1C opening names a `{city}`, so 1C requires one.** A contact with no city gets no
+opening line at all: `pick_opening` drops variants it cannot fill and `strip_unfillable`
+removes the line from the exemplar before the model sees it. That is deliberate. Handed
+this shape with no city, the model wrote *"We do a lot of work with organizers in Kansas
+City."* for `bookings@lanternroomkc.com` — mining `kc` out of the domain, inventing a
+location AND asserting traction there that `config/positioning.md` does not support.
+
+**A prose rule did not prevent that and could not.** The prompt already said to invent
+nothing; the exemplar demanded a value, and the exemplar is what the model follows. The
+fix is structural: remove the demand rather than argue with it. Any shape line whose
+placeholder has no data behind it is deleted, for every shape and every contact.
+
 
 ## Email 2 shapes (threaded reply, no greeting, no re-introduction)
 

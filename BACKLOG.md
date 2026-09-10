@@ -650,6 +650,62 @@ holding.** Check what the prompt forbids before calling a deflection a defect.
 The real gap this exposes is a **content** one, not a classifier one — see the approved-
 answers item below. Until that exists, deflecting is the only safe response.
 
+## Sparse contacts now generate instead of flagging — 2026-09-10, on Aliza's call
+
+**Asked for:** the engine should stay automated, so a contact with missing data should
+still get copy and still send, leaning on generic messaging, rather than being flagged to
+an SDR.
+
+Only one route was flagging: branch 3, `flag: insufficient`, meaning an email address and
+nothing else — no name, company, title or vertical. (`fallback: neutral`, a contact with
+a name but nothing to route a persona on, already generated.) That branch now returns
+`fallback: minimal` and generates. **The one remaining hard floor is no email at all**,
+where nothing can be sent whatever we write.
+
+### The batch guard is the other half, and must not be removed with it
+
+"No personalization fields" is *also* the exact signature of a plumbing failure — the
+wrong CSV reaching generation, which happened earlier the same day. **Per contact the two
+are indistinguishable.** Before this change a bad file produced a flagged sheet somebody
+noticed; after it, the same bad file would quietly produce generic mail to an entire real
+list using data we actually had.
+
+So sparsity is tolerated per contact and rejected in bulk: `check_sparse_share` aborts
+when more than `--max-sparse-share` (default **0.6**) of a batch is data-less, skipping
+batches under 5 where a high share means nothing. Loose on purpose — it is a tripwire for
+broken input, not a quality bar.
+
+### What the first run actually produced, and the lesson
+
+For `bookings@lanternroomkc.com` it wrote:
+
+> *"We do a lot of work with organizers in **Kansas City**."*
+
+It mined `kc` from the domain, invented a location, and asserted traction there that
+`config/positioning.md` does not support. The subject read *"ticketing setup at
+lanternroomkc?"*, using a domain as a brand name.
+
+**Cause: shape 1C's opening variants are literally `We do a lot of work with organizers
+in {city}.`** The template demanded a city and the contact had none, so the model found
+one. The prompt already carried an explicit "invent nothing" rule, freshly written for
+exactly this case, and it lost. **An exemplar beats an instruction — again.** A slot with
+no data behind it is not a gap the model leaves blank, it is an invitation.
+
+*Fixed structurally, not with more prose:* `strip_unfillable` deletes any exemplar line
+whose placeholder the contact cannot supply, and `pick_opening` drops unusable variants,
+both before the model sees anything. Generic and not sparse-specific — **it also fixes
+any named contact routed to 1C without a city**, which was a live latent bug. After: no
+invented city, subject *"locked in on your ticketing setup?"*, clean and sendable.
+
+### Known cost, accepted
+
+Data-less contacts have few levers left, so their emails converge — the validator warned
+that several openers repeated across the batch. At volume that is both a quality and a
+**deliverability** concern, since near-identical bulk content is a spam signal. Currently
+their only variation is the sender's intro line (2 variants for Carl). **If sparse
+contacts become a large share of real lists, add neutral opening variants to give them
+something to vary on.** Watch the WARN counts in a generation run as the signal.
+
 ## Intake pipeline would have produced ZERO copy — FIXED 2026-09-10, before it ran
 
 Found by exercising `slack_intake.run_pipeline` against list 1764 while waiting for a

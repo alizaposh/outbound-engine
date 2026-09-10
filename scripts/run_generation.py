@@ -162,16 +162,35 @@ def route(c: Contact) -> tuple[str | None, str, bool]:
     """Returns (persona, persona_basis, platform_known).
 
     Branch 1: a usable signal is present. Branch 2: signals missing but the lead is a
-    real organizer, so fall back to secondary signals. Branch 3: too little to write
-    a credible email, flag instead of generating.
+    real organizer, so fall back to secondary signals. Branch 3: nothing but an email --
+    generate anyway, on the generic value proposition.
+
+    **Branch 3 used to flag for a human instead of generating (changed 2026-09-10).**
+    The engine is meant to run without an SDR in the loop, and a thin HubSpot record is
+    an ordinary fact of a rep's list, not an error: a contact with an address and no
+    name is still someone worth one careful generic email. Flagging them meant the most
+    automated part of the system quietly required the most manual attention.
+
+    **The risk this creates, and why the batch guard in main() is not optional.** "No
+    personalization fields" is also the exact signature of a plumbing failure -- the
+    wrong CSV reaching generation, which happened on 2026-09-10 and would have flagged
+    an entire list. Per contact the two are indistinguishable. Across a batch they are
+    not: a few sparse contacts is data reality, nearly all of them is a broken input.
+    So sparsity is tolerated per contact and rejected in bulk. Never relax one without
+    the other, or a bad file becomes a list of generic mail to real prospects instead of
+    a run that stops.
     """
     comp = (c.current_competitor or "").strip().lower()
     platform_known = comp not in UNUSABLE_COMPETITOR
 
-    has_identity = bool(c.email) and bool(
-        c.first_name or c.last_name or c.company or c.jobtitle or c.vertical)
-    if not has_identity:
+    # The one true floor. No address means nothing can be sent, whatever we write.
+    if not c.email:
         return None, "flag: insufficient", platform_known
+
+    has_identity = bool(c.first_name or c.last_name or c.company or c.jobtitle
+                        or c.vertical)
+    if not has_identity:
+        return None, "fallback: minimal", platform_known
 
     if c.estimated_gmv_usd is not None:
         persona = "Pro" if c.estimated_gmv_usd >= GMV_PRO_GATE else "Premium"
@@ -193,6 +212,44 @@ def route(c: Contact) -> tuple[str | None, str, bool]:
 
 
 # ---- prompt -------------------------------------------------------------------
+
+# A list where nearly every contact has an address and nothing else is not a sparse
+# list, it is a broken input. 0.6 is deliberately loose: a genuinely thin rep list can be
+# half unnamed and still be real, so this is a tripwire for plumbing failure, not a
+# quality bar. Tighten only with evidence about what real lists look like.
+DEFAULT_MAX_SPARSE_SHARE = 0.6
+SPARSE_FLOOR = 5      # below this, a high share is just a small sample
+
+
+def check_sparse_share(contacts: list[Contact], limit: float) -> None:
+    """Abort when almost the whole batch has no personalization data.
+
+    **This is the other half of routing branch 3 and must not be removed with it.**
+    Generating for a sparse contact is right; generating for a sparse *batch* means
+    writing generic mail to an entire real list because the wrong file was passed or a
+    HubSpot fetch returned bare records. Per contact those cases are identical. In
+    aggregate they are obvious, and stopping is cheap while un-sending is impossible.
+
+    Skipped for tiny batches, where a high share carries no information -- two unnamed
+    contacts out of two is not evidence of anything.
+    """
+    if not contacts or len(contacts) < SPARSE_FLOOR or limit >= 1:
+        return
+    sparse = [c for c in contacts if route(c)[1] == "fallback: minimal"]
+    share = len(sparse) / len(contacts)
+    if share <= limit:
+        return
+    raise SystemExit(
+        f"REFUSING TO GENERATE: {len(sparse)} of {len(contacts)} contact(s) "
+        f"({share:.0%}) have an email address and no other data at all, above the "
+        f"{limit:.0%} ceiling.\n"
+        f"  A few such contacts are normal and are written generically on purpose. A "
+        f"whole list of them is not a sparse list, it is the wrong input.\n"
+        f"  Check that --contacts points at the file from eligibility.py "
+        f"--eligible-out, and that it carries first_name / prospect_org / company.\n"
+        f"  Examples: {', '.join(c.email for c in sparse[:3])}\n"
+        f"  Override with --max-sparse-share 1 if the list really is this thin.")
+
 
 def build_system_prompt() -> tuple[str, str]:
     """(cached rulebook prefix, instruction). Rulebook first so it caches once."""
@@ -404,6 +461,44 @@ def pick_comparable(c: Contact) -> str:
     return options[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(options)]
 
 
+# Placeholders a shape exemplar may carry, mapped to what the contact must supply for
+# the line to be writable. Anything not listed here (%OFFER%, %CTA%, {sender.intro_line},
+# {comparable}) is always filled by code and is never a reason to drop a line.
+SHAPE_SLOTS = {
+    "{city}": lambda c: c.city,
+    "{first_name}": lambda c: c.first_name,
+    "{prospect_org}": lambda c: c.prospect_org or c.company,
+    "{company}": lambda c: c.company or c.prospect_org,
+}
+
+
+def unfillable_slots(text: str, c: Contact) -> list[str]:
+    """Placeholders in `text` this contact cannot supply."""
+    return [s for s, get in SHAPE_SLOTS.items() if s in text and not get(c)]
+
+
+def strip_unfillable(spec: str, c: Contact) -> str:
+    """Drop exemplar lines whose placeholders this contact cannot fill.
+
+    **A slot the data cannot fill is not a gap the model leaves blank -- it is an
+    invitation to invent one.** Shape 1C's opening is literally "We do a lot of work with
+    organizers in {city}." Given a contact with no city, the model produced exactly that
+    sentence with "Kansas City" in it, mined from the email domain `lanternroomkc.com`,
+    turning a missing field into a fabricated location AND an unapproved claim about
+    where Posh has traction.
+
+    Prose instructions do not fix this, and that is the point worth remembering: a
+    written rule saying "invent nothing" was already in the prompt and lost to a template
+    that demanded a value. **The exemplar is what the model follows**, so the exemplar is
+    what has to change. Removing the line removes the demand.
+
+    Lines filled by code -- %OFFER%, %CTA%, the sender intro, the comparable -- are never
+    touched.
+    """
+    kept = [ln for ln in spec.splitlines() if not unfillable_slots(ln, c)]
+    return "\n".join(kept)
+
+
 def pick_opening(c: Contact, shape_key: str,
                  openings: dict[str, list[str]]) -> str:
     """One opening variant per contact, within the assigned shape.
@@ -414,6 +509,11 @@ def pick_opening(c: Contact, shape_key: str,
     the same sentence 13 times.
     """
     variants = openings.get(shape_key) or []
+    # Same rule as strip_unfillable: an opening this contact cannot fill would be
+    # completed with an invented value. Every 1C variant names a {city}, so a contact
+    # with no city has NO usable opening and correctly gets none -- the email opens on
+    # the question instead, which is a weaker email and an honest one.
+    variants = [v for v in variants if not unfillable_slots(v, c)]
     if not variants:
         return ""
     seed = (c.email or c.prospect_org or "").strip().lower()
@@ -518,6 +618,26 @@ def research_note(c: Contact, persona, basis, platform_known,
         "current_competitor": (f"appears to be {c.current_competitor}"
                                if platform_known else None),
         "competitor_confidence": "high" if platform_known else "unknown",
+        # Set only for branch 3: an address and nothing else. Spelled out because the
+        # failure mode when a model is handed an empty brief is not silence, it is
+        # INVENTION -- it will supply a plausible venue, city or event to fill the shape
+        # it has been given, and a fabricated detail is far worse than a generic email.
+        # The instruction therefore says what to write, not merely what to avoid.
+        "sparse_data_rules": ([
+            "You know NOTHING about this organizer except their email address. That is "
+            "the whole brief, and it is expected -- not a gap for you to fill.",
+            "Write the GENERIC value proposition, well. A clear, human, specific-about-"
+            "POSH email is the correct output here.",
+            "INVENT NOTHING. No venue, no city, no event name, no genre, no crowd size, "
+            "no current platform, no guess at what they run. If you did not receive it, "
+            "it does not go in the email.",
+            "Do NOT guess an organization from the email address. A domain is not a "
+            "brand name and the local part is not a person.",
+            "No first name is known, so open without one. 'Hey there' or straight into "
+            "the sentence. Never write an empty or placeholder greeting.",
+            "Say less rather than padding. A short honest email outperforms a longer "
+            "one carrying invented detail.",
+        ] if basis == "fallback: minimal" else None),
         "shapes": {
             "message_1": (shape_specs or {}).get(1, ""),
             "message_2": (shape_specs or {}).get(2, ""),
@@ -653,6 +773,10 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
     specs = {pos: s.replace("%OFFER%", offer).replace("%CTA%", cta)
                    .replace("%CLOSER%", closer)
              for pos, s in specs.items()}
+    # Remove exemplar lines this contact has no data for, BEFORE the model sees them.
+    # See strip_unfillable: a demanded slot with nothing to put in it is where invented
+    # detail comes from, and the exemplar outranks any written instruction not to.
+    specs = {pos: strip_unfillable(s, c) for pos, s in specs.items()}
     # This sender's own approved intro lines, picked per contact. resolve_sender_intro
     # asserts every variant names its own sender, so variety here cannot reintroduce the
     # signed-Carl-introduced-Brooke bug.
@@ -835,6 +959,11 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=pathlib.Path,
                     default=ROOT / "reviews" / "draft-run.csv")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--max-sparse-share", type=float,
+                    default=DEFAULT_MAX_SPARSE_SHARE,
+                    help="abort if more than this share of contacts have an email and "
+                         "no other data (default %(default)s). A whole list like that "
+                         "is a wrong-input signal, not a thin list. 1 disables.")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--angle", default="",
                     help="campaign-level direction from the requesting rep, e.g. "
@@ -863,6 +992,7 @@ def main(argv=None) -> int:
     contacts = load_contacts(a.contacts)
     if a.limit:
         contacts = contacts[:a.limit]
+    check_sparse_share(contacts, a.max_sparse_share)
     failure_fallback = load_failure_fallback()
     shapes = load_shapes()
     openings = shape_openings()
