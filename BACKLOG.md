@@ -818,6 +818,43 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## City hygiene: HubSpot free text was going straight into copy — FIXED 2026-09-10
+
+Aliza spotted a contact whose `city` reads **"North America"**. Shape 1C's opening is
+literally "We do a lot of work with organizers in {city}", so that field becomes a
+sentence verbatim.
+
+**Sampled 1,200 contacts, 219 distinct values.** The junk sorts into four kinds:
+
+| kind | examples | verdict |
+|---|---|---|
+| not a city | `Arizona`, `Texas`, `Delaware`, `New Jersey`, `Mexico`, `UK`, `North America` | drop |
+| street address | `184th St`, `Park Row`, `NY 11693` | drop |
+| city + noise | `Chicago, IL`, `Houston, TX 77007`, `Orlando Fl`, `Santa Monica, CA` | **clean** |
+| free-text note | `Los Angeles (also mentions Riverside, Pomona, DTLA, Redlands)` | **clean** |
+
+`clean_city()` salvages the last two and drops the first two. Verified against the real
+values: 24 kept (all correctly normalised — `Chicago, IL` → `Chicago`, the Los Angeles
+note → `Los Angeles`, `boston` → `Boston`), 12 dropped.
+
+**Why "North America" is worse than nothing.** It is vague exactly where the sentence
+exists to be specific, and a prospect reading "organizers in North America" learns only
+that a machine filled the line. A dropped city costs one opening sentence, which
+`strip_unfillable` then removes cleanly — verified end to end.
+
+**Applied at BOTH entry points**, the CSV column and a domain-inferred city. An inferred
+value is a guess and gets the same scrutiny as a stored one.
+
+Judgement calls worth knowing:
+- **`DC` and bare `Washington` are dropped.** `Washington` is in the state list and `DC`
+  is two characters; both are ambiguous. `Washington DC` passes. Losing a usable city is
+  cheaper than "organizers in Washington" meaning the state.
+- **`Singapore` passes and `Mexico` does not.** Singapore is a city-state and the
+  sentence works; Mexico is a country.
+- **Casing is fixed per word, not per string.** `"New york".islower()` is False, so a
+  whole-string check leaves the typo in the sentence, and `.title()` on the whole string
+  would flatten `St. Louis`.
+
 ## `attempt` callback tier: reference a prior UNANSWERED send — 2026-09-10
 
 **Asked** whether an outbound email could be referenced, not just an inbound reply —

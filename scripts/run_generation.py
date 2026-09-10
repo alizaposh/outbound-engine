@@ -552,6 +552,98 @@ def pick_comparable(c: Contact) -> str:
     return options[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(options)]
 
 
+# ---- city hygiene --------------------------------------------------------------
+#
+# `city` is written straight into copy -- shape 1C's opening is "We do a lot of work with
+# organizers in {city}." -- so whatever is in the field becomes a sentence. HubSpot's is
+# free text and holds plenty that is not a city. Sampled 1,200 contacts, 219 distinct
+# values, and the junk sorts into four kinds:
+#
+#   not a city      Arizona, Texas, Delaware, New Jersey, Mexico, UK, North America
+#   street address  "184th St", "Park Row", "NY 11693"
+#   city + noise    "Chicago, IL", "Houston, TX 77007", "Orlando Fl", "Santa Monica, CA"
+#   free-text note  "Los Angeles (also mentions Riverside, Pomona, DTLA, Redlands)"
+#
+# The last two are salvageable and the first two are not. "We work with organizers in
+# North America" is worse than saying nothing at all: it is vague where the sentence
+# exists to be specific, and it advertises that the line was filled by a machine.
+US_STATES = {
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
+    "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+    "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+    "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada",
+    "new hampshire", "new jersey", "new mexico", "new york state", "north carolina",
+    "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania", "rhode island",
+    "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont",
+    "virginia", "washington", "west virginia", "wisconsin", "wyoming",
+}
+STATE_CODES = {
+    "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id", "il", "in",
+    "ia", "ks", "ky", "la", "me", "md", "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv",
+    "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn",
+    "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy",
+}
+# Regions, countries and placeholders. Singapore is deliberately ABSENT: it is a
+# city-state, and "organizers in Singapore" is a sentence that works.
+NON_CITY = {
+    "north america", "south america", "central america", "latam", "latin america",
+    "europe", "asia", "africa", "emea", "apac", "usa", "us", "u.s.", "u.s.a.",
+    "united states", "america", "canada", "mexico", "uk", "u.k.", "united kingdom",
+    "england", "australia", "germany", "france", "spain", "italy", "brazil", "india",
+    "n/a", "na", "none", "unknown", "tbd", "remote", "online", "virtual", "various",
+    "multiple", "nationwide", "worldwide", "global", "everywhere", "anywhere", "other",
+    "east coast", "west coast", "midwest", "southeast", "northeast", "southwest",
+}
+STREET_WORDS = {"st", "street", "ave", "avenue", "rd", "road", "blvd", "boulevard",
+                "ln", "lane", "dr", "drive", "ct", "court", "way", "pkwy", "parkway",
+                "hwy", "highway", "suite", "ste", "apt", "floor", "fl#", "row"}
+_PARENTHETICAL = re.compile(r"\s*\([^)]*\)")
+_ZIP = re.compile(r"\b\d{5}(?:-\d{4})?\b")
+
+
+def clean_city(raw: str | None) -> str | None:
+    """A city fit to put in a sentence, or None.
+
+    Salvages what is salvageable and drops the rest. **Uncertain means None**, the same
+    rule callbacks use: a missing city costs one opening line, while a wrong one is
+    printed to a prospect who lives there.
+    """
+    if not raw:
+        return None
+    s = _PARENTHETICAL.sub("", str(raw)).strip()      # "LA (also mentions ...)" -> "LA"
+    s = _ZIP.sub("", s).strip().strip(",").strip()    # "Miami, FL 33155" -> "Miami, FL"
+    if not s:
+        return None
+    # Trailing state, spelled or coded: "Chicago, IL" / "Orlando Fl" / "Brisbane City, Australia"
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    if len(parts) > 1 and (parts[-1].lower() in STATE_CODES
+                           or parts[-1].lower() in US_STATES
+                           or parts[-1].lower() in NON_CITY):
+        parts = parts[:-1]
+    s = ", ".join(parts).strip()
+    words = s.split()
+    if len(words) > 1 and words[-1].lower().strip(".") in STATE_CODES:
+        s = " ".join(words[:-1])                      # "Orlando Fl" -> "Orlando"
+    s = s.strip().strip(",").strip()
+    if not s:
+        return None
+
+    low = s.lower()
+    if low in NON_CITY or low in US_STATES or low in STATE_CODES:
+        return None                                   # a state or a region, not a city
+    if any(ch.isdigit() for ch in s):
+        return None                                   # "184th St", "NY 11693"
+    if s.split() and s.split()[-1].lower().strip(".") in STREET_WORDS:
+        return None                                   # "Park Row"
+    if len(s) < 3 or len(s) > 40:
+        return None                                   # "DC" is ambiguous; long is prose
+    # Fix casing PER WORD, not per string. `s.islower()` is False for "New york", so a
+    # whole-string check leaves the typo in the sentence; and `s.title()` on the whole
+    # string would flatten "St. Louis" and "DTLA"-style capitals. Only a word that is
+    # entirely lowercase gets touched.
+    return " ".join(w.title() if w.islower() else w for w in s.split())
+
+
 # Domains that say nothing about an organization. An inference from one of these would
 # be pure invention, so they never reach the model.
 FREE_MAIL = {
@@ -659,8 +751,9 @@ def apply_domain_inference(contacts: list[Contact], inferred: dict) -> int:
         if got["org"] and not (c.prospect_org or c.company):
             c.prospect_org, c.org_inferred = got["org"], got["org"]
             n += 1
-        if got["city"] and not c.city:
-            c.city, c.city_inferred = got["city"], got["city"]
+        inferred_city = clean_city(got["city"])
+        if inferred_city and not c.city:
+            c.city, c.city_inferred = inferred_city, inferred_city
             n += 1
     return n
 
@@ -1153,7 +1246,10 @@ def load_contacts(path: pathlib.Path) -> list[Contact]:
             jobtitle=clean(row.get("job_title")) or clean(row.get("jobtitle")),
             company=clean(row.get("company")),
             prospect_org=clean(row.get("prospect_org")),
-            city=clean(row.get("city")),
+            # Cleaned at the door, so no caller can route a raw HubSpot value
+            # into a sentence. See clean_city: "North America" and "184th St"
+            # become None rather than copy.
+            city=clean_city(row.get("city")),
             current_competitor=clean(row.get("current_competitor")),
             estimated_gmv_usd=int(float(gmv)) if gmv else None,
             vertical=clean(row.get("vertical")),
