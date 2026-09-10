@@ -1039,17 +1039,15 @@ happen by chance about 1% of the time, so the fix is real rather than a lucky st
 
 ## A shareable reference for the ten intents — BUILT 2026-09-10
 
-Published in two places, both 2026-09-10:
+**Lives in Notion, and only in Notion:**
+https://app.notion.com/p/3d7effd1823381a3b675cf9bdbaae48c
 
-- **Notion** (the one to share with the team, since they can comment inline):
-  https://app.notion.com/p/3d7effd1823381a3b675cf9bdbaae48c
-  Created as a workspace-level private page; move it into the right teamspace.
-- **Artifact** (the same content as a standalone page):
-  https://claude.ai/code/artifact/a0b42ba6-685c-48ac-8387-3fd27f20aa8b
-  Private until shared from the page's share menu; republish the same file to update.
+Created as a workspace-level private page; move it into the right teamspace to share it.
 
-**Two copies now, which is one more thing to drift.** If the intents change, update
-both — or delete the artifact and keep only Notion, which is where comments will land.
+It was briefly also published as a standalone artifact. **That copy was deleted on
+purpose**: the point of the page is collecting disagreement, comments land inline in
+Notion, and a second copy of the ten definitions is just one more thing that drifts from
+the code without anyone noticing. One canonical home.
 
 Written for reps, not for whoever maintains the code — the two existing descriptions are
 a model prompt and a maintenance table, and neither answers "what counts as an
