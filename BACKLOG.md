@@ -1037,7 +1037,34 @@ happen by chance about 1% of the time, so the fix is real rather than a lucky st
 
 *Do not raise the pass bar to 15/16 to make the suite green.* The flake was the finding.
 
-## A shareable reference for the ten intents — NOT STARTED (requested 2026-09-09)
+## A shareable reference for the ten intents — BUILT 2026-09-10
+
+**https://claude.ai/code/artifact/a0b42ba6-685c-48ac-8387-3fd27f20aa8b**
+(private until shared from the page's share menu; republish the same file to update it)
+
+Written for reps, not for whoever maintains the code — the two existing descriptions are
+a model prompt and a maintenance table, and neither answers "what counts as an
+objection?" for someone who sells for a living.
+
+**The boundaries lead, the definitions follow.** Nobody argues about what `objection`
+means; they argue about where it ends. So the page opens on the three contested pairs as
+real reply-versus-reply comparisons, each with the question that separates them, and puts
+the ten-intent reference underneath. Every example is a **real reply** from the
+2026-09-09 test, quoted as written — including the incumbency one the engine got wrong,
+shown as the miss it was.
+
+It closes by asking five specific questions rather than requesting sign-off, because a
+reviewer given a document and no question returns "looks good".
+
+**Not generated from `INTENTS` at runtime**, contrary to the original spec here. Doing so
+would have meant a build step and a hosting story for a page that changes a few times a
+year, and the mechanical half (status / sequence / recycle window) is small enough to
+re-check by hand. **The drift risk that spec worried about is real and now applies**: if
+`INTENTS`, `config/reply-defaults.md` or the draft rules change, this page is a fourth
+copy that will not notice. Re-read it whenever reply handling changes, and treat a
+contradiction as the page being wrong, never the code.
+
+
 
 **Trigger:** none needed; do this whenever there is a spare slot. It is a writing task,
 not an engineering one.
