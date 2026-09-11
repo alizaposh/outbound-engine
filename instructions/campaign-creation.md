@@ -4,6 +4,50 @@
 API. **Never run this without a recorded approval.** Read
 `config/smartlead-defaults.md` for the default settings.
 
+## One campaign per submission (decided 2026-09-11)
+
+**Each accepted intake request gets its own Smartlead campaign.** Multiple submissions do
+not feed a shared one.
+
+Sharing is *technically* possible and worth knowing why: the copy rides on the **lead**,
+not the campaign. The sequence body is literally `{{message_1_body}}` and each lead
+carries its own custom fields, so a single campaign could hold leads with entirely
+different copy. The reasons not to are operational, not technical.
+
+1. **One sender per campaign is already a hard rule** (guarantee 5 in
+   `create_campaign.py`). A Smartlead campaign *rotates* across its assigned mailboxes,
+   so a campaign mixing senders would send Carl-signed copy from Brooke's mailbox. Intake
+   runs with one `--mailbox`, so a submission maps to exactly one sender anyway. A
+   "shared" campaign could therefore only ever be shared by requests that happen to draw
+   the same sender.
+2. **The approval gate is per submission.** Each request gets its own review tab and its
+   own human approval, and the campaign is what launch acts on. One-to-one keeps *what
+   was approved* and *what was launched* the same object. Sharing breaks that: you would
+   be adding leads to something a human already signed off on.
+3. **`max_new_leads_per_day` is set PER CAMPAIGN** (15, from
+   `config/smartlead-defaults.md`). This is the concrete cost of sharing: every
+   submission would serialise behind one 15/day ramp, so a rep who submits second waits
+   for the first list to finish ramping. Separate campaigns each get their own.
+4. **Independent pause and stop.** If a list turns out badly targeted or the copy is
+   wrong, you pause that campaign. In a shared campaign there is no way to stop one
+   rep's list without stopping everyone's.
+5. **Reporting attribution.** `scripts/campaign_report.py` reports per campaign, so
+   one-per-submission gives per-rep, per-list numbers. A shared campaign blends them
+   permanently — and unblending later is not possible, because the campaign id is the
+   only link (`outbound_last_campaign_id` on the contact).
+
+**The cost, stated plainly:** two manual UI gates per campaign (HubSpot activity logging
+ON, "Optimize Email Delivery" OFF — neither reachable by API). One campaign per
+submission means a human in the Smartlead UI for every submission. That is the known v1
+caveat in `CLAUDE.md`, and it is the price of all five properties above.
+
+**Is there a cap on campaigns?** Not one the API exposes — `/account`, `/subscription`
+and `/user` all 404, and no quota endpoint exists. Campaign count is very unlikely to
+bind: the real ceiling is `max_leads_in_flight`. Check the Smartlead plan page directly
+if it ever matters.
+
+---
+
 ## How to run it
 
 `scripts/create_campaign.py` implements the steps below. It creates the campaign
