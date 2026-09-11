@@ -525,6 +525,7 @@ CLOSER_VARIANTS: list[str] = []
 # single worked example it was copied verbatim by all 30 attempt-tier contacts on the
 # first real rep list.
 ATTEMPT_VARIANTS: list[str] = []
+SUBJECT_VARIANTS: list[str] = []
 
 
 def load_variants(label: str, path: str = SHAPES_FILE) -> list[str]:
@@ -566,6 +567,42 @@ VERTICAL_COMPARABLE = {
 # An unrecognised or blank vertical still needs a name. Community-shaped is the least
 # presumptuous default: it asserts nothing about scale or format.
 DEFAULT_COMPARABLE = ["We Met IRL", "NARC Run Club"]
+
+
+def pick_subject(c: Contact, variants: list[str]) -> str:
+    """The sequence's one subject, filled for this contact.
+
+    **Prefers the most specific line the contact's data can actually fill**, in the order
+    competitor > organization > generic, then hashes within that tier so contacts sharing
+    a tier do not share a subject. `unfillable_slots` is what decides fillability, so the
+    same rule that governs body copy governs the subject: a slot with no data behind it
+    means that line is not available, rather than a placeholder reaching a prospect.
+
+    A competitor subject is the most specific thing available and also the riskiest, so
+    it is only ever drawn when `current_competitor` is both present and usable — the
+    unknown-platform values in UNUSABLE_COMPETITOR do not qualify, since naming the wrong
+    incumbent is worse than naming none.
+    """
+    if not variants:
+        return ""
+    comp_ok = bool(c.current_competitor
+                   and c.current_competitor.strip().lower() not in UNUSABLE_COMPETITOR)
+    tiers = []
+    for v in variants:
+        if "{competitor}" in v:
+            tiers.append((0, v) if comp_ok else (9, v))
+        elif "{prospect_org}" in v:
+            tiers.append((1, v))
+        else:
+            tiers.append((2, v))
+    for rank in (0, 1, 2):
+        usable = [v for r, v in tiers if r == rank and not unfillable_slots(v, c)]
+        if usable:
+            chosen = pick_variant(c, sorted(usable), f"subject{rank}")
+            return (chosen.replace("{prospect_org}", c.prospect_org or c.company or "")
+                          .replace("{competitor}", c.current_competitor or "")
+                          .replace("{city}", c.city or "").strip())
+    return ""
 
 
 def pick_comparable(c: Contact) -> str:
@@ -973,6 +1010,7 @@ def role_register(jobtitle: str | None) -> str:
 
 def research_note(c: Contact, persona, basis, platform_known,
                   sender_name: str = "", sender_intro: str = "",
+                  subject: str = "",
                   shape_keys: dict | None = None,
                   shape_specs: dict | None = None, opening: str = "",
                   angle: str = "") -> dict:
@@ -1041,6 +1079,18 @@ def research_note(c: Contact, persona, basis, platform_known,
             "Say less rather than padding. A short honest email outperforms a longer "
             "one carrying invented detail.",
         ] if basis == "fallback: minimal" else None),
+        # THE SUBJECT IS SUPPLIED, NOT REQUESTED. With no list the model improvised and
+        # two lines covered 23 of 36 contacts. Given as the subject to USE, for the same
+        # reason the attempt callback is: an example is a template.
+        "subject_line": subject or None,
+        "subject_guidance": (
+            "Use `subject_line` EXACTLY as given for message_1. It was chosen for this "
+            "contact from an approved list and already fits the house style: lowercase "
+            "except proper nouns, 2-8 words, no Title Case. Do not rewrite, extend or "
+            "'improve' it.\n"
+            "message_2 and message_3 take subject \"\" so Smartlead threads them as "
+            "'Re: ...'. This one subject is the whole sequence's subject."
+            if subject else None),
         "shapes": {
             "message_1": (shape_specs or {}).get(1, ""),
             "message_2": (shape_specs or {}).get(2, ""),
@@ -1204,8 +1254,13 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                  for pos, s in specs.items()}
         opening = ""
 
+    subject = pick_subject(c, SUBJECT_VARIANTS)
+    # KEYWORDS, not positions. Adding `subject` to research_note's signature silently
+    # shifted `keys` into it when these were positional -- the shape keys would have been
+    # handed to the model as its subject line. Keyword args make the next insertion safe.
     note = research_note(c, persona, basis, platform_known, sender_name, sender_intro,
-                         keys, specs, opening, angle=angle)
+                         subject=subject, shape_keys=keys, shape_specs=specs,
+                         opening=opening, angle=angle)
     res.shape = "/".join(f"{p}{keys[p]}" for p in POSITIONS if keys.get(p))
     emails, attempts, bid, err = generate_with_retry(
         client, model, rulebook, instruction, note)
@@ -1440,10 +1495,15 @@ def main(argv=None) -> int:
     shapes = load_shapes()
     openings = shape_openings()
     global OFFER_VARIANTS, CTA_VARIANTS
-    global CLOSER_VARIANTS, ATTEMPT_VARIANTS
+    global CLOSER_VARIANTS, ATTEMPT_VARIANTS, SUBJECT_VARIANTS
     OFFER_VARIANTS, CTA_VARIANTS = load_variants("Offer"), load_variants("CTA")
     CLOSER_VARIANTS = load_variants("Closer")
     ATTEMPT_VARIANTS = load_variants("Attempt callback")
+    SUBJECT_VARIANTS = load_variants("Subject")
+    if not SUBJECT_VARIANTS:
+        raise SystemExit(
+            "no 'Subject' variants parsed from config/message-shapes.md. The model would "
+            "improvise subjects again, which put two lines on 23 of 36 contacts.")
     if not ATTEMPT_VARIANTS:
         raise SystemExit(
             "no 'Attempt callback' variants parsed from config/message-shapes.md. The "

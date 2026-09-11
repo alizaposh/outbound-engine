@@ -253,6 +253,45 @@ these three first lines distinct from each other when editing.
   `none`, the callback *is* the opener (`message-generation.md` §9) and the rest of the
   skeleton is unchanged. Running both would double the opening and break the cap.
 
+## Subject variants (code picks one)
+
+**Email 1's subject only, and it is the subject for the WHOLE sequence.** Emails 2 and 3
+send with `subject: ""` so Smartlead threads them and they arrive as "Re: ...". There is
+never a second subject to write.
+
+Picked per contact in code, preferring the most specific line the contact's data can
+fill. Until 2026-09-11 there was no list at all and the model improvised from the shape,
+which produced 14 distinct subjects across 36 contacts with two of them covering 23.
+
+**Lowercase is the house style and Title Case is a FAIL** — it is the marketing-headline
+register, and `check_subject_shape` enforces it. A proper noun keeps its capitals, so
+"Neon Vault x Posh" passes and "Neon Vault Partnership With Posh" does not. Cap is
+**2-8 words**, where the prospect's own name counts as one word however long it is.
+
+Naming the competitor, when we know it:
+- filling seats beyond {competitor}
+- {competitor} working out for {prospect_org}?
+- beyond {competitor} for ticketing?
+
+Naming the organization, when we have a real one:
+- {prospect_org} x Posh
+- ticketing for {prospect_org}
+- {prospect_org} partnership with Posh
+- ticketing setup at {prospect_org}
+- {prospect_org} and Posh?
+
+Generic, when we have neither. **These carry most of a cold list** — on the first real
+rep list only 9 of 36 contacts had a usable organization name and 1 had a known
+competitor, so a thin generic set is what actually reaches most prospects:
+- locked in on your ticketing setup?
+- ticketing setup for your events?
+- locked in on ticketing right now?
+- who handles your ticketing?
+- quick ticketing question
+- your current ticketing setup?
+- ticketing for your next run of events?
+- open to a ticketing conversation?
+
 ## Offer variants (code picks one)
 
 Declarative: they NAME the offer. The ask is the CTA's job, so these do not end in a

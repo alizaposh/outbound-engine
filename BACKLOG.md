@@ -818,6 +818,57 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## Subject variants, and the comparable decision — 2026-09-11
+
+**Aliza's two calls:** randomize the comparable when `vertical` is missing, and give the
+sequence one personalized subject.
+
+### Comparable: randomization accepted, relevance unverified — DECIDED, no code change
+
+Already randomized: `pick_comparable` hashes on email, so it is effectively random across
+a list and stable per contact. No change was needed.
+
+**Recording the accepted risk, because `positioning.md` says otherwise.** NARC Run Club's
+entry reads *"Fits: community-focused and grassroots organizers who already sell
+tickets"* and *"Never cite NARC to an organizer running only free events today."* With
+`vertical` empty on all 36 contacts, 11 drew NARC and its free-to-paid story without us
+knowing whether they sell tickets. The name and figures are cleared, so this is not
+fabrication — it is *"Relevance is the gate"* being decided by a hash. **Aliza's decision
+is that randomizing is acceptable when the vertical is unknown.** Revisit if `vertical`
+ever gets populated, since the relevance rule then becomes enforceable for free.
+
+### Subjects: 16 variants, picked most-specific-first
+
+There was **no subject list at all** — the model improvised from the shape, producing 14
+distinct subjects across 36 contacts with **two covering 23 of them**. Now 16 variants in
+three tiers, picked by `pick_subject` in order competitor > organization > generic, hashed
+within the tier:
+
+    competitor known  ->  "filling seats beyond Eventbrite"
+    org known         ->  "Motion Spaces partnership with Posh", "ticketing for Neon Vault"
+    neither           ->  "who handles your ticketing?", "quick ticketing question"
+
+Measured on the real 36: **17 distinct, max 6 on any one line** (was 14 with two covering
+23). Nine contacts now get their organization named and one gets its competitor.
+
+`unfillable_slots` decides fillability, so the rule governing body copy governs the
+subject: a slot with no data means the line is unavailable rather than a placeholder
+reaching a prospect. A competitor subject draws only when the value is present **and**
+not in `UNUSABLE_COMPETITOR`, since naming the wrong incumbent is worse than naming none.
+
+**One of Aliza's examples would have FAILED validation.** "NAME Partnership With Posh" is
+Title Case, which `check_subject_shape` rejects as the marketing-headline register. The
+lowercase form, "NAME partnership with Posh", passes and is what shipped. "NAME x Posh"
+and "ticketing for NAME" were fine as written.
+
+**Note there is only ever one subject.** Emails 2 and 3 send with `subject: ""` so
+Smartlead threads them as "Re: ...", so "one subject line for all 3 emails" was already
+the architecture; the change was personalizing it.
+
+*Caught during the edit:* adding `subject` to `research_note`'s signature silently shifted
+the positional arguments, so `shape_keys` would have been passed as the subject line. The
+call site now uses keywords, which makes the next insertion safe.
+
 ## Copy diversification round 2: offers, CTAs, attempt variants — 2026-09-11
 
 Aliza asked to shorten the offer bundle and diversify further, then specifically to vary
