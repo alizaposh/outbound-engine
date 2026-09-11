@@ -88,6 +88,15 @@ Breakup theatrics, §8. Email 3 is one line and closes the loop; it does not per
 
 ## Regex
 
+- `\b(where\s+we\s+(add|help|drive|deliver)|add(s)?\s+the\s+most|biggest\s+(lift|difference|impact|gain)|most\s+valuable|the\s+most\s+value)\b`
+  **Ranking the offer elements** (2026-09-11). Shape 2B read "the marketing side is
+  usually where we add the most", flagged by the person running outbound as untrue, and
+  the model had invented its own variants ("biggest lift", "usually where organizers see
+  the biggest difference") — 8 of 36 emails on the first real list carried some form of
+  it. Two faults in one: it is a performance claim about relative results, which the
+  retired-stats rule forbids, and ranking the bundle undercuts a bundle that is approved
+  precisely because it is unquantified and undifferentiated. Name the elements neutrally
+  or leave them out.
 - `marketplace[^.]{0,40}\b(automatically|automatic)\b`
   **Outcome promise by implication** (2026-09-11). Real copy: "The marketplace brings new
   attendees to events automatically, which is usually where organizers see the biggest

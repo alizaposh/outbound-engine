@@ -128,6 +128,18 @@ customer name, already matched to this contact by `pick_comparable()` in
 lives in code precisely so the internal vertical that drives it never reaches the prompt.
 **Never a figure beside the name** except NARC's cleared numbers.
 
+**NEVER RANK THE OFFER ELEMENTS.** Account support, financial incentives and the
+marketing push are named as a bundle, and no email may claim one of them matters most.
+Shape 2B read "the marketing side is usually where we add the most" until 2026-09-11, and
+the person running outbound flagged it as **simply untrue**. The model had also invented
+its own variants — "biggest lift", "usually where organizers see the biggest difference" —
+so 8 of 36 emails on the first real list carried some form of the claim.
+
+Two reasons it has to go. It is a **performance claim** about relative results, which the
+retired-stats rule forbids; and ranking the bundle undercuts the bundle, which is approved
+precisely *because* it is unquantified and undifferentiated. Mention the elements
+neutrally, as 2A does, or leave them out.
+
 ### Shape 2A: proof first
 > Hope your week is going well — circling back on this.
 >
@@ -147,8 +159,7 @@ cleanly onto a cleared name.
 > Following up on this one.
 >
 > We run ticketing for organizers like {comparable}, and just closed a $37M Series B. For {prospect_org}
-> there's real room on the incentives, and the
-> marketing side is usually where we add the most.
+> there's real room on the incentives, and we can get into the marketing side too.
 >
 > The holiday run-up is when we can get the strongest offers across.
 >

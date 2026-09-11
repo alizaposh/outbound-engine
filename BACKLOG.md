@@ -835,6 +835,42 @@ email 1's opener ask, and the two need to be tunable separately.
 Generation refuses to start if the list fails to parse, or email 2 would close with a
 literal `%ASK2%` placeholder in a prospect's inbox.
 
+## "The marketing side is where we add the most" — REMOVED 2026-09-11
+
+Aliza, reading email 2: that claim is **not true**. Asked to stop calling out any one
+offer element as the most valuable, and offered to have the sentence deleted outright.
+
+It lived in shape 2B's exemplar, and the model had also invented its own variants —
+"biggest lift", "usually where organizers see the biggest difference" — so **8 of 36
+emails on the first real list carried some form of it**.
+
+**Two faults in one sentence.** It is a performance claim about relative results, which
+the retired-stats rule already forbids; and ranking the bundle undercuts the bundle, which
+`positioning.md` approves *precisely because* it is unquantified and undifferentiated.
+Naming a winner among the three is a claim we cannot support and, per the person who runs
+this, is not even accurate.
+
+2B now reads "there's real room on the incentives, and we can get into the marketing side
+too" — both elements mentioned, neither ranked, which is how 2A already handled it.
+
+**Machine-checked, because the model invented the variants itself.** Fixing one exemplar
+would not have stopped "biggest lift" appearing next run. One regex covers the family:
+
+    \b(where\s+we\s+(add|help|drive|deliver)|add(s)?\s+the\s+most|
+      biggest\s+(lift|difference|impact|gain)|most\s+valuable|the\s+most\s+value)\b
+
+Verified: all four observed variants are caught, and the neutral phrasings — "we can get
+into the marketing side too", "dedicated account support, financial incentives, marketing
+push and more" — pass. No exemplar line teaches the banned form any more.
+
+### Left alone, and worth a human decision
+
+Shapes 2A/2B/2C all say the holiday run-up is **"the best time of year"** / **"when we can
+get the strongest offers across"**. That is a superlative too, but about *timing and
+commercial seasonality* rather than ranking a product element, and it is long-standing
+approved copy. Flagged rather than changed: if seasonal framing is also overstated, it is
+the same fix in three exemplars.
+
 ## Marketplace claim tightened on review feedback — 2026-09-11
 
 Aliza reading email 2 on list 1914: *"The marketplace brings new attendees to events
