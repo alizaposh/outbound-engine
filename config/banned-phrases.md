@@ -88,6 +88,21 @@ Breakup theatrics, §8. Email 3 is one line and closes the loop; it does not per
 
 ## Regex
 
+- `marketplace[^.]{0,40}\b(automatically|automatic)\b`
+  **Outcome promise by implication** (2026-09-11). Real copy: "The marketplace brings new
+  attendees to events automatically, which is usually where organizers see the biggest
+  lift." `positioning.md` allows the marketplace *mechanism* — discovery by attendees
+  already browsing Posh — and forbids performance claims. "Automatically" converts a
+  mechanism into a guaranteed result delivered without effort, which is a performance
+  claim wearing different clothes, and it is not something we control. Say "our
+  marketplace can bring new attendees through discovery".
+- `\bthe marketplace\b`
+  **Ambiguous ownership** (2026-09-11). "The marketplace" leaves a prospect guessing which
+  one is meant — theirs, the industry's, or ours. Distribution is only an advantage if it
+  is identifiably OURS, so it is "our marketplace" or "the Posh marketplace". Caught in
+  review on list 1914; the rule existed nowhere before, which is why the model had no
+  reason to prefer either form.
+
 - `unlike\s+(eventbrite|dice|tixr|shotgun|resident\s+advisor|ra|plots|ticketfairy|eventeny|eventnoire)`
   Direct competitor comparison, which is disparagement by construction.
 - `better\s+than\s+(eventbrite|dice|tixr|shotgun|resident\s+advisor|plots|ticketfairy)`

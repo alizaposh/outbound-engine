@@ -96,7 +96,7 @@ different stages. Both must **already be selling tickets**.
   responsive support.
 - **Lead with:** the operational headache + brand mismatch of their current tool.
   Posh automates the manual marketing (text blasts) and matches a premium
-  brand, with the marketplace bringing new attendees. **Never claim native email
+  brand, with our marketplace bringing new attendees through discovery. **Never claim native email
   follow-ups:** Posh has no native email follow-up, that needs a third-party tool
   (_AE feedback: Dogwood Arts_). Text blasting is native and safe to feature. The stats land well here, but
   use at most one across the whole sequence (see message-generation.md).

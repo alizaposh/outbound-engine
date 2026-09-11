@@ -37,6 +37,20 @@ Primary problems we solve:
 - **Marketplace distribution:** events reach attendees already browsing the Posh
   marketplace, which is organic demand the organizer didn't have to source. **No share
   or volume figure** attaches to this.
+  - **Say "our marketplace", never "the marketplace"** (2026-09-11). Copy read "The
+    marketplace brings new attendees to events", which leaves a prospect guessing which
+    marketplace is meant — theirs, the industry's, ours. The distribution advantage is
+    only an advantage if it is identifiably *ours*.
+  - **It CAN bring attendees, via discovery. It does not do so "automatically".**
+    "Automatically" is a promise of an outcome we do not control and cannot support: it
+    reads as guaranteed incremental sales with no work, which is a performance claim by
+    implication and belongs with the retired numeric stats above. The mechanism —
+    discovery by attendees already browsing — is the honest and more specific thing to
+    say, and it is what the approved wording describes.
+  - **Allowed:** "our marketplace can bring new attendees to your events through
+    discovery"; "attendees already browsing Posh can find your events".
+    **Never:** "automatically", "guaranteed", "hands-off", "without any effort", or any
+    phrasing that makes incremental attendance an assured result.
 - **A better deal than their current tool:** Posh can put together a more competitive
   offer than an organizer's current ticketing solution: dedicated account support,
   financial incentives, a marketing push, and more. **Bundled and unquantified, exactly
@@ -51,7 +65,7 @@ cited only where a bullet marks them cleared.
 - **Caché Life** (NYC nightlife/music): switched from TicketFairy for better brand
   alignment, and improved marketing conversion via Posh text blasts.
   **Fits:** nightlife, music, and upscale **Premium** organizers.
-- **We Belong Here** (multi-day festival): the marketplace drove organic growth.
+- **We Belong Here** (multi-day festival): our marketplace drove organic growth.
   **Fits:** festival and large-scale **Pro** organizers.
 - **NARC Run Club** (community-focused run club, co-founders Noah and Omari):
   transitioned from free events to a sustainable paid business, adding brand

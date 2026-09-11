@@ -835,6 +835,43 @@ email 1's opener ask, and the two need to be tunable separately.
 Generation refuses to start if the list fails to parse, or email 2 would close with a
 literal `%ASK2%` placeholder in a prospect's inbox.
 
+## Marketplace claim tightened on review feedback — 2026-09-11
+
+Aliza reading email 2 on list 1914: *"The marketplace brings new attendees to events
+automatically, which is usually where organizers see the biggest lift."* Two faults, and
+she named both.
+
+**"automatically" is a performance claim wearing different clothes.** `positioning.md`
+approves the marketplace *mechanism* — discovery by attendees already browsing Posh — and
+separately retired every numeric performance stat. "Automatically" converts a mechanism
+into a guaranteed outcome delivered without effort, which is the same claim the retired
+stats made, just unquantified. It is also not something we control. Approved wording is
+now "our marketplace **can** bring new attendees **through discovery**".
+
+**"The marketplace" leaves the prospect guessing which one.** Theirs, the industry's,
+ours? Distribution is only an advantage if it is identifiably OURS. It is "our
+marketplace" or "the Posh marketplace" — the latter still passes, since the check is on
+the bare phrase.
+
+**Both are now machine-checked, not just documented.** Two regexes in
+`config/banned-phrases.md`:
+
+    marketplace[^.]{0,40}\b(automatically|automatic)\b
+    \bthe marketplace\b
+
+**Documenting it in `positioning.md` alone would not have been enough**, which is the
+whole lesson of this session repeated once more: the prohibited-claims list already
+forbade performance claims, and the model wrote "automatically" anyway. A rule that is
+not machine-checked is advice. Verified: the real sentence is caught, and "our marketplace
+can bring new attendees through discovery", "attendees already browsing Posh can find your
+events" and "the Posh marketplace puts events in front of new attendees" all pass.
+
+**Two rulebook files were also teaching the banned form** and were fixed, since
+`RULEBOOK_FILES` is fed to the model as its prompt: `positioning.md`'s We Belong Here case
+study ("the marketplace drove organic growth") and `personas.md` ("with the marketplace
+bringing new attendees"). Leaving those would have had the prompt demonstrate the phrasing
+the validator rejects — the exemplar-beats-instruction failure, one layer up.
+
 ## Subject variants, and the comparable decision — 2026-09-11
 
 **Aliza's two calls:** randomize the comparable when `vertical` is missing, and give the
