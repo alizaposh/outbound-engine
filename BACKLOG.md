@@ -818,6 +818,72 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## Message sameness: measured, diagnosed, and largely fixed — 2026-09-11
+
+Aliza asked whether the near-identical messages would cause a deliverability problem.
+**Measured rather than estimated**, across the 36 real drafts, masking first names:
+
+| | distinct of 36 | exact duplicates | mean pairwise similarity |
+|---|---|---|---|
+| email 1 | 30 → **25** | 6 → 11 | 62% → **56%** |
+| email 2 | 27 → **33** | 9 → **3** | 70% → **43%** |
+| email 3 | 7 → **20** | 29 → **16** | 84% → **62%** |
+
+**Email 3 was the real problem: 29 of 36 byte-identical.**
+
+**On deliverability, stated honestly:** identical bulk content is a genuine risk factor —
+filters fingerprint bodies, and 29 identical sends from a weeks-old domain is the pattern
+bulk detection looks for. But it cannot be claimed as a cause: domain reputation,
+authentication and complaint rates matter more, and 36 contacts is low volume. It
+compounds risk. **The quality argument is independent and stronger** — 29 people getting
+the same email 3 is simply worse outreach.
+
+### Two root causes
+
+**1. Shape assignment collapsed.** 33 of 36 contacts drew the identical `1C/2C/3B`,
+because shapes for positions 2 and 3 derived from the volume band and none of these
+contacts had a GMV figure. Positions 2 and 3 are now **hashed per contact**: 9 distinct
+combos, at most 9 contacts on any one.
+
+**Position 1 stays signal-driven and must never be hashed.** 1A states which platform
+the prospect is on and 1C does not, so a hashed pick there could assert something untrue.
+2A/2B/2C assert exactly the same facts — Series B, comparable, incentives, holiday timing
+— and differ only in order and length, so a "wrong" pick reads differently and cannot
+lie. That distinction is the whole licence for this change.
+
+**2. Every exemplar at a position opened identically.** All three email-2 shapes opened
+"Circling back" and all three email-3 shapes "Closing the loop", so shape variety changed
+nothing a reader would notice. Each now has a distinct first line.
+
+### The finding worth keeping: email 3 was ARITHMETICALLY saturated
+
+Email 3 has two moving parts, its shape opener and its closer, so the distinct bodies it
+can produce is exactly `shapes x closers`. At 3 x 4 = 12 it produced **exactly 12**. **No
+prompt change could have improved that**, and continuing to write instructions would have
+been arguing with arithmetic. Closers went 4 → 8, doubling the ceiling to 24, and
+measured output went to 20 distinct. Recorded in `config/message-shapes.md`: **if email 3
+looks repetitive, add closers — do not add instructions.**
+
+### Side effects, both reported not hidden
+
+**Email 1 lost distinct bodies (30 → 25) while getting less similar (62% → 56%).** Not
+contradictory: position 1 was untouched, so this is model variance, and mean similarity
+is the metric that tracks the deliverability concern. Its residual sameness is the 21-word
+offer bundle, shared by design.
+
+**Validation went from 8 PASS / 28 WARN to 34 PASS / 1 WARN / 1 FAIL.** The PASS jump is
+the shorter callback fixing the length WARNs. **The 1 FAIL is a false positive and was
+deliberately NOT fixed:** `case_study_rules` flagged "numeral near 'We Met IRL', which has
+no cleared figures", where the numeral is the "15" of "Free for 15 minutes this week?".
+The contact passes on re-roll, so it is non-deterministic.
+
+**Leave that check alone.** It exists to stop a fabricated customer metric — the most
+dangerous copy failure this engine has — and a numeral beside a customer name is exactly
+what one looks like. The false positive costs one row going to human review; a false
+negative sends an invented statistic about a real customer. Tightening the proximity
+window is possible and is the same trade that was declined for the objection CTA and the
+payout deflection: **do not loosen a fabrication guard to clear a warning.**
+
 ## List 1914 copy: two data/copy bugs found by reviewing real output — 2026-09-11
 
 The gate changes took list 1914 from 4 eligible to 36. Reading the 36 drafts then found

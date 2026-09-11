@@ -144,7 +144,7 @@ lives in code precisely so the internal vertical that drives it never reaches th
 Leads on the named customer rather than the funding, for a prospect whose world maps
 cleanly onto a cleared name.
 
-> Circling back on this.
+> Following up on this one.
 >
 > We run ticketing for organizers like {comparable}, and just closed a $37M Series B. For {prospect_org}
 > there's real room on the incentives, and the
@@ -157,7 +157,7 @@ cleanly onto a cleared name.
 ### Shape 2C: short
 When email 1 ran long, or the contact's register is terse.
 
-> Circling back. We just closed a $37M Series B and run ticketing for organizers
+> Wanted to put this back in front of you. We just closed a $37M Series B and run ticketing for organizers
 > like {comparable}. There's real room on the incentives for {prospect_org}, and the
 > holiday run-up is when we can get the strongest offer across.
 >
@@ -183,14 +183,23 @@ is allowed to stay. Do not "tidy" it away.
 > %CLOSER%
 
 ### Shape 3B: the plain question
-> Closing the loop. Worth 15 minutes this week to look at the offer?
+> Last note from me on this. Worth 15 minutes this week to look at the offer?
 >
 > %CLOSER%
 
 ### Shape 3C: shortest
-> Closing the loop here. Still worth a look at the offer?
+> I'll leave it here — still worth a look at the offer?
 >
 > %CLOSER%
+
+
+**Each shape at positions 2 and 3 opens DIFFERENTLY, on purpose.** Until 2026-09-11 every
+email-2 exemplar opened "Circling back" and every email-3 one "Closing the loop", so
+shape variety produced no visible variety at all — the shapes differ in the order of the
+middle beats, which a reader never notices. Measured on the first real rep list, email 3
+came out as **7 distinct bodies across 36 contacts, 29 of them byte-identical**. Changing
+a shape's opener is the only edit that actually changes what the prospect sees, so keep
+these three first lines distinct from each other when editing.
 
 ## Rules that apply to every shape
 
@@ -281,6 +290,18 @@ short, no ask, no new information.
 - Either way, hope the season goes well.
 - Would be great to connect.
 - Either way, good luck with the run.
+- Hope the rest of the season treats you well.
+- Happy to connect whenever the timing suits.
+- Either way, wishing you a strong run of shows.
+- Glad to talk whenever it makes sense.
+
+**Count matters as much as wording, and this is the reason.** Email 3 is the shortest
+email in the sequence and has only two moving parts: its shape's opener and this closer.
+So the number of DISTINCT email 3s the engine can produce is exactly
+`email-3 shapes x closers`. At 3 x 4 that was 12, and on a 36-contact list it produced
+exactly 12 distinct bodies with 24 exact duplicates — the space was fully exhausted, and
+no prompt change could have improved it. 3 x 8 doubles the ceiling to 24. **If email 3
+looks repetitive on a future list, add closers here; do not add instructions.**
 
 **Budget: 9 words maximum.** The longest close (3A) is 21 words and the cap is 30, so a
 10-word closer pushed a real email to 32. Keep every variant at or under 9.

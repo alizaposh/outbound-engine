@@ -903,11 +903,36 @@ def assign_shapes(c: Contact, shapes: dict[int, dict[str, str]],
         return sorted(have)[0] if have else ""
 
     band = volume_band(c.estimated_gmv_usd)
+    # POSITION 1 STAYS SIGNAL-DRIVEN. This is a correctness gate, not a style choice:
+    # 1A states which platform the prospect is on and 1C does not, so a contact whose
+    # competitor is unknown must never draw 1A. Never hash this one.
     m1 = "C" if not platform_known else BAND_SHAPE.get(band, "A")
     m1 = pick(1, m1, "A")
-    return {1: m1,
-            2: pick(2, BAND_SHAPE_M2.get(band, "A"), "A"),
-            3: pick(3, M1_TO_M3.get(m1, "A"), "A")}
+
+    # POSITIONS 2 AND 3 ARE HASHED PER CONTACT, changed 2026-09-11.
+    #
+    # They were derived from the volume band and from m1, which sounds principled and
+    # collapses in practice: on the first real rep list, **33 of 36 contacts drew the
+    # identical shape `1C/2C/3B`**, because none had a GMV figure so all landed in one
+    # band. Email 3 came out as only **7 distinct bodies across 36 contacts, 29 of them
+    # byte-identical** after masking the first name.
+    #
+    # Hashing is safe HERE and only here, because 2A/2B/2C assert exactly the same facts
+    # -- Series B, the comparable, the incentives, the holiday timing -- and differ only
+    # in order and length. Same for 3A/3B/3C. A wrong pick reads differently; it cannot
+    # state something untrue. That is precisely what is NOT true of position 1.
+    #
+    # Seeded on the email plus the position so a contact does not draw the same letter
+    # for both, which would reintroduce the correlation this removes.
+    def hashed(pos: int) -> str:
+        have = sorted(shapes.get(pos, {}))
+        if not have:
+            return ""
+        seed = f"{(c.email or c.prospect_org or '').strip().lower()}|m{pos}"
+        return have[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(have)]
+
+    return {1: m1, 2: hashed(2) or pick(2, BAND_SHAPE_M2.get(band, "A"), "A"),
+            3: hashed(3) or pick(3, M1_TO_M3.get(m1, "A"), "A")}
 
 
 def volume_band(gmv: int | None) -> str:
