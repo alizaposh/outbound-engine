@@ -364,6 +364,13 @@ The opening line of email 1 when `callback_tier` is **`attempt`** — we emailed
 contact within the last year and they never replied. It **replaces** the shape's opening
 beat rather than adding to it, and email 1 keeps its 75-word cap.
 
+**Shorten the SETUP, never the question.** Three of the original eight were trimmed to
+reach the 12-word budget by cutting the question itself, which produced "Better now?",
+"Try again?" and "trying you again at a better time" — one nonsense fragment, one that
+reads as us talking to ourselves, and one that asserts the very thing it is asking. The
+question is the whole point of the line; the clause before it is what gives. A variant
+that does not fit the budget needs a shorter preamble, not a clipped ask.
+
 **The greeting stays.** These replace the shape's opening BEAT, not the salutation:
 email 1 still opens "Hey {first_name}," and the line follows it. Phrasing the prompt as
 "open email 1 with this line" cost 11 of 36 contacts their greeting on a real list.
@@ -379,11 +386,11 @@ wrote is not. And no apology or guilt — not "sorry to bother you again".
 
 - I know we tried to connect a while back. Better timing now?
 - I know we tried to connect previously. Is now a better time?
-- We reached out a while back and didn't catch you. Better now?
+- We reached out a while back. Is it better timing now?
 - Tried you earlier in the year — worth revisiting?
 - I think you've heard from us before. Timing may be better now.
-- We got in touch a while ago without much luck. Try again?
-- Reached out once before, so trying you again at a better time.
+- We got in touch a while ago. Worth trying again?
+- Reached out before — trying again in case timing is better.
 - I know we've emailed before — hoping this lands better.
 
 **Why this is a config list and not a line in the prompt (2026-09-11).** It started as a
