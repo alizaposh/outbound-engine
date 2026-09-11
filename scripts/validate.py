@@ -582,6 +582,15 @@ def check_case_studies(subject: str, body: str, *, allowed_names=()) -> list[Fin
     if len(canonical) > 1:
         out.append(Finding("case_study_rules", FAIL,
             f"more than one case study in a single email: {sorted(canonical)}"))
+    # A MEETING LENGTH IS NOT A CUSTOMER METRIC. "Free for 15 minutes this week?" is the
+    # CTA, and when it landed within the window of a no-figure customer it FAILed 2 of 36
+    # emails on a real run -- copy that was otherwise clean at 53 words. This masks
+    # durations before the numeral search, which is a PRECISION fix and not a loosening:
+    # a span of minutes, hours, days, weeks or months cannot express "We Met IRL grew
+    # 40%", so removing it cannot hide a fabricated performance figure. Any other numeral
+    # near the name still FAILs.
+    hay = re.sub(r"\b\d+\s*(?:-|\s)?\s*(minute|min|hour|hr|day|week|month)s?\b",
+                 "DURATION", hay, flags=re.I)
     for cust in NO_FIGURE_CUSTOMERS:
         for m in re.finditer(re.escape(cust), hay, re.I):
             window = hay[max(0, m.start() - 120): m.end() + 120]

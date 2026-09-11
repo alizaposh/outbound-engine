@@ -97,6 +97,17 @@ Breakup theatrics, §8. Email 3 is one line and closes the loop; it does not per
   retired-stats rule forbids, and ranking the bundle undercuts a bundle that is approved
   precisely because it is unquantified and undifferentiated. Name the elements neutrally
   or leave them out.
+- `\btext[- ]?blast`
+  **A customer-specific detail stretched into a product claim** (2026-09-11).
+  `positioning.md` mentions Posh text blasts in exactly one place — inside the Caché Life
+  case study, as something that improved *their* marketing conversion. It is not listed
+  as a general capability. Real copy twice framed it as one: "having your guest list and
+  text blasts in the same place as ticketing" to a run club, and "text blasts to your own
+  list built right into the platform". Both passed every other check, because the figures
+  they cited were cleared and nothing else tripped.
+  **If text blasts become an approved capability, delete this entry** — it is banned
+  because it is unapproved, not because it is untrue. Until then, a detail that belongs
+  to one customer's story must not be recycled as a feature for everyone.
 - `marketplace[^.]{0,40}\b(automatically|automatic)\b`
   **Outcome promise by implication** (2026-09-11). Real copy: "The marketplace brings new
   attendees to events automatically, which is usually where organizers see the biggest
