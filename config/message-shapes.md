@@ -138,7 +138,7 @@ lives in code precisely so the internal vertical that drives it never reaches th
 > With the holiday season coming up, this is usually the best time of year for us to get
 > a strong offer across.
 >
-> Free for 15 minutes this week?
+> %ASK2%
 
 ### Shape 2B: the comparable first
 Leads on the named customer rather than the funding, for a prospect whose world maps
@@ -152,7 +152,7 @@ cleanly onto a cleared name.
 >
 > The holiday run-up is when we can get the strongest offers across.
 >
-> Free for 15 minutes this week?
+> %ASK2%
 
 ### Shape 2C: short
 When email 1 ran long, or the contact's register is terse.
@@ -161,7 +161,7 @@ When email 1 ran long, or the contact's register is terse.
 > like {comparable}. There's real room on the incentives for {prospect_org}, and the
 > holiday run-up is when we can get the strongest offer across.
 >
-> Free for 15 minutes this week?
+> %ASK2%
 
 ## Email 3 shapes (the close)
 
@@ -393,6 +393,28 @@ timing now?" thirty times. **A prompt example is a template, not a suggestion** 
 same lesson as the invented "Kansas City", the objection call-to-action, and the callback
 that added a beat instead of replacing one. Variation has to be picked per contact in
 code, exactly as the offer, CTA and closer are.
+
+## Email 2 ask variants (code picks one)
+
+Email 2's closing ask. **Separate from the email 1 CTA list on purpose:** this ask lands
+after the proof beat — Series B, the comparable, the incentives — so it can be slightly
+more direct than email 1's, and the two lists should be tunable independently.
+
+Until 2026-09-11 the ask was hardcoded as "Free for 15 minutes this week?" inside all
+three email-2 exemplars, so **all 36 contacts on the first real rep list closed email 2
+with the identical sentence** while email 1's CTA varied eight ways. A beat written into
+an exemplar cannot vary; only a slot can.
+
+Reply-based, one ask, **never a booking link** — the calendar goes out in the reply.
+
+- Free for 15 minutes this week?
+- Worth 15 minutes this week?
+- Any time this week for a quick call?
+- Open to a short call this week?
+- Want me to put something together for you?
+- Worth a conversation this week?
+- Free for a quick call in the next few days?
+- Happy to walk you through it — this week work?
 
 ## Closer variants (code picks one)
 

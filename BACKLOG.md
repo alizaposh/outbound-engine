@@ -818,6 +818,23 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## Email 2's ask was hardcoded in the exemplars — FIXED 2026-09-11
+
+The last identical beat. "Free for 15 minutes this week?" was written into all three
+email-2 exemplars, so **all 36 contacts closed email 2 with the same sentence** while
+email 1's CTA varied eight ways. **A beat written into an exemplar cannot vary; only a
+slot can** — which is why expanding the CTA list earlier never reached email 2.
+
+Now `%ASK2%`, substituted like `%OFFER%`, `%CTA%` and `%CLOSER%`, drawing from its own
+8-variant list. Measured on the real 36: **8 distinct asks, 2-7 contacts each** (was 1).
+
+**Its own list rather than reusing `CTA_VARIANTS`,** because this ask lands *after* the
+proof beat — Series B, the comparable, the incentives — so it can be more direct than
+email 1's opener ask, and the two need to be tunable separately.
+
+Generation refuses to start if the list fails to parse, or email 2 would close with a
+literal `%ASK2%` placeholder in a prospect's inbox.
+
 ## Subject variants, and the comparable decision — 2026-09-11
 
 **Aliza's two calls:** randomize the comparable when `vertical` is missing, and give the

@@ -526,6 +526,9 @@ CLOSER_VARIANTS: list[str] = []
 # first real rep list.
 ATTEMPT_VARIANTS: list[str] = []
 SUBJECT_VARIANTS: list[str] = []
+# Email 2's closing ask. Its own list rather than reusing CTA_VARIANTS: this ask follows
+# the proof beat, so it may be more direct, and the two must be tunable separately.
+ASK2_VARIANTS: list[str] = []
 
 
 def load_variants(label: str, path: str = SHAPES_FILE) -> list[str]:
@@ -1223,8 +1226,9 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
     offer = pick_variant(c, OFFER_VARIANTS, "offer")
     cta = pick_variant(c, CTA_VARIANTS, "cta")
     closer = pick_variant(c, CLOSER_VARIANTS, "closer")
+    ask2 = pick_variant(c, ASK2_VARIANTS, "ask2")
     specs = {pos: s.replace("%OFFER%", offer).replace("%CTA%", cta)
-                   .replace("%CLOSER%", closer)
+                   .replace("%CLOSER%", closer).replace("%ASK2%", ask2)
              for pos, s in specs.items()}
     # Remove exemplar lines this contact has no data for, BEFORE the model sees them.
     # See strip_unfillable: a demanded slot with nothing to put in it is where invented
@@ -1496,10 +1500,16 @@ def main(argv=None) -> int:
     openings = shape_openings()
     global OFFER_VARIANTS, CTA_VARIANTS
     global CLOSER_VARIANTS, ATTEMPT_VARIANTS, SUBJECT_VARIANTS
+    global ASK2_VARIANTS
     OFFER_VARIANTS, CTA_VARIANTS = load_variants("Offer"), load_variants("CTA")
     CLOSER_VARIANTS = load_variants("Closer")
     ATTEMPT_VARIANTS = load_variants("Attempt callback")
     SUBJECT_VARIANTS = load_variants("Subject")
+    ASK2_VARIANTS = load_variants("Email 2 ask")
+    if not ASK2_VARIANTS:
+        raise SystemExit(
+            "no 'Email 2 ask' variants parsed from config/message-shapes.md. Email 2 "
+            "would close with a literal %ASK2% placeholder.")
     if not SUBJECT_VARIANTS:
         raise SystemExit(
             "no 'Subject' variants parsed from config/message-shapes.md. The model would "
