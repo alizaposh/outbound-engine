@@ -147,6 +147,8 @@ neutrally, as 2A does, or leave them out.
 > like {comparable}. Happy to get into the marketing side, and there's real room on the
 > financial incentives for {prospect_org}.
 >
+> %MARKETPLACE%
+>
 > With the holiday season coming up, this is usually the best time of year for us to get
 > a strong offer across.
 >
@@ -160,6 +162,8 @@ cleanly onto a cleared name.
 >
 > We run ticketing for organizers like {comparable}, and just closed a $37M Series B. For {prospect_org}
 > there's real room on the incentives, and we can get into the marketing side too.
+>
+> %MARKETPLACE%
 >
 > The holiday run-up is when we can get the strongest offers across.
 >
@@ -422,6 +426,34 @@ weekend" arriving on a Thursday is exactly the tell that marks an email as machi
 
 Day-agnostic openers only. "Hope your week is going well" works every weekday, and sends
 are weekdays only (`days_of_the_week: [1,2,3,4,5]`).
+
+## Marketplace variants (code picks one)
+
+Email 2's distribution beat, in shapes **2A and 2B only** — 2C is the deliberately terse
+shape and stays short. A designed beat as of 2026-09-11.
+
+**Why it had to be designed rather than left to the model.** `positioning.md` leads with
+the marketplace in its one-sentence description of Posh, yet it appeared in only **2 of 36
+emails** on the first real list, both times improvised — and both times wrongly, as "The
+marketplace brings new attendees automatically". Banning that phrasing then took it to
+**0 of 36**: the fix removed the claim instead of correcting it. A headline differentiator
+cannot depend on the model reaching for it unprompted.
+
+**Approved wording only.** The mechanism is discovery by attendees already browsing Posh,
+and it is organic demand the organizer did not have to source. It **can** do this; it
+never does it "automatically", and no share or volume figure attaches. Say "our
+marketplace" or "the Posh marketplace", never "the marketplace" — see
+`config/banned-phrases.md` for both checks.
+
+**12-14 words.** Email 2's cap is 90 and it already runs to 118 at the top end, so this
+beat is deliberately one short sentence.
+
+- Our marketplace also puts your events in front of attendees already browsing Posh.
+- Attendees already browsing Posh can discover your events through our marketplace.
+- Our marketplace can bring new attendees through discovery, not outbound work.
+- There's also our marketplace, where attendees already on Posh find new events.
+- Our marketplace puts your events in front of people already looking for events.
+- Through our marketplace, people already browsing Posh can find what you're running.
 
 ## Email 2 ask variants (code picks one)
 

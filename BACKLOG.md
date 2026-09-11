@@ -835,6 +835,42 @@ email 1's opener ask, and the two need to be tunable separately.
 Generation refuses to start if the list fails to parse, or email 2 would close with a
 literal `%ASK2%` placeholder in a prospect's inbox.
 
+## Marketplace promoted to a designed beat in email 2 — 2026-09-11
+
+`positioning.md` leads its one-sentence description of Posh with the built-in marketplace,
+yet it reached only **2 of 36 emails** on the first real list — both improvised, and both
+wrong ("The marketplace brings new attendees automatically"). Banning that phrasing took
+it to **0 of 36**: the correction removed the claim instead of fixing it. Aliza's call was
+to make it deliberate.
+
+Now `%MARKETPLACE%` in shapes **2A and 2B**, six variants of 11-13 words, picked per
+contact. 2C is the deliberately terse shape and stays without it, so the beat lands on
+roughly two thirds of contacts rather than all of them.
+
+**Approved wording enforced two ways.** The variants say "our marketplace" and describe
+the mechanism — discovery by attendees already browsing Posh — with "can"/"puts" rather
+than "automatically", and no share or volume figure. Every variant was checked against
+`banned-phrases.md` before shipping; none trips the `the marketplace` or
+`marketplace…automatically` patterns added earlier today.
+
+**Why it needed to be a slot and not prompt guidance.** The model had the marketplace
+available in `positioning.md` the whole time and used it twice in 36 emails, wrongly. A
+headline differentiator cannot depend on the model reaching for it unprompted — the same
+reason the attempt callback, the subject and the email 2 ask all became variant lists
+rather than examples.
+
+### Open: email 2's word budget
+
+Email 2's target is 40-90 and it already ran to **118 at the top end** before this beat
+was added, so ~12 more words pushes more contacts over. It is a WARN, not a FAIL.
+
+**The available trade, which Aliza half-flagged already:** all three email-2 shapes call
+the holiday run-up "the best time of year" / "when we can get the strongest offers
+across". That is ~20 words of superlative about seasonality. Cutting it would more than
+pay for the marketplace beat and remove a claim she had already questioned. Not done
+unilaterally: it is long-standing approved copy and a commercial-timing statement rather
+than a product claim.
+
 ## "The marketing side is where we add the most" — REMOVED 2026-09-11
 
 Aliza, reading email 2: that claim is **not true**. Asked to stop calling out any one
