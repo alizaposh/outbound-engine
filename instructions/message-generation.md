@@ -124,7 +124,8 @@ email 2's job, and holding it back is what gives email 2 a reason to exist.
 
 **Job:** casual re-open, then the proof and the timing reason held back from email 1.
 
-Beats: light human re-open ("Hope you had a good weekend — circling back on this") →
+Beats: light human re-open ("Hope your week is going well — circling back on this";
+**never day-specific — the send weekday is unknowable at generation time**) →
 company proof → both levers restated with more weight → the season reason → the same
 15-minute ask.
 

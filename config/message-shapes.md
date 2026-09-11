@@ -129,7 +129,7 @@ lives in code precisely so the internal vertical that drives it never reaches th
 **Never a figure beside the name** except NARC's cleared numbers.
 
 ### Shape 2A: proof first
-> Hope you had a good weekend — circling back on this.
+> Hope your week is going well — circling back on this.
 >
 > Bit more context on us: we just closed a $37M Series B, and we run ticketing for organizers
 > like {comparable}. Happy to get into the marketing side, and there's real room on the
@@ -400,6 +400,17 @@ timing now?" thirty times. **A prompt example is a template, not a suggestion** 
 same lesson as the invented "Kansas City", the objection call-to-action, and the callback
 that added a beat instead of replacing one. Variation has to be picked per contact in
 code, exactly as the offer, CTA and closer are.
+
+**NO COPY MAY DEPEND ON THE DAY OF THE WEEK.** Shape 2A opened "Hope you had a good
+weekend" until 2026-09-11, which is true on a Monday and odd every other day. **The
+weekday is not knowable when the copy is written**: email 2 sends 3 days after email 1,
+email 1 sends whenever a human launches the campaign, and `max_new_leads_per_day` paces
+leads in over several days — so generation, which runs before the campaign is even
+created, cannot know. At best it was right one day in five, and "hope you had a good
+weekend" arriving on a Thursday is exactly the tell that marks an email as machine-sent.
+
+Day-agnostic openers only. "Hope your week is going well" works every weekday, and sends
+are weekdays only (`days_of_the_week: [1,2,3,4,5]`).
 
 ## Email 2 ask variants (code picks one)
 
