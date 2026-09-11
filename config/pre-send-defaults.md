@@ -42,19 +42,23 @@ recency_fields:
 
 has_group_exclude_value: "yes"          # has_group = yes -> existing customer
 
-excluded_owners:                        # name -> hubspot_owner_id, all 8 resolved 2026-08-24
+excluded_owners:                        # name -> hubspot_owner_id, resolved 2026-08-24.
+                                        # 7 names: Rob Dong removed 2026-09-11, see notes.
   - Dani Edelstein      # 82992386   danielle@posh.vip
   - Bastian Delalande   # 89417305   bastian@posh.vip
   - Ty Scearce          # 91700241   ty@posh.vip
   - Pavlos Tiftikidis   # 87936293   pavlos@posh.vip
-  - Rob Dong            # 88177403   rob@posh.vip
   - Avante Price        # 10486941   avante@posh.vip
   - Jenny Blake         # 90391601   jenny@posh.vip
   - Will Heyman         # 90391665   will@posh.vip
                                         # IDs are a convenience copy; resolve by name at
                                         # runtime so an owner change can't go unnoticed.
 
-lead_status_exclude: [IN_PROGRESS, CONNECTED, OPEN_DEAL]   # internals confirmed 2026-08-24
+lead_status_exclude: [IN_PROGRESS, OPEN_DEAL]   # internals confirmed 2026-08-24.
+                                    # CONNECTED REMOVED 2026-09-11: it is a
+                                    # leftover value from the previous CRM, not a
+                                    # statement about current engagement, so it
+                                    # was excluding contacts nobody is working.
 csm_property: customer_success_manager  # any non-empty value -> exclude
 lifecycle_allow: [lead, opportunity]    # internals confirmed 2026-08-24 (labels differ)
 sequence_property: hs_sequences_is_enrolled   # must be false
@@ -150,8 +154,20 @@ Read from the live portal (hub `50950747`) via the properties and owners APIs, n
 UI labels. HubSpot internal values differ from displayed labels, which is what made this
 list necessary.
 
-- **`hs_lead_status`** — the excluded three are `IN_PROGRESS`, `CONNECTED`, `OPEN_DEAL`
-  (uppercase, underscored). The full enum is `NEW`, `OPEN`, `IN_PROGRESS`, `OPEN_DEAL`,
+- **Rob Dong removed from `excluded_owners` 2026-09-11.** He owns a large share of the
+  database and is not actively working most of it: on the first real rep submission
+  (list 1914) his ownership excluded **31 of 41 contacts**, three quarters of a usable
+  list. **Ownership turned out to be a weak proxy for "someone is working this."** The
+  signals that actually mean active work are still enforced and were kept deliberately:
+  `in HubSpot sequence`, the recency gates on `notes_last_contacted` /
+  `hs_last_sales_activity_timestamp`, and `has CSM`. A contact Rob is genuinely working
+  will trip one of those; a contact he merely owns will not. The other seven names remain
+  — remove one only with the same evidence, a real list where that owner is blocking
+  contacts nobody is touching.
+- **`hs_lead_status`** — the excluded values are now `IN_PROGRESS` and `OPEN_DEAL`
+  (uppercase, underscored). **`CONNECTED` was removed 2026-09-11**: it is residue from
+  the previous CRM rather than a claim about current engagement, so it was excluding
+  contacts nobody is working. The full enum is `NEW`, `OPEN`, `IN_PROGRESS`, `OPEN_DEAL`,
   `UNQUALIFIED`, `ATTEMPTED_TO_CONTACT`, `CONNECTED`, `BAD_TIMING`. **`lead_status_exclude`
   previously held display labels** ("In Progress"), which would have matched nothing and
   silently excluded no one.
