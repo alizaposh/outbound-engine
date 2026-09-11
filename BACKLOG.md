@@ -835,6 +835,43 @@ email 1's opener ask, and the two need to be tunable separately.
 Generation refuses to start if the list fails to parse, or email 2 would close with a
 literal `%ASK2%` placeholder in a prospect's inbox.
 
+## The why-now line was being dropped — FIXED 2026-09-11
+
+On the 36-contact run, one contact's email 2 abandoned the shape's middle section
+entirely: no why-now beat, and in its place *"the thing that changes things is having
+your guest list and text blasts in the same place as ticketing"*. Aliza preferred the
+original structure and asked that the line be kept.
+
+**The model was following instructions.** The shape guidance says the shapes are
+"register and structure targets, **not templates**, so fill them with this contact's own
+details" — which is deliberate, and is what stops 36 emails reading identically. It also
+licenses rewriting the middle, so substituting `%WHY_NOW%` into the exemplar was never
+going to hold it.
+
+**Two changes, because an instruction alone has already lost once today.**
+
+1. **The line is now passed explicitly** as `why_now_line` with its own guidance, the way
+   the subject line is, and the shape guidance now distinguishes the *structure* (a
+   target, rewrite freely) from *supplied lines* (chosen for this contact, used as
+   given). It also forbids adding a second reason or substituting an invented one.
+2. **`check_why_now` in `validate.py`**: email 2 must carry the marketplace beat or the
+   season, and **FAILs** with neither. Content-level rather than an exact-string match,
+   since the model may reword slightly and requiring the exact sentence would fail honest
+   copy — what must not happen is the beat disappearing. Both beats present is a WARN:
+   they dilute each other and two of them break the 90-word cap, which is why they share
+   one slot.
+
+Verified against the real copy: Amanda's email FAILs, marketplace-only and season-only
+pass, both-at-once WARNs, and email 1 is not checked.
+
+**The claim it smuggled in is the reason this needed a check rather than a note.**
+"Text blasts" appears in `positioning.md` only *inside the Caché Life case study* — a
+customer-specific detail, not a general capability. The copy stretched it into a product
+claim for a run club, and **validation passed it**, because the NARC figures it cited are
+cleared and nothing else tripped. Machine checks catch invented numbers; they do not catch
+invented framing. A dropped structural beat is the observable symptom of that rewrite, so
+checking for the beat is what makes the framing drift detectable at all.
+
 ## Marketplace promoted to a designed beat in email 2 — 2026-09-11
 
 `positioning.md` leads its one-sentence description of Posh with the built-in marketplace,

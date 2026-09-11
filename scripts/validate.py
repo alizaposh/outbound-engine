@@ -662,6 +662,45 @@ def check_length(subject: str, body: str, *, position: int, footer: str) -> list
     return []
 
 
+# Email 2's why-now beat, in either of its two approved forms. Deliberately CONTENT-level
+# rather than an exact-string match on the supplied line: the model may legitimately
+# reword slightly, and requiring the exact sentence would FAIL honest copy. What must not
+# happen is the beat disappearing.
+WHY_NOW_MARKETPLACE = re.compile(r"\bmarketplace\b", re.I)
+WHY_NOW_SEASON = re.compile(
+    r"(holiday|season|next couple of months|run[- ]up|time of year)", re.I)
+
+
+def check_why_now(subject: str, body: str, *, position: int = 2) -> list[Finding]:
+    """Email 2 must carry exactly one why-now beat: our marketplace OR the season.
+
+    **Why this is a check and not just an instruction.** The shape guidance tells the
+    model the shapes are "register and structure targets, not templates", which it
+    correctly read as licence to rewrite the middle -- and on a real 36-contact run one
+    contact's email 2 lost the why-now line entirely and invented "guest list and text
+    blasts" in its place, a capability framing that is approved only inside one case
+    study. The instruction was strengthened at the same time as this was added, but an
+    instruction that has already been overridden once is not a guarantee.
+
+    BOTH beats present is also a finding: they dilute each other, and two of them break
+    email 2's 90-word cap, which is the whole reason the two share one slot.
+    """
+    if position != 2:
+        return []
+    has_mk = bool(WHY_NOW_MARKETPLACE.search(body))
+    has_se = bool(WHY_NOW_SEASON.search(body))
+    if has_mk and has_se:
+        return [Finding("why_now", WARN,
+                        "email 2 invokes BOTH the marketplace and the season; they share "
+                        "one slot on purpose and two reasons dilute each other")]
+    if not has_mk and not has_se:
+        return [Finding("why_now", FAIL,
+                        "email 2 has no why-now beat: neither our marketplace nor the "
+                        "season. The supplied why_now_line was dropped, which is how a "
+                        "rewritten middle section smuggles in an unapproved claim")]
+    return []
+
+
 # ---- driver -------------------------------------------------------------------
 
 def validate_email(subject: str, body: str, *, position: int, footer: str, token: str,
@@ -679,6 +718,7 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
     res.findings += check_banned(subject, body, literals=literals, regexes=regexes)
     res.findings += check_gmv_leak(subject, body)
     res.findings += check_category_leak(subject, body)
+    res.findings += check_why_now(subject, body, position=position)
     res.findings += check_case_studies(subject, body, allowed_names=allowed_names)
     res.findings += check_fabricated_customers(subject, body)
     res.findings += check_superlatives(subject, body)

@@ -1018,7 +1018,7 @@ def role_register(jobtitle: str | None) -> str:
 
 def research_note(c: Contact, persona, basis, platform_known,
                   sender_name: str = "", sender_intro: str = "",
-                  subject: str = "",
+                  subject: str = "", why_now: str = "",
                   shape_keys: dict | None = None,
                   shape_specs: dict | None = None, opening: str = "",
                   angle: str = "") -> dict:
@@ -1116,8 +1116,31 @@ def research_note(c: Contact, persona, basis, platform_known,
                 "length, and where it puts the intro line. These are register and "
                 "structure targets, not templates, so fill them with this contact's own "
                 "details. Do not substitute a shape, do not merge two, and do not reuse "
-                "a shape you have seen before."),
+                "a shape you have seen before.\n"
+                "**'NOT TEMPLATES' APPLIES TO THE STRUCTURE, NOT TO SUPPLIED LINES.** "
+                "Where a shape contains a line that arrived already written -- the "
+                "why-now line below, the ask, the closer, the opening move -- that line "
+                "is chosen for this contact and is used as given. Rewriting the shape "
+                "around it is expected; dropping or replacing it is not. One contact in "
+                "36 had its middle section rewritten wholesale on a real run, losing the "
+                "why-now line and inventing a feature claim in its place."),
         },
+        # Passed EXPLICITLY, not only substituted into the exemplar. Substitution alone
+        # was not enough: the shape guidance says the shapes are "not templates", which
+        # the model correctly read as licence to rewrite the middle -- and it did, on 1
+        # of 36 contacts, dropping this line and inventing "guest list and text blasts"
+        # in its place. A supplied line needs its own instruction, the way the subject
+        # line does.
+        "why_now_line": why_now or None,
+        "why_now_guidance": (
+            "Email 2 carries exactly ONE why-now beat and `why_now_line` is it, chosen "
+            "for this contact. Use it as given, in the position the shape puts it.\n"
+            "Do NOT add a second reason. If this line is about our marketplace, do not "
+            "also invoke the season; if it is about the season, do not also invoke the "
+            "marketplace. Two reasons dilute each other and break email 2's word cap.\n"
+            "Do NOT substitute your own reason -- not a feature, not a capability, not a "
+            "customer story. Those are claims, and the approved ones are in the rulebook."
+            if why_now else None),
         "city": c.city,
         "city_guidance": (
             "Referencing their city is fine and reads as someone who looked. NEVER "
@@ -1270,7 +1293,8 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
     # shifted `keys` into it when these were positional -- the shape keys would have been
     # handed to the model as its subject line. Keyword args make the next insertion safe.
     note = research_note(c, persona, basis, platform_known, sender_name, sender_intro,
-                         subject=subject, shape_keys=keys, shape_specs=specs,
+                         subject=subject, why_now=why_now,
+                         shape_keys=keys, shape_specs=specs,
                          opening=opening, angle=angle)
     res.shape = "/".join(f"{p}{keys[p]}" for p in POSITIONS if keys.get(p))
     emails, attempts, bid, err = generate_with_retry(
