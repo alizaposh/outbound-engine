@@ -305,9 +305,12 @@ Generation never reads HubSpot itself. If the columns are absent the tier defaul
   - e.g. "Good to reconnect," / "It's been a while since we last connected,"
 - **Attempt callback** (`attempt`, added 2026-09-10): we emailed them within the last
   year and they never replied. Acknowledge **the attempt**, never a conversation.
-  - e.g. "I know we tried to connect a while back — wanted to follow up and see if now's a better time."
-  - e.g. "We reached out earlier in the year and didn't catch you. Worth another try?"
-  - e.g. "I think you've heard from us before. If the timing was wrong then, it may not be now."
+  - **One sentence, 12 words or fewer.** It replaces the opening beat; it does not add
+    to it. Email 1 keeps its 75-word cap, and a two-sentence version put 30 of 30
+    contacts over that cap on the first list to use this tier.
+  - e.g. "I know we tried to connect a while back — better timing now?"
+  - e.g. "We reached out earlier in the year and didn't catch you."
+  - e.g. "You've heard from us before; timing may be better now."
   - **This is a different claim from a soft callback, and the difference is the whole
     point.** "Good to reconnect" says we had an exchange and needs a reply to be true.
     "We tried to reach you" says only that we wrote, which is true whether or not they

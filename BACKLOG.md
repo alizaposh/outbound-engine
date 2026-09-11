@@ -863,8 +863,39 @@ session that an exemplar beat an instruction** — after the invented "Kansas Ci
 objection call-to-action. The pattern is settled: *if the shape shows a line, the model
 writes that line.* Remove the slot; do not argue with it.
 
-*Still open, pre-existing:* email 2 runs 35-38 words against a 40-90 target. Unrelated to
-these changes (it was 28-34 before them) and a WARN, not a FAIL.
+### OPEN, and a copy-spec decision rather than a bug: email 1 length
+
+**I called this fixed twice and was wrong both times.** First from a 4-contact sample
+("email 1 now PASSes"); at 36 contacts it was 31/36 over. Then by shortening the
+`attempt` callback from 19 words to 11, which helped and still left 11 of 12 over.
+
+The arithmetic is the answer. Email 1's mandatory beats — sender intro, the locked-in
+question, the offer bundle, the CTA — run ~54-65 words on their own against a **75-word
+WARN threshold**. Any callback of more than ~20 words breaks it, and `attempt` contacts
+are 30 of 36 on this list.
+
+`soft` contacts are 68-84 words with 1 of 6 over, so **the base copy is already near the
+ceiling** and this is not really about the callback at all.
+
+Three honest options, all Aliza's call:
+1. **Accept the WARN.** It is a WARN, not a FAIL — the batch still reports
+   "review-ready", and 76-84 words is not a long cold email. Costs nothing.
+2. **Raise `LENGTH_TARGETS[1]`** to ~85 for emails carrying a callback. The threshold was
+   calibrated before the `attempt` tier existed.
+3. **Shorten the offer bundle.** "dedicated account support, financial incentives,
+   marketing push and more" is 21 words of the budget and the least specific thing in the
+   email.
+
+**Do not keep shortening the callback.** It is now 11 words and the cap is still broken;
+further cuts damage the one genuinely personal line to satisfy a soft threshold.
+
+*Also open, pre-existing:* email 2 runs 35-38 words against a 40-90 target. Unrelated to
+these changes (it was 28-34 before them) and also a WARN.
+
+*Also worth a look before sending at volume:* emails 2 and 3 opened with "Circling back."
+and "Closing the loop." on **all 12** contacts in a sample. Identical bulk content is a
+deliverability signal, not only a quality one, and the fix is more opening variants for
+positions 2 and 3 rather than anything structural.
 
 ## First real rep submission, list 1914 — 2026-09-11. One bug, one decision
 

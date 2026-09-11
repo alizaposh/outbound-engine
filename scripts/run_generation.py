@@ -411,10 +411,14 @@ def callback_note(c: Contact) -> dict | None:
             "not.\n"
             "No apology and no guilt. Not 'sorry to bother you again'. One clean line "
             "about the gap, then the normal ask.\n"
-            "IT REPLACES A BEAT, IT DOES NOT ADD ONE. Email 1 keeps its word cap. On "
-            "the first list to use this tier, adding the line on top instead of in "
-            "place of the opener pushed email 1 to 78-85 words against a 75 cap on "
-            "nearly every contact. Cut the line the callback stands in for."),
+            "ONE SHORT SENTENCE, TWELVE WORDS OR FEWER, and it REPLACES the opening "
+            "beat rather than adding to it. Email 1 keeps its 75-word cap.\n"
+            "Good: 'I know we tried to connect a while back -- better timing now?'\n"
+            "Too long: 'I know we tried to connect a while back. Wanted to see if now "
+            "is a better time.' -- that is two sentences and 19 words, and on the first "
+            "list to use this tier it put email 1 at 79-93 words on 30 of 30 contacts, "
+            "over the cap every single time. The soft callback manages this in three "
+            "words ('Good to reconnect'); this one has no excuse to need twenty."),
     }[tier]
     return {
         "tier": tier,
