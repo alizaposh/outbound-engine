@@ -818,6 +818,56 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## Copy diversification round 2: offers, CTAs, attempt variants — 2026-09-11
+
+Aliza asked to shorten the offer bundle and diversify further, then specifically to vary
+the attempt-callback line, which read identically on all 30 attempt contacts.
+
+**Measured across the 36 real drafts, masking first names:**
+
+| | start of day | after offers/CTAs | after attempt variants |
+|---|---|---|---|
+| email 1 | 30 distinct, 6 dupes, **62%** | 36 distinct, 0 dupes, 52% | **36 distinct, 0 dupes, 31%** |
+| email 2 | 27 distinct, 9 dupes, 70% | 34, 2, 44% | 34, 2, 43% |
+| email 3 | 7 distinct, 29 dupes, 84% | 19, 17, 62% | 20, 16, 62% |
+
+Email 1 went from six duplicate pairs and 62% mean similarity to **zero duplicates and
+31%**, and from 79-93 words to 51-58. Validation went from 8 PASS / 28 WARN / 1 FAIL to
+**30 PASS / 6 WARN / 0 FAIL** — the case_study_rules false positive stopped firing once
+fewer CTAs carried a numeral, without the guard being touched.
+
+### `positioning.md` allowed a shorter offer than was being used
+
+The three original offer variants all listed the full bundle at 19-21 words. But
+positioning approves **two things separately**: that Posh "can put together a competitive
+or custom offer for them" with no contents named, and the exact bundled wording if they
+*are* named — and states outright that *the existence of a tailored offer is approved, its
+contents are not*. So a short variant naming nothing is **shorter AND lower-risk**.
+
+Offers 3 → 9 across three tiers (short / account-support-only / full bundle), mean 20 → 15
+words. CTAs 4 → 8, with the four new ones deliberately avoiding "15 minutes" and "bring
+to the table" — between them those appeared in three of the original four.
+
+### The attempt line was a prompt example, so all 30 copied it
+
+Eight variants now live in `config/message-shapes.md` and are picked per contact by the
+same `pick_variant` used for offers, CTAs and closers. Generation **refuses to start** if
+the list fails to parse rather than falling back to the prompt. Spread measured before
+regenerating: all 8 in use, 2-6 contacts each.
+
+**Sixth instance this session of the same lesson.** A single worked example inside prompt
+guidance is a template, not a suggestion — as with the invented "Kansas City", the
+objection CTA, the callback that added a beat instead of replacing one, and the shape
+openers. **Variation has to be picked in code.**
+
+### A regression I introduced and fixed
+
+Wording the guidance as "**open email 1 with** the exact line given" made the model place
+it *before* the greeting: **missing greetings went from 4 of 36 to 11 of 36**, emails
+starting mid-thought with no salutation. The instruction now says the greeting stays and
+the line follows it; re-tested at 0 of 10. Noted in the config too, since the failure came
+from one preposition.
+
 ## Message sameness: measured, diagnosed, and largely fixed — 2026-09-11
 
 Aliza asked whether the near-identical messages would cause a deliverability problem.

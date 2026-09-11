@@ -399,10 +399,16 @@ def callback_note(c: Contact) -> dict | None:
             "email 1 by acknowledging the reconnection only, per §9 'Soft callback'. "
             "Assert nothing specific about what was discussed."),
         # The claim here is narrower than 'soft' and the wording must be too.
+        # The LINE ITSELF is supplied, not exemplified -- see attempt_line below.
         "attempt": (
-            "WE EMAILED THEM AND THEY NEVER REPLIED. Open email 1 by acknowledging THE "
-            "ATTEMPT, per §9 'Attempt callback' -- e.g. 'I know we tried to connect a "
-            "while back, wanted to see if now is a better time.'\n"
+            "WE EMAILED THEM AND THEY NEVER REPLIED. Use the exact line given in "
+            "`opening_line` below as email 1's first BODY line, per §9 'Attempt "
+            "callback'.\n"
+            "THE GREETING STAYS. Email 1 still opens 'Hey <first name>,' on its own "
+            "line, and `opening_line` comes after it. It replaces the shape's opening "
+            "BEAT, never the greeting. Wording this as 'open email 1 with' cost 11 of "
+            "36 contacts their greeting on a real list -- the email started mid-thought "
+            "with no salutation at all.\n"
             "NEVER imply a conversation happened. 'Good to reconnect', 'great speaking', "
             "'following up on our chat' are all FALSE here: they did not answer.\n"
             "NEVER reference what our previous email SAID. Not the offer, not the "
@@ -424,6 +430,12 @@ def callback_note(c: Contact) -> dict | None:
         "tier": tier,
         "detail": c.callback_detail if tier == "specific" else None,
         "last_interaction_date": c.callback_last_date or None,
+        # Picked per contact for the attempt tier, salted so it does not correlate with
+        # the offer or CTA draw. Given as the line to USE, not as an example to imitate:
+        # a prompt example is a template, which is why one example produced one line
+        # across 30 contacts.
+        "opening_line": (pick_variant(c, ATTEMPT_VARIANTS, "attempt")
+                         if tier == "attempt" else None),
         "guidance": guidance,
         "rules": ("Email 1 only, never emails 2 or 3. If the date is long ago, "
                   "acknowledge the gap rather than implying it was recent. If in any "
@@ -509,6 +521,10 @@ def shape_openings(path: str = SHAPES_FILE) -> dict[str, list[str]]:
 OFFER_VARIANTS: list[str] = []
 CTA_VARIANTS: list[str] = []
 CLOSER_VARIANTS: list[str] = []
+# The `attempt` callback opener. A LIST picked per contact, not a prompt example: as a
+# single worked example it was copied verbatim by all 30 attempt-tier contacts on the
+# first real rep list.
+ATTEMPT_VARIANTS: list[str] = []
 
 
 def load_variants(label: str, path: str = SHAPES_FILE) -> list[str]:
@@ -1424,9 +1440,15 @@ def main(argv=None) -> int:
     shapes = load_shapes()
     openings = shape_openings()
     global OFFER_VARIANTS, CTA_VARIANTS
-    global CLOSER_VARIANTS
+    global CLOSER_VARIANTS, ATTEMPT_VARIANTS
     OFFER_VARIANTS, CTA_VARIANTS = load_variants("Offer"), load_variants("CTA")
     CLOSER_VARIANTS = load_variants("Closer")
+    ATTEMPT_VARIANTS = load_variants("Attempt callback")
+    if not ATTEMPT_VARIANTS:
+        raise SystemExit(
+            "no 'Attempt callback' variants parsed from config/message-shapes.md. The "
+            "attempt tier would fall back to whatever the prompt suggests, which is how "
+            "30 of 30 contacts came out with the same opening line.")
     if not CLOSER_VARIANTS:
         raise SystemExit("no Closer variants parsed; email 3 would end on a bare "
                          "'closing the loop', which reads as a door shutting")

@@ -259,10 +259,35 @@ Declarative: they NAME the offer. The ask is the CTA's job, so these do not end 
 question. **Do not use a colon before the list** — the bundle is what the proposal
 contains, not a definition of it, and a colon reads as the latter.
 
-The wording follows the approved bundle in `config/positioning.md`: dedicated account
-support, financial incentives, marketing push, and more. **Bundled and unquantified** —
-naming a rate, a share or a figure is a FAIL.
+**Naming the bundle is OPTIONAL.** `config/positioning.md` approves two things
+separately: that Posh "can put together a competitive or custom offer/proposal for them"
+— on its own, with no contents named — and, if the contents *are* named, the exact
+bundled wording "dedicated account support, financial incentives, marketing push and
+more". It also says plainly: *the existence of a tailored offer is approved, its contents
+are not.* So a short variant that names nothing is both **shorter and lower-risk** than
+one that lists the bundle.
 
+**Why that matters (2026-09-11).** The three original variants all listed the full bundle
+at 19-21 words. On a 36-contact list that single block was both the main reason email 1
+ran over its 75-word cap **and** the largest remaining source of sameness in email 1 —
+near-verbatim in all 36. Short variants fix both at once.
+
+**When the bundle IS named, keep the phrase intact.** Do not reorder or reword it:
+"financial incentives" is approved only in that vague bundled form. **Bundled and
+unquantified** — naming a rate, a share or a figure is a FAIL.
+
+Short, no contents named (all approved by the "existence of a tailored offer" clause):
+- I'd like to put a custom offer together for you.
+- Happy to put a competitive proposal together for you.
+- If there's room, I'd like to build you a custom proposal.
+- There's a custom offer I'd like to put together for you.
+
+Dedicated account support only — a real capability, and `positioning.md` allows this one
+to be described concretely:
+- I'd like to put a custom offer together for you, with a dedicated account team behind it.
+- Happy to build you a custom proposal, with real account support behind it.
+
+Full bundle, exact approved wording:
 - I'd like to put a custom offer together for you with dedicated account support, financial incentives, marketing push and more.
 - If there's room, I'd like to put a custom proposal together for you with dedicated account support, financial incentives and a marketing push.
 - Happy to put something custom together for you, with dedicated account support, financial incentives and marketing behind it.
@@ -276,10 +301,59 @@ they say yes.
 - Let me know if you're open to connecting to see what we can bring to the table.
 - Any opportunity to compare what Posh could put together in a custom proposal?
 - Open to 15 minutes to see what this could look like for you?
+- Worth a quick conversation?
+- Free for a short call this week?
+- Interested in seeing what that would look like?
+- Any interest in talking it through?
+
+**The four added on 2026-09-11 deliberately avoid "15 minutes" and "bring to the
+table"**, which between them appeared in three of the original four and so turned up in
+most emails on a 36-contact list. They are also shorter, which matters because the CTA
+and the offer share email 1's 75-word budget.
+
+A quiet side benefit: "15 minutes" beside a cleared customer name is what tripped
+`case_study_rules` with "numeral near 'We Met IRL'" — a false positive, but a less
+frequent one now that fewer CTAs carry a numeral.
 
 The third was banned in August on AE feedback and **un-banned by explicit decision**,
 because it appears in the sales team's own live email. Kept for the record so the
 reversal is visible.
+
+## Attempt callback variants (code picks one)
+
+The opening line of email 1 when `callback_tier` is **`attempt`** — we emailed this
+contact within the last year and they never replied. It **replaces** the shape's opening
+beat rather than adding to it, and email 1 keeps its 75-word cap.
+
+**The greeting stays.** These replace the shape's opening BEAT, not the salutation:
+email 1 still opens "Hey {first_name}," and the line follows it. Phrasing the prompt as
+"open email 1 with this line" cost 11 of 36 contacts their greeting on a real list.
+
+**One sentence or one short pair, 12 words maximum.** An em-dash counts as a word here, because the length validator splits on whitespace and so does this budget. These are the only thing separating
+an `attempt` email from a cold one, so they carry real weight for their length.
+
+**They may claim only that we WROTE, never that we spoke.** "Good to reconnect", "great
+speaking", "following up on our chat" are all false here — the prospect never answered.
+They must also not reference what the earlier email SAID: our own logged sends are
+bulk-associated and unreliable per contact, so *that* we wrote is known and *what* we
+wrote is not. And no apology or guilt — not "sorry to bother you again".
+
+- I know we tried to connect a while back. Better timing now?
+- I know we tried to connect previously. Is now a better time?
+- We reached out a while back and didn't catch you. Better now?
+- Tried you earlier in the year — worth revisiting?
+- I think you've heard from us before. Timing may be better now.
+- We got in touch a while ago without much luck. Try again?
+- Reached out once before, so trying you again at a better time.
+- I know we've emailed before — hoping this lands better.
+
+**Why this is a config list and not a line in the prompt (2026-09-11).** It started as a
+single worked example inside the classifier guidance, and all 30 `attempt` contacts on
+the first real list wrote it verbatim: "I know we tried to connect a while back. Better
+timing now?" thirty times. **A prompt example is a template, not a suggestion** — the
+same lesson as the invented "Kansas City", the objection call-to-action, and the callback
+that added a beat instead of replacing one. Variation has to be picked per contact in
+code, exactly as the offer, CTA and closer are.
 
 ## Closer variants (code picks one)
 
