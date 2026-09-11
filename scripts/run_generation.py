@@ -410,7 +410,11 @@ def callback_note(c: Contact) -> dict | None:
             "unreliable for any one contact -- that we wrote is known, what we wrote is "
             "not.\n"
             "No apology and no guilt. Not 'sorry to bother you again'. One clean line "
-            "about the gap, then the normal ask."),
+            "about the gap, then the normal ask.\n"
+            "IT REPLACES A BEAT, IT DOES NOT ADD ONE. Email 1 keeps its word cap. On "
+            "the first list to use this tier, adding the line on top instead of in "
+            "place of the opener pushed email 1 to 78-85 words against a 75 cap on "
+            "nearly every contact. Cut the line the callback stands in for."),
     }[tier]
     return {
         "tier": tier,
@@ -644,6 +648,49 @@ def clean_city(raw: str | None) -> str | None:
     return " ".join(w.title() if w.islower() else w for w in s.split())
 
 
+_ALPHA_ONLY = re.compile(r"[^a-z]")
+
+
+def clean_org(raw: str | None, first: str | None, last: str | None) -> str | None:
+    """An organization name fit to put in a sentence, or None.
+
+    **Drops a `prospect_org` that is really the contact's own name.** On the first real
+    rep list, 27 of 36 contacts had `prospect_org` set to exactly their own name, so the
+    copy read "ticketing setup for Meklit Iyob?" to a person the greeting already
+    addressed as "Hey Meklit" -- the same name twice, once pretending to be a company.
+    Individually each email validated; together they are the most obviously
+    machine-written thing the engine has produced.
+
+    This is the `clean_city` problem in a second field: HubSpot free text reaching copy
+    unchecked. The rule is the same -- **uncertain means None** -- and the cost is the
+    same, one less specific noun in a sentence that still reads fine without it.
+
+    Casing is deliberately NOT normalised here. Unlike a city, an organization name can
+    legitimately be a lowercase handle ("crackheadbarneyandfriends" is a real one on this
+    list), and title-casing it would be a wrong correction rather than a tidy-up.
+    """
+    org = (raw or "").strip()
+    if not org:
+        return None
+    flat = _ALPHA_ONLY.sub("", org.lower())
+    if not flat:
+        return None                       # punctuation or digits only
+    # The FULL name matching is conclusive at any length -- "k m" for a contact named
+    # "k m" is not a company, and a length floor here wrongly let that through.
+    full = _ALPHA_ONLY.sub("", f"{first or ''}{last or ''}".lower())
+    if full and full == flat:
+        return None
+    # A name PART alone is weaker evidence, because a real org can be named after its
+    # founder. Only match on one long enough to be distinctive, and accept that a
+    # genuine "Reese" belonging to a Reese loses its org name -- one less noun in a
+    # sentence that still reads, versus addressing someone by their own name twice.
+    for part in (first or "", last or ""):
+        cand = _ALPHA_ONLY.sub("", part.lower())
+        if cand and len(cand) >= 5 and cand == flat:
+            return None
+    return org
+
+
 # Domains that say nothing about an organization. An inference from one of these would
 # be pure invention, so they never reach the model.
 FREE_MAIL = {
@@ -772,6 +819,16 @@ SHAPE_SLOTS = {
 def unfillable_slots(text: str, c: Contact) -> list[str]:
     """Placeholders in `text` this contact cannot supply."""
     return [s for s, get in SHAPE_SLOTS.items() if s in text and not get(c)]
+
+
+def strip_slot(spec: str, slot: str) -> str:
+    """Drop every exemplar line containing `slot`, whatever the contact has.
+
+    Distinct from strip_unfillable, which removes a line because the DATA is missing.
+    This removes a line because something else is taking its place -- a callback
+    standing in for the opening beat -- and the data may be perfectly available.
+    """
+    return "\n".join(ln for ln in spec.splitlines() if slot not in ln)
 
 
 def strip_unfillable(spec: str, c: Contact) -> str:
@@ -1083,6 +1140,25 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
     # signed-Carl-introduced-Brooke bug.
     sender_intro = assemble.resolve_sender_intro(mailbox, seed=c.email or "")
     opening = pick_opening(c, f"1{keys[1]}", openings)
+
+    # A CALLBACK REPLACES THE OPENING BEAT -- structurally, not by asking.
+    #
+    # message-generation.md has always said the callback "replaces beat 2", and the
+    # prompt says so too. Neither holds: the shape exemplar still contains the opening
+    # line, the model writes both, and email 1 lands at 79-85 words against a 75 cap.
+    # Measured on the first list to use the `attempt` tier, that was 35 of 36 contacts.
+    # Adding the instruction a second time, more loudly, changed nothing.
+    #
+    # **This is the third time this session that an exemplar beat an instruction**, after
+    # the invented "Kansas City" and the objection call-to-action. The lesson has stopped
+    # being a surprise: if the shape shows a line, the model writes that line. So remove
+    # the slot rather than argue with it -- exactly what strip_unfillable does for a
+    # field with no data.
+    if callback_note(c):
+        specs = {pos: (strip_slot(s, "{city}") if pos == 1 else s)
+                 for pos, s in specs.items()}
+        opening = ""
+
     note = research_note(c, persona, basis, platform_known, sender_name, sender_intro,
                          keys, specs, opening, angle=angle)
     res.shape = "/".join(f"{p}{keys[p]}" for p in POSITIONS if keys.get(p))
@@ -1245,7 +1321,10 @@ def load_contacts(path: pathlib.Path) -> list[Contact]:
             email=clean(row.get("email")) or "",
             jobtitle=clean(row.get("job_title")) or clean(row.get("jobtitle")),
             company=clean(row.get("company")),
-            prospect_org=clean(row.get("prospect_org")),
+            # Cleaned at the door like city: a prospect_org that is really the
+            # contact's own name is not an organization. See clean_org.
+            prospect_org=clean_org(row.get("prospect_org"),
+                                   row.get("first_name"), row.get("last_name")),
             # Cleaned at the door, so no caller can route a raw HubSpot value
             # into a sentence. See clean_city: "North America" and "184th St"
             # become None rather than copy.

@@ -818,6 +818,54 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## List 1914 copy: two data/copy bugs found by reviewing real output — 2026-09-11
+
+The gate changes took list 1914 from 4 eligible to 36. Reading the 36 drafts then found
+two problems that every automated check had passed.
+
+### 27 of 36 emails addressed the recipient's own name as their company
+
+`prospect_org` was populated **36/36**, which read as a well-enriched list. In 27 cases
+the value was the contact's own name, so the copy was:
+
+> subject: **ticketing setup for meklit iyob?**
+> "Hey Meklit, I'm Carl... I know we tried to connect a while back."
+
+The same name twice, once as a person and once as a company, lowercased. **Every one of
+those emails validated individually** — no check knows an org name should not equal the
+recipient's name — so the run reported clean.
+
+`clean_org()` drops it: 9 of 36 keep a real organization (*Chopin Foundation of the
+United States*, *The Hotel Pontotoc*, *Motion Spaces*, *Forever OG*), 27 fall back to
+naming no company at all. Same rule as `clean_city`: **uncertain means None**, and the
+cost is one less noun in a sentence that reads fine without it.
+
+Two judgement calls: a **full**-name match drops at any length (an early version had a
+5-character floor that let `"k m"` through for a contact named "k m"), while a match on
+one name PART needs 5+ characters, because a real org can be named after its founder.
+And **casing is deliberately not normalised** for orgs — `crackheadbarneyandfriends` is a
+real handle on this list, and title-casing it would be a wrong correction rather than a
+tidy-up.
+
+### The `attempt` callback pushed email 1 over its word cap on 35 of 36
+
+Email 1 came in at **79-85 words against a 75 cap**. The callback was being *added* to
+the opening beat rather than replacing it.
+
+`message-generation.md` has always said the callback "replaces beat 2", and the prompt
+said so too. **Neither held**, because the shape exemplar still contained the opening
+line and the model wrote both. Stating the rule a second time, more loudly, changed
+nothing: still 79-85 words.
+
+Fixed structurally with `strip_slot()`, which removes the `{city}` line from the email-1
+exemplar when a callback is present. Email 1 now PASSes. **This is the third time in one
+session that an exemplar beat an instruction** — after the invented "Kansas City" and the
+objection call-to-action. The pattern is settled: *if the shape shows a line, the model
+writes that line.* Remove the slot; do not argue with it.
+
+*Still open, pre-existing:* email 2 runs 35-38 words against a 40-90 target. Unrelated to
+these changes (it was 28-34 before them) and a WARN, not a FAIL.
+
 ## First real rep submission, list 1914 — 2026-09-11. One bug, one decision
 
 41 contacts, submitted via the Slack form. **The form parsed correctly on the first
