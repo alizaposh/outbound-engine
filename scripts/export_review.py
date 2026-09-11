@@ -56,7 +56,27 @@ SELLER_COLUMN = "Seller"
 # tabs, so a tab this script CREATES must not reintroduce them -- otherwise every
 # generated tab arrives with two dead columns a reviewer then deletes again.
 DEAD_COLUMNS = ("message_2_subject", "message_3_subject")
-NEW_TAB_COLUMNS = [c for c in SHEET_COLUMNS_REFERENCE if c not in DEAD_COLUMNS]
+
+# What a REVIEWER actually needs, and nothing else (2026-09-11, Aliza's call).
+#
+# A created tab used to carry all 24 reference columns -- persona, persona_basis,
+# platform_known, validation, generation_error, attempts, repairs_applied,
+# sequence_findings, bedrock_message_id, hs_object_id. Those are engine diagnostics: they
+# are how a failure gets debugged, and they are noise to a sales rep scoring copy. A rep
+# reading 24 columns to find four is a rep who stops reading.
+#
+# The diagnostics are NOT lost. Every one stays in the run's CSV under `reviews/`, which
+# is the file to open when something needs explaining. The Sheet is the review surface,
+# not the archive.
+#
+# Ranking and Feedback are kept even though they were not in the requested list: they are
+# the reviewer's own columns and the entire reason the sheet exists -- feedback becomes
+# rules in config/. Without them a rep can read the copy and has nowhere to respond.
+NEW_TAB_COLUMNS = [
+    "Seller", "first_name", "last_name", "email",
+    "message_1_subject", "message_1_body", "message_2_body", "message_3_body",
+    "Ranking (X/5)", "Feedback",
+]
 
 
 def load_config(path: pathlib.Path = CONFIG) -> dict:

@@ -81,6 +81,12 @@ FORM_LABELS = {
     "list": ("hubspot list", "list", "hubspot list url", "audience"),
     "angle": ("angle", "campaign angle", "theme", "messaging angle", "copy direction"),
     "notes": ("notes", "context", "anything else"),
+    # Who asked. Names the review tab so a rep can find their own request among many.
+    # **The Workflow Builder form does not send this yet** -- its submission is a
+    # bot_message with `user: None` and a body carrying only List, Angle and Notes, so
+    # the submitter is genuinely not recoverable from Slack. Add a "Your name" field to
+    # the form and this starts working; until then the tab falls back to the list id.
+    "requester": ("requested by", "your name", "name", "rep", "requester", "submitted by"),
 }
 # The angle reaches the generation prompt, so it is capped. A rep pasting three
 # paragraphs would crowd out the rulebook, and a topic hint does not need paragraphs.
@@ -188,7 +194,8 @@ def parse_form(text: str) -> dict | None:
     if angle.lower() in ("none", "n/a", "-", ""):
         angle = ""
     return {"list_id": list_id, "angle": angle[:ANGLE_MAX],
-            "notes": " ".join(fields.get("notes", [])).strip(), "form": True}
+            "notes": " ".join(fields.get("notes", [])).strip(),
+            "requester": " ".join(fields.get("requester", [])).strip(), "form": True}
 
 
 def parse_request(text: str) -> tuple[str | None, str]:
@@ -322,7 +329,7 @@ def list_size(list_id: str) -> int:
 
 
 def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
-                 angle: str = "") -> dict:
+                 angle: str = "", requester: str = "") -> dict:
     """eligibility -> generation -> export. Each step is the existing script, run as a
     subprocess so its own guarantees and refusals stay intact rather than being
     re-implemented here."""
@@ -346,7 +353,35 @@ def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
     enriched = work / f"intake-{list_id}-{stamp}-enriched.csv"
     cb_review = work / f"intake-{list_id}-{stamp}-callbacks-review.csv"
     gen = work / f"intake-{list_id}-{stamp}-generated.csv"
-    tab = f"Intake-{list_id}-{stamp}"
+    # REVIEW TAB NAME: the requester's first name and the date, e.g. "Aliza-2026-09-11".
+    # A rep looking for their own request should recognise the tab without decoding a
+    # timestamp, which "Intake-1914-20260911-1359" required. The list id moves into the
+    # CSV filenames under reviews/, which is where a debugger looks anyway.
+    #
+    # A same-day second request from the same person gets "-2", rather than overwriting:
+    # export_review refuses a tab that already has rows unless --allow-append, so a
+    # collision would otherwise fail the run at the last step.
+    who = re.sub(r"[^A-Za-z0-9]", "", (requester or "").split()[0]) if requester else ""
+    base = f"{who.title()}-{dt.date.today().isoformat()}" if who else \
+           f"List{list_id}-{dt.date.today().isoformat()}"
+    tab = base
+    try:
+        import review_queue as _rq
+        _svc, _ = _rq.sheets_service()
+        _cfg = __import__("export_review").load_config()
+        _meta = _svc.spreadsheets().get(
+            spreadsheetId=_cfg["GENERATION_REVIEW_SHEET_ID"]).execute(
+            num_retries=_rq.SHEETS_RETRIES)
+        _titles = {sh["properties"]["title"] for sh in _meta.get("sheets", [])}
+        n = 2
+        while tab in _titles:
+            tab, n = f"{base}-{n}", n + 1
+    except Exception as e:
+        # Never fail the run over a tab name. A collision surfaces at export instead,
+        # which refuses a tab that already has rows -- loud, and after the copy is safe
+        # on disk in reviews/.
+        print(f"    note: could not check existing tab names ({type(e).__name__}); "
+              f"using {tab!r}")
 
     from eligibility import env_token
     tok = env_token()
@@ -513,8 +548,10 @@ def main(argv=None) -> int:
         form = parse_form(text)
         if form:
             list_id, brief, angle = form["list_id"], form["notes"], form["angle"]
+            requester = form.get("requester", "")
         else:
             list_id, brief = parse_request(text)
+            requester = ""   # loose free-text path has no form field
             angle = ""
         who = m.get("user", "?")
         if not list_id:
@@ -551,7 +588,8 @@ def main(argv=None) -> int:
                 print("    still queued; not repeating the reply")
             continue
 
-        res = run_pipeline(list_id, brief, a.mailbox, a.apply, angle=angle)
+        res = run_pipeline(list_id, brief, a.mailbox, a.apply, angle=angle,
+                           requester=requester)
         if res.get("eligible") == 0:
             # Guarantee 5: say WHY, per reason. "Nothing happened" is the worst possible
             # answer to a request, and the reasons are usually actionable -- already in a

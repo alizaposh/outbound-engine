@@ -203,3 +203,46 @@ again, so re-recording them every week would write an identical row forever — 
 that grows without carrying any information. The final row is kept, because that *is*
 the useful artefact; after that the campaign is skipped. An `ACTIVE` campaign is always
 re-recorded, since its movement is the entire point of the history.
+
+### Generated tab: name and columns (changed 2026-09-11)
+
+**Name: `<Requester first name>-<YYYY-MM-DD>`**, e.g. `Aliza-2026-09-11`. A rep should
+recognise their own request without decoding `Intake-1914-20260911-1359`. The list id
+lives on in the CSV filenames under `reviews/`, which is where a debugger looks anyway.
+A same-day second request from the same person gets `-2`, because `export_review` refuses
+a tab that already has rows and a silent collision would fail the run at its last step.
+
+The requester comes from a **"Your name"** field on the Slack form. Workflow Builder
+submissions are `bot_message` with `user: None` and carry no submitter, so this is the
+only way to know who asked; without the field the tab falls back to `List<id>-<date>`.
+The parser accepts "Your name", "Requested by", "Name", "Rep", "Requester" or
+"Submitted by", in either Workflow Builder layout.
+
+**Columns: 10, not 24.**
+
+| Column | Filled by |
+|---|---|
+| `Seller` | engine (the sending persona) |
+| `first_name`, `last_name`, `email` | engine |
+| `message_1_subject` | engine — the subject for the WHOLE sequence |
+| `message_1_body`, `message_2_body`, `message_3_body` | engine |
+| `Ranking (X/5)` | **human** |
+| `Feedback` | **human** |
+
+Emails 2 and 3 have no subject column because they send with `subject: ""` and thread as
+"Re: ...".
+
+**What was removed and where it went.** `persona`, `persona_basis`, `platform_known`,
+`current_competitor`, `estimated_gmv_usd`, `vertical`, `validation`, `generation_error`,
+`attempts`, `repairs_applied`, `sequence_findings`, `bedrock_message_id` and
+`hs_object_id` are engine diagnostics — how a failure gets debugged, and noise to a rep
+scoring copy. **All of them remain in the run's CSV under `reviews/`.** The Sheet is the
+review surface; the CSV is the archive.
+
+`Ranking (X/5)` and `Feedback` were kept although not in the requested list: they are the
+reviewer's own columns and the reason the sheet exists, since feedback becomes rules in
+`config/`. A rep with no cell to write in cannot review.
+
+**Existing tabs are untouched.** Rows map to each tab's own header BY NAME, so Test1-Test12
+keep their 24 columns and still populate correctly. This changes only tabs the engine
+creates.
