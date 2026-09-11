@@ -818,6 +818,61 @@ reachable today is excluded, so generation and export have not run *from intake*
 branch executes on the rep's list — it is the thing to watch on the first real
 submission.
 
+## First real rep submission, list 1914 — 2026-09-11. One bug, one decision
+
+41 contacts, submitted via the Slack form. **The form parsed correctly on the first
+try** — `list 1914 (41 contacts) form angle=''` — which was the one leg that could not be
+simulated, since intake deliberately skips our own messages.
+
+### The bug: export_review could not create its own tab — FIXED
+
+The pipeline ran eligibility, callbacks and generation successfully and then died at
+export with Sheets' unhelpful `Unable to parse range: Intake-1914-...!A1:AZ1`.
+
+**`export_review.py` had no tab-creation logic at all.** Every prior export was
+hand-driven against a tab a human had already made — Test1 through Test12, all created
+by hand — so the assumption held right up until `run_pipeline` began generating a fresh
+timestamped tab per request. **41 contacts' copy was written and had nowhere to go.**
+
+*Fixed:* the tab is created with a header when missing. Two details worth keeping:
+- The generated header omits `message_2_subject` / `message_3_subject`. Those are always
+  empty since emails 2 and 3 became threaded replies, and a human had already deleted
+  them from the existing tabs; recreating them would hand every reviewer two dead
+  columns to delete again.
+- **The "never writes a header" rule still holds for a tab that EXISTS.** An empty
+  existing tab is still refused, because silently populating a tab someone made for
+  another purpose is worse than stopping.
+
+*Caught in passing:* my first version of the fix referenced a constant name I had
+invented (`CSV_TO_SHEET` instead of `SHEET_COLUMNS_REFERENCE`). `compile()` does not
+catch that — the name is only resolved when the branch runs — so **`compile()` is not
+sufficient verification for a new code path.** Importing the module and checking the
+attribute is.
+
+*The rep's thread was corrected.* They had received `[engine:rejected] ... failed at the
+export step`, true when posted and stale afterwards. A follow-up reply carries the real
+outcome and the review link.
+
+### The decision: 31 of 41 were excluded as "owned by Rob Dong"
+
+| outcome | n |
+|---|---|
+| owned by Rob Dong | **31** |
+| ELIGIBLE | 4 |
+| in HubSpot sequence | 4 |
+| lead status CONNECTED | 2 |
+
+`excluded_owners` in `config/pre-send-defaults.md` lists 8 Posh reps, Rob among them,
+resolved 2026-08-24. The gate worked as configured. **Whether it should have is Aliza's
+call:** if those 31 are contacts Rob is actively working, the gate just prevented
+poaching; if his ownership is stale, the gate deleted three quarters of a real list.
+Either way it is a config decision, not a bug.
+
+**The good news in the same run:** the 4 eligible contacts are properly enriched —
+`prospect_org` 4/4, `city` 4/4, `estimated_gmv_usd` 3/4 — so the SDR built the list
+correctly. And **all 4 drew the new `attempt` callback tier**, meaning the first real
+rep list immediately exercised the "I know we tried to connect" opener.
+
 ## City hygiene: HubSpot free text was going straight into copy — FIXED 2026-09-10
 
 Aliza spotted a contact whose `city` reads **"North America"**. Shape 1C's opening is

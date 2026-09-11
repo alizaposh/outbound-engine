@@ -51,6 +51,13 @@ SHEET_COLUMNS_REFERENCE = [
 HUMAN_COLUMNS = ("Ranking (X/5)", "Feedback")
 SELLER_COLUMN = "Seller"
 
+# Always empty since emails 2 and 3 became threaded replies (they inherit the thread
+# subject and must not invent one). A human deleted these two by hand from the existing
+# tabs, so a tab this script CREATES must not reintroduce them -- otherwise every
+# generated tab arrives with two dead columns a reviewer then deletes again.
+DEAD_COLUMNS = ("message_2_subject", "message_3_subject")
+NEW_TAB_COLUMNS = [c for c in SHEET_COLUMNS_REFERENCE if c not in DEAD_COLUMNS]
+
 
 def load_config(path: pathlib.Path = CONFIG) -> dict:
     """Read GENERATION_REVIEW_* out of the fenced block in review-surfaces.md."""
@@ -128,6 +135,46 @@ def main(argv=None) -> int:
     print(f"sheet {sheet_id}, tab {tab}, seller {seller!r}")
 
     from googleapiclient.errors import HttpError
+
+    # CREATE THE TAB IF IT IS MISSING, header included.
+    #
+    # **This script could not be driven by automation until 2026-09-10.** It assumed the
+    # tab already existed, which was true for every hand-run export -- Test1..Test12 were
+    # all created by a human first -- and false the moment `slack_intake.run_pipeline`
+    # started generating a fresh timestamped tab per request. The first real rep
+    # submission failed here with Sheets' unhelpful `Unable to parse range:
+    # Intake-1914-...!A1:AZ1`, after eligibility, callbacks and generation had all
+    # succeeded. Forty-one contacts' copy was written and then had nowhere to go.
+    #
+    # The header is written from NEW_TAB_COLUMNS, so a generated tab matches what a
+    # human actually maintains -- minus the two dead subject columns. The "never writes a header" rule below still
+    # holds for a tab that EXISTS: an empty existing tab is a setup mistake and is still
+    # refused, because silently populating a tab someone made for another purpose is
+    # worse than stopping.
+    titles = set()
+    try:
+        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute(
+            num_retries=rq.SHEETS_RETRIES)
+        titles = {s["properties"]["title"] for s in meta.get("sheets", [])}
+    except HttpError as e:
+        raise rq._explain_http_error(e, sheet_id, who) from None
+
+    created = False
+    if tab not in titles:
+        try:
+            svc.spreadsheets().batchUpdate(
+                spreadsheetId=sheet_id,
+                body={"requests": [{"addSheet": {"properties": {"title": tab}}}]}
+            ).execute(num_retries=rq.SHEETS_RETRIES)
+            svc.spreadsheets().values().update(
+                spreadsheetId=sheet_id, range=f"{tab}!A1", valueInputOption="RAW",
+                body={"values": [list(NEW_TAB_COLUMNS)]}
+            ).execute(num_retries=rq.SHEETS_RETRIES)
+            created = True
+            print(f"created tab {tab!r} with a {len(NEW_TAB_COLUMNS)}-column header")
+        except HttpError as e:
+            raise rq._explain_http_error(e, sheet_id, who) from None
+
     try:
         got = svc.spreadsheets().values().get(
             spreadsheetId=sheet_id, range=f"{tab}!A1:AZ1").execute(num_retries=rq.SHEETS_RETRIES).get("values", [[]])
@@ -138,8 +185,9 @@ def main(argv=None) -> int:
         raise rq._explain_http_error(e, sheet_id, who) from None
 
     if not header:
-        print(f"ABORT: {tab} has no header row. Create the columns first; this never "
-              f"writes a header.", file=sys.stderr)
+        print(f"ABORT: {tab} exists but has no header row. Create the columns first; "
+              f"this never writes a header into a tab someone else made.",
+              file=sys.stderr)
         return 2
     # Identity columns: without these a reviewer cannot tell whose email a row is.
     missing_key = [c for c in ("email", "message_1_body") if c not in header]
