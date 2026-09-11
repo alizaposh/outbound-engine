@@ -147,10 +147,7 @@ neutrally, as 2A does, or leave them out.
 > like {comparable}. Happy to get into the marketing side, and there's real room on the
 > financial incentives for {prospect_org}.
 >
-> %MARKETPLACE%
->
-> With the holiday season coming up, this is usually the best time of year for us to get
-> a strong offer across.
+> %WHY_NOW%
 >
 > %ASK2%
 
@@ -163,9 +160,7 @@ cleanly onto a cleared name.
 > We run ticketing for organizers like {comparable}, and just closed a $37M Series B. For {prospect_org}
 > there's real room on the incentives, and we can get into the marketing side too.
 >
-> %MARKETPLACE%
->
-> The holiday run-up is when we can get the strongest offers across.
+> %WHY_NOW%
 >
 > %ASK2%
 
@@ -173,8 +168,9 @@ cleanly onto a cleared name.
 When email 1 ran long, or the contact's register is terse.
 
 > Wanted to put this back in front of you. We just closed a $37M Series B and run ticketing for organizers
-> like {comparable}. There's real room on the incentives for {prospect_org}, and the
-> holiday run-up is when we can get the strongest offer across.
+> like {comparable}. There's real room on the incentives for {prospect_org}.
+>
+> %WHY_NOW%
 >
 > %ASK2%
 
@@ -427,26 +423,26 @@ weekend" arriving on a Thursday is exactly the tell that marks an email as machi
 Day-agnostic openers only. "Hope your week is going well" works every weekday, and sends
 are weekdays only (`days_of_the_week: [1,2,3,4,5]`).
 
-## Marketplace variants (code picks one)
+## Why-now variants (code picks one)
 
-Email 2's distribution beat, in shapes **2A and 2B only** — 2C is the deliberately terse
-shape and stays short. A designed beat as of 2026-09-11.
+Email 2's single middle beat, in **all three shapes**. One reason to pay attention now —
+either our distribution or the season — and **never both**, which is the point of a shared
+slot rather than two.
 
-**Why it had to be designed rather than left to the model.** `positioning.md` leads with
-the marketplace in its one-sentence description of Posh, yet it appeared in only **2 of 36
-emails** on the first real list, both times improvised — and both times wrongly, as "The
-marketplace brings new attendees automatically". Banning that phrasing then took it to
-**0 of 36**: the fix removed the claim instead of correcting it. A headline differentiator
-cannot depend on the model reaching for it unprompted.
+**Why they trade off (2026-09-11).** Both are worth saying and email 2 cannot afford both:
+its target is 40-90 words and it already ran to **118 at the top end** with only the
+seasonal line. The marketplace beat needed ~12 words, the seasonal line was ~20, and
+keeping both put more contacts over the cap. Drawing one from a combined pool costs one
+beat's words, doubles the variety of that beat, and means no email argues two different
+reasons at once.
 
-**Approved wording only.** The mechanism is discovery by attendees already browsing Posh,
-and it is organic demand the organizer did not have to source. It **can** do this; it
-never does it "automatically", and no share or volume figure attaches. Say "our
-marketplace" or "the Posh marketplace", never "the marketplace" — see
-`config/banned-phrases.md` for both checks.
+### Distribution — our marketplace
 
-**12-14 words.** Email 2's cap is 90 and it already runs to 118 at the top end, so this
-beat is deliberately one short sentence.
+`positioning.md` leads its one-sentence description of Posh with the built-in marketplace,
+and it reached only 2 of 36 emails on the first real list, improvised and wrong both
+times. **Approved wording only:** "our marketplace" or "the Posh marketplace" (never "the
+marketplace"), the mechanism is discovery by attendees already browsing Posh, it **can**
+do this rather than doing it "automatically", and no share or volume figure attaches.
 
 - Our marketplace also puts your events in front of attendees already browsing Posh.
 - Attendees already browsing Posh can discover your events through our marketplace.
@@ -454,6 +450,19 @@ beat is deliberately one short sentence.
 - There's also our marketplace, where attendees already on Posh find new events.
 - Our marketplace puts your events in front of people already looking for events.
 - Through our marketplace, people already browsing Posh can find what you're running.
+
+### Season — the holiday run-up
+
+A commercial-timing statement, not a product claim. It was hardcoded into all three shapes
+until 2026-09-11, so every email said it and none varied it.
+
+- With the holiday season coming up, this is a good time for us to get an offer across.
+- The holiday run-up is usually when we can put a strong offer together.
+- Heading into the holiday season, there's more room on what we can offer.
+- The next couple of months are when an offer like this carries the most weight.
+
+**12-20 words.** Anything longer and email 2 breaks its cap, which is the constraint that
+created this slot.
 
 ## Email 2 ask variants (code picks one)
 
