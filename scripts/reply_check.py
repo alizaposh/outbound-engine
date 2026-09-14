@@ -519,7 +519,11 @@ out_of_office or automated_reply. Keep it short, plain, one ask, no dashes, and 
 promise pricing or terms.
 
 **For `interested` and `question`, the draft MUST include this booking link, as a plain
-visible URL: {booking_link}** ({owner}'s calendar). Do not invent a different link, do
+visible URL: {booking_link}** ({owner}'s calendar). **If that value is a bracketed
+placeholder rather than a URL, reproduce it verbatim** -- it means this lead has no
+HubSpot record so the right calendar is not knowable, and a reviewer will paste it in.
+Never substitute a real link you have seen elsewhere in the thread. Do not invent a
+different link, do
 not write "I'll send over some times" and do not offer to find a slot by hand -- give
 them the link so they can book. You stay the correspondent; the meeting simply lands on
 {owner}'s calendar, and there is no mid-thread introduction.
@@ -618,21 +622,33 @@ def booking_links() -> dict[str, str]:
     return links
 
 
-def booking_link_for(sender: str, links: dict[str, str] | None = None) -> tuple[str, str]:
-    """(sender name, their link). Raises on an unknown or missing sender.
+def booking_link_for(sender: str, links: dict[str, str] | None = None
+                     ) -> tuple[str, str]:
+    """(sender name, their link), or ("", "") when the sender is UNKNOWABLE.
 
-    **A hard error, not a fallback.** Falling back to another sender's calendar would
-    hand a prospect the wrong person's time while looking like it worked, and defaulting
-    to "the first link in the table" would quietly recreate the single-owner behaviour
-    this replaced. A draft that stops for a human is the cheaper failure.
+    **Two different situations, and conflating them cost the whole run once.**
+
+    An EMPTY sender means there is no HubSpot contact for this lead, or it was not
+    enrolled by the engine -- a Smartlead-only lead, a hand-uploaded list, a contact
+    deleted after enrolment. That is an ordinary fact about the data, it is reachable
+    today (the reply-test leads have no HubSpot record at all), and it must NOT raise:
+    there is no per-contact try/except in the reply loop, so one such lead would abort
+    the run and stop every real prospect's reply being processed. Returns ("", "") and
+    the draft goes out without a link for a human to add.
+
+    A NAMED sender with no row is different: somebody added a sender to `senders.md` and
+    forgot `meeting-routing.md`. That is a config gap, it affects every contact that
+    sender ever mails, and it should be loud. Still raises.
+
+    **Neither case ever falls back to another sender's calendar.** Handing a prospect the
+    wrong person's time while looking like it worked is the failure both branches exist
+    to prevent, and defaulting to the first row would quietly restore the single-owner
+    behaviour this replaced.
     """
     links = links if links is not None else booking_links()
     who = (sender or "").strip()
     if not who:
-        raise RuntimeError(
-            "no outbound_sender on this contact, so there is no way to know whose "
-            "booking link belongs in the draft. It is written once at enrolment by "
-            "create_campaign.py; a contact without it was not enrolled by the engine.")
+        return "", ""
     for name, link in links.items():
         if name.lower() == who.lower():
             return name, link
@@ -704,6 +720,12 @@ def classify(client, model: str, thread: list[dict], sender: str = "") -> dict:
     # The SENDER'S link, not a single owner's. Raises on an unknown or missing sender
     # rather than handing the prospect somebody else's calendar -- see booking_link_for.
     owner, link = booking_link_for(sender)
+    if not link:
+        # No HubSpot contact for this lead, so whose calendar to offer is unknowable.
+        # Say so in the draft instead of inventing a link or silently dropping the ask --
+        # a reviewer can paste the right one, and a fabricated URL is unrecoverable.
+        link = "[NO BOOKING LINK — reviewer must add the sender's own]"
+        owner = "the sender"
     prompt = (CLASSIFY_PROMPT
               .replace("{booking_link}", link)
               .replace("{owner}", owner)

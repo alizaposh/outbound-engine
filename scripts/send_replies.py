@@ -45,6 +45,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -197,6 +198,14 @@ def main(argv=None) -> int:
         problems = []
         if not body:
             problems.append("draft_response is empty")
+        # A draft written for a lead with no HubSpot contact carries a bracketed
+        # placeholder where the booking link belongs, because whose calendar to offer is
+        # not knowable (see booking_link_for). A reviewer is meant to paste the right
+        # link in. Approving without doing so would email the literal placeholder to a
+        # prospect, which is the most obviously broken thing this engine could send.
+        if "NO BOOKING LINK" in body or re.search(r"\[[A-Z][A-Z ]{6,}", body):
+            problems.append("draft still contains a bracketed placeholder; replace it "
+                            "with the sender's own booking link before approving")
         if not stats_id:
             problems.append("no smartlead_stats_id (queued before it was captured?)")
         if not campaign:
