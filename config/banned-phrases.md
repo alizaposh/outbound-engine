@@ -86,6 +86,15 @@ Breakup theatrics, §8. Email 3 is one line and closes the loop; it does not per
 - `last attempt`
 - `i'll stop reaching out`
 
+**Un-banned 2026-09-14: `text blasts`.** Banned on 2026-09-11 because `positioning.md`
+mentioned it only inside the Caché Life case study, so copy using it generally looked like
+a customer detail promoted to a product claim. The person running outbound confirmed it is
+a real capability and approved the copy that used it, so the rulebook was incomplete rather
+than the copy wrong. It is now an approved capability in `positioning.md`, with the
+boundary that a workflow contrast is sayable and any figure — time saved, open rate,
+deliverability — is not. Recorded here rather than silently deleted, so the reversal is
+visible if it comes up again.
+
 ## Regex
 
 - `\b(where\s+we\s+(add|help|drive|deliver)|add(s)?\s+the\s+most|biggest\s+(lift|difference|impact|gain)|most\s+valuable|the\s+most\s+value)\b`
@@ -97,17 +106,16 @@ Breakup theatrics, §8. Email 3 is one line and closes the loop; it does not per
   retired-stats rule forbids, and ranking the bundle undercuts a bundle that is approved
   precisely because it is unquantified and undifferentiated. Name the elements neutrally
   or leave them out.
-- `\btext[- ]?blast`
-  **A customer-specific detail stretched into a product claim** (2026-09-11).
-  `positioning.md` mentions Posh text blasts in exactly one place — inside the Caché Life
-  case study, as something that improved *their* marketing conversion. It is not listed
-  as a general capability. Real copy twice framed it as one: "having your guest list and
-  text blasts in the same place as ticketing" to a run club, and "text blasts to your own
-  list built right into the platform". Both passed every other check, because the figures
-  they cited were cleared and nothing else tripped.
-  **If text blasts become an approved capability, delete this entry** — it is banned
-  because it is unapproved, not because it is untrue. Until then, a detail that belongs
-  to one customer's story must not be recycled as a feature for everyone.
+- `\btext[- ]?blasts?\b[^.]{0,70}(\d|\bx\b|\bdouble\b|\btriple\b|\btwice\b)`
+- `(\d|\bx\b|\bdouble\b|\btriple\b|\btwice\b)[^.]{0,70}\btext[- ]?blasts?\b`
+  **A figure attached to text blasts** (2026-09-14). Text blasts became an approved
+  capability the same day, and approving the capability left the numbers unguarded:
+  `check_approved_stats` catches "80%" but not "3x the open rate" or "2 hours a week",
+  both of which passed everything. `positioning.md` allows the workflow contrast —
+  "reaching past attendees takes minutes instead of an afternoon of exports" — and no
+  figure: no time saving, no multiplier, no open or deliverability rate. Same rule as the
+  retired marketplace and conversion stats. **Both directions are needed** because the
+  number can precede or follow the phrase.
 - `marketplace[^.]{0,40}\b(automatically|automatic)\b`
   **Outcome promise by implication** (2026-09-11). Real copy: "The marketplace brings new
   attendees to events automatically, which is usually where organizers see the biggest

@@ -34,6 +34,23 @@ Primary problems we solve:
 > marketplace share, conversion, or any other performance claim. Describe the advantages
 > qualitatively. Customer case studies below are a separate approved category.
 
+- **Owned audience and text blasts (approved 2026-09-14):** the organizer's guest list
+  and text blasts live in the same place as ticketing, so reaching past attendees does
+  not mean exporting a list and working it by hand. They own the relationship with people
+  who came before.
+  - **Previously banned, and worth knowing why.** Text blasts appeared in this file only
+    *inside* the Caché Life case study, as something that improved *their* marketing
+    conversion. Copy that framed it as a general capability therefore looked like a
+    customer-specific detail being recycled into a product claim — the same shape as a
+    fabrication — and it was banned on 2026-09-11 with a note saying "banned because it
+    is unapproved, not because it is untrue." Confirmed a real capability by the person
+    running outbound on 2026-09-14, so the rulebook was the thing that was wrong.
+  - **A workflow contrast is allowed; a figure is not.** "Reaching past attendees takes
+    minutes instead of an afternoon of exports" describes *their current manual process*
+    and is fine. A time saving, a percentage, a deliverability or open-rate claim for
+    text blasts is not, and falls under the retired-stats rule above.
+  - **Describes our own product only.** This must never become a comparison to what
+    another platform does or does not offer.
 - **Marketplace distribution:** events reach attendees already browsing the Posh
   marketplace, which is organic demand the organizer didn't have to source. **No share
   or volume figure** attaches to this.
