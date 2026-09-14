@@ -296,3 +296,29 @@ acknowledged is not re-acknowledged every morning.
 Intake runs generation, which is slow and costs model calls. Run it by hand a few times
 first, confirm the replies read well to a rep, then add it to the morning slot — the same
 graduation pattern the write jobs used.
+
+## Campaign naming: `<Requester>-<date>` (changed 2026-09-14)
+
+Campaigns are named the same way the review tabs are, e.g. **`Aliza-2026-09-14`**, so a
+live campaign in Smartlead and the Google Sheet tab holding the copy that was approved
+for it carry the same name. Tying the two together previously meant matching a list id
+against a timestamped tab by hand.
+
+    --requester "Aliza Mayer"   ->  Aliza-2026-09-14
+    (omitted)                   ->  2026-09_list1914_ticketing-switch
+
+The requester comes from the Slack form's **"Your name"** field, the same source as the
+tab name. Omitting it keeps the old `<month>_<audience>_<usecase>` shape, which is right
+for a hand-run campaign with no Slack request behind it — a rep's name on a campaign
+nobody requested would be misleading.
+
+**`--audience` and `--usecase` are still required.** They now go into the approval note
+rather than the name, because "what was this for" belongs with the approval record now
+that the name answers "whose request, and when".
+
+**A same-day second campaign from the same rep gets `-2`**, matching the tab suffix rule.
+Smartlead does not enforce unique names, so without this two campaigns would be
+indistinguishable in the UI and in the weekly report.
+
+*Campaign 3955179 was renamed from `2026-09_list1914_ticketing-switch` to
+`Aliza-2026-09-14` when this landed, so the convention is not split across campaigns.*

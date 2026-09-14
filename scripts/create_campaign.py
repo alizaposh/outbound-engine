@@ -350,6 +350,11 @@ def main(argv=None) -> int:
                     help="output of scripts/run_generation.py, after human approval")
     ap.add_argument("--audience", help="e.g. ra-premium")
     ap.add_argument("--usecase", help="e.g. switch")
+    ap.add_argument("--requester",
+                    help="first name of the rep who requested this, from the Slack "
+                         "form's 'Your name' field. Names the campaign to match its "
+                         "review tab, e.g. Aliza-2026-09-14. Omitted -> the old "
+                         "<month>_<audience>_<usecase> shape.")
     ap.add_argument("--mailboxes",
                     help="comma-separated sending mailboxes, all must be in config/senders.md")
     ap.add_argument("--approved-by",
@@ -381,7 +386,8 @@ def main(argv=None) -> int:
         n_rows = sum(1 for _ in csv.DictReader(a.csv.open(encoding="utf-8"))) \
             if a.csv.exists() else 0
         a.approval_note = (f"reviewed {n_rows} draft(s) in {a.csv.name} on "
-                           f"{dt.date.today().isoformat()}")
+                           f"{dt.date.today().isoformat()}; audience={a.audience} "
+                           f"usecase={a.usecase}")
     needed = [n for n, v in (("--csv", a.csv), ("--audience", a.audience),
                              ("--usecase", a.usecase), ("--mailboxes", a.mailboxes),
                              ("--approved-by", a.approved_by),
@@ -426,7 +432,49 @@ def main(argv=None) -> int:
             f"the copy is signed {sender!r} but these mailboxes belong to someone else: "
             f"{ {m: sender_map[m] for m in wrong} }. A mismatch misrepresents the sender.")
 
-    name = (f"{dt.date.today():%Y-%m}_{a.audience}_{a.usecase}")
+    # CAMPAIGN NAME MATCHES THE REVIEW TAB (changed 2026-09-14).
+    #
+    # Was "2026-09_list1914_ticketing-switch". Now "Aliza-2026-09-14", the same
+    # convention `slack_intake` uses for the Google Sheet tab, so a campaign in Smartlead
+    # and the review it came from carry the same name. Tying a live campaign back to the
+    # copy that was approved for it previously meant matching a list id against a
+    # timestamped tab by hand.
+    #
+    # --audience and --usecase are still required and still recorded: they go in the
+    # campaign's approval note, which is where the "what was this for" question belongs
+    # now that the name answers "whose request, and when".
+    #
+    # A same-day second campaign from the same rep gets "-2", matching the tab suffix
+    # rule. Smartlead does not enforce unique names, so without this two campaigns would
+    # be indistinguishable in the UI and in the weekly report.
+    if a.requester:
+        who = re.sub(r"[^A-Za-z0-9]", "", a.requester.split()[0]).title()
+        base = f"{who}-{dt.date.today().isoformat()}"
+        # A local client: the module-level `sl` is not built until later in this
+        # function, and using it here would be a NameError that compile() cannot see --
+        # it only resolves when this branch runs. Caught before shipping, but only by
+        # checking the line numbers.
+        try:
+            # `call`, not a `campaigns()` helper -- this class has only the generic
+            # method. An earlier version invented `.campaigns()` and the AttributeError
+            # was swallowed by the except below, so the collision check silently never
+            # ran while appearing to work.
+            listed = Smartlead(api_key()).call("GET", "/campaigns") or []
+            existing = {c.get("name") for c in listed}
+        except Exception as e:
+            # Never fail creation over a name lookup. A collision is visible in the UI
+            # and in the weekly report, which is recoverable; a failed creation after
+            # copy approval is not.
+            print(f"  note: could not list existing campaign names ({type(e).__name__}); "
+                  f"not checking for a same-day duplicate")
+            existing = set()
+        name, n = base, 2
+        while name in existing:
+            name, n = f"{base}-{n}", n + 1
+    else:
+        # No requester (a hand-run campaign with no Slack request behind it). Keep the
+        # old shape rather than inventing a name that looks like a rep's.
+        name = f"{dt.date.today():%Y-%m}_{a.audience}_{a.usecase}"
     delays = list(cfg.get("seq_delay_days", [0, 3, 4]))
     delay_override = ([int(x) for x in a.delays.split(",")] if a.delays else None)
     if delay_override:
