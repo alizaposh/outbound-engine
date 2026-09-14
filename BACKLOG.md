@@ -1,3 +1,58 @@
+## Validation failures are retried, not dropped — BUILT 2026-09-14
+
+Aliza: reps curate these lists and expect the people on them reached, so dropping a
+contact because its copy failed validation is the wrong default.
+
+Before this a FAIL was terminal. The row was stamped FAIL, `create_campaign.py` refused
+the batch (guarantee 3), and the only ways forward were `--skip-failed` — dropping the
+contact — or a hand edit. Across three 36-contact runs the FAIL count was 1, 1 and 0, a
+**different contact each time**, so curated prospects were being lost to a phrasing
+problem the model could fix if asked.
+
+**Now up to `VALIDATION_ATTEMPTS` (3) generate+validate rounds per contact.** The findings
+are fed back verbatim — the exact banned phrase, the word count against its target, the
+missing beat. That specificity is the point: without it a retry is the same prompt with
+different dice, and the same phrase is as likely to reappear.
+
+The retry prompt says to fix exactly those points and change nothing else, and
+**explicitly not to substitute a different claim to route around the problem** — that is
+precisely how "text blasts" entered the copy in the first place.
+
+Only FAIL retries. WARNs are advisory and retrying them would triple the token spend
+chasing an opener repetition nobody would notice.
+
+**`validation_rounds` is written to the CSV**, because a row that passed on attempt 3
+looks identical to one that passed first time. It is the only way to see the mechanism
+working in production.
+
+### Proven by forcing a failure, since the real batch had none
+
+The full 36 came back **0 FAIL with every contact at `rounds=1`** — good for the batch,
+but it left the retry path unexercised. So `circling back` was temporarily added to
+`banned-phrases.md` (backed up and reverted in the same command) to guarantee a failure:
+
+    Meklit   shape=1C/2A/3B   final=PASS   rounds=2
+    Reese    shape=1C/2A/3C   final=PASS   rounds=2
+
+The retry fired, the model reworded that clause, and the second attempt passed.
+
+*Took two tries to test.* The first attempt used contacts drawing shapes 2B/2C, which
+open "Following up on this one" and never say "circling back" — nothing failed, which
+looked like the retry not working. Only 2A opens with that phrase. **A negative result
+from a test that could not have triggered the thing it was testing is worth nothing**,
+and that is easy to miss when the output says PASS.
+
+### The residual case, stated accurately
+
+A contact exhausting all three rounds falls back to committed static copy, and
+`create_campaign.py` refuses `GENERATION_FAILED_FALLBACK` rows exactly as it refuses
+FAILs. So such a contact still would not enrol without a human — which is correct, since
+generic committed copy should not silently go to a curated prospect under a rep's name.
+
+**"No contact is ever dropped" is therefore not quite true.** The accurate claim is that
+failures should now be rare enough to handle one at a time rather than systematically,
+and a contact that exhausts three rounds is a real signal worth looking at.
+
 # Backlog
 
 Deferred work, with the trigger that unblocks each item. Nothing here is in v1 scope
