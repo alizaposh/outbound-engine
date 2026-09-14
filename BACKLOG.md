@@ -1,3 +1,44 @@
+## Campaign for Brooke's and Zach's mailboxes — NOT STARTED (decided 2026-09-14)
+
+**Trigger:** campaign 3955179 (`Aliza-2026-09-14`, 36 leads on Carl's 4 boxes) has
+demonstrably worked. Concretely, all of:
+
+1. Email 1 landed in inbox, not spam, on a spot check of a few recipients.
+2. The unsubscribe link **rendered** on a real send — a test send shows it
+   non-clickable by design, so only a real one proves it.
+3. Email 1 rendered as paragraphs, not one block. Bodies are converted to HTML at
+   creation and the first real send is the only proof.
+4. No bounce spike, and reputation on Carl's 4 boxes still ~100%.
+5. Any replies reached the Replies queue with a sane intent.
+
+**Why it is worth doing.** Brooke's and Zach's 8 mailboxes have been warming for weeks
+at 99-100% reputation and have **never sent a real email**. A box that has only ever seen
+warmup traffic and then starts carrying real cold mail at volume is a sharper jump than
+one that has been ramping. Giving them a small real campaign sooner is gentler than a
+cold start later, when the volume would matter more.
+
+**What it requires, and the part that is untested.** One sender per campaign is a hard
+rule, so this is a **separate campaign per sender** with copy regenerated under that
+sender — `outbound_sender` is write-once per contact, so it cannot be re-pointed. Both
+senders are ready in config: `senders.md` maps all 8 boxes, neither is a placeholder, and
+each has two approved intro lines.
+
+**The genuinely new path is sender identity in generated copy.** Every campaign so far
+has been Carl. Generating as Brooke or Zach exercises `resolve_sender_intro` in
+production for the first time since the bug it was written for: a 34-contact run once
+signed "Carl" while the body said "I'm Brooke" in **18 of 34 emails**. The function now
+asserts every variant names its own sender, so the check exists — it has just never run
+for real. **Verify the sign-off name and the intro line agree on every row** of the first
+Brooke or Zach batch before approving it.
+
+Note Zach's intros differ on purpose: he is the SDR and meeting owner, so "I help
+organizers get set up on Posh" is his, and meetings book with him regardless of which
+persona sent the email (`config/meeting-routing.md`).
+
+*Needs a fresh HubSpot list, or a split of one — list 1914's 36 are now enrolled under
+Carl and gate 10 (sender continuity) will soft-exclude them from another sender's
+campaign, which is the rule working.*
+
 ## Validation failures are retried, not dropped — BUILT 2026-09-14
 
 Aliza: reps curate these lists and expect the people on them reached, so dropping a
