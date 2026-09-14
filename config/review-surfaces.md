@@ -226,7 +226,7 @@ The parser accepts "Your name", "Requested by", "Name", "Rep", "Requester" or
 | `first_name`, `last_name`, `email` | engine |
 | `message_1_subject` | engine — the subject for the WHOLE sequence |
 | `message_1_body`, `message_2_body`, `message_3_body` | engine |
-| `Approved` | **human** — `Y` builds the campaign; anything else does not |
+| `Approved` | **human** — a strict `Y`/`N` dropdown. `Y` builds the campaign |
 | `Ranking (X/5)` | **human** |
 | `Feedback` | **human** |
 
@@ -251,7 +251,13 @@ creates.
 
 ### The `Approved` column is the trigger (added 2026-09-14)
 
-Writing **`Y`** on a row marks that contact's copy approved. `scripts/build_approved.py`
+Selecting **`Y`** on a row marks that contact's copy approved. The column is a
+**strict `Y`/`N` dropdown**, matching how `decision` works on the reply queue.
+
+**The strictness is the point, not the dropdown.** A free-text approval column accepts
+"Yes " with a trailing space, "yep", "APPROVE" — none of which the builder recognises. A
+reviewer would mark a row approved, watch nothing happen, and have no way to see why.
+Rejecting the value at entry makes that impossible rather than merely unlikely. `scripts/build_approved.py`
 reads the tab in the morning heartbeat and creates a DRAFTED campaign from the approved
 rows.
 

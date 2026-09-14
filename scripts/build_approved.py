@@ -50,6 +50,11 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 PY = sys.executable
 
 APPROVED_COL = "Approved"
+# The dropdown offers exactly Y and N (export_review.APPROVED_CHOICES) and rejects
+# anything else, so "y" is the only value that can mean approved. The synonyms are kept
+# anyway, for two reasons: a tab created before the dropdown existed has a free-text
+# column, and a human pasting a range can still bypass validation in Sheets. Accepting
+# an unambiguous "yes" costs nothing; the dropdown is what makes it rare.
 YES = {"y", "yes", "approved", "true", "1"}
 # Only tabs the engine created. Test1..Test12 are historical copy reviews a human made
 # and must never be treated as a campaign waiting to be built.

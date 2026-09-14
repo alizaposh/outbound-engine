@@ -48,7 +48,15 @@ SHEET_COLUMNS_REFERENCE = [
     "message_1_subject", "message_1_body", "message_2_subject", "message_2_body",
     "message_3_subject", "message_3_body", "Ranking (X/5)", "Feedback",
 ]
-HUMAN_COLUMNS = ("Ranking (X/5)", "Feedback")
+HUMAN_COLUMNS = ("Approved", "Ranking (X/5)", "Feedback")
+
+# The Approved dropdown. A dropdown rather than a free-text field so the value is always
+# one the engine recognises: a typo ("Yes " with a space, "yep", "APPROVE") in a
+# write-in column means a row a human believes is approved that build_approved.py will
+# silently skip. `strict` rejects anything off the list, so that cannot happen.
+#
+# "Y" first because it is the default position in the dropdown and the one used most.
+APPROVED_CHOICES = ["Y", "N"]
 SELLER_COLUMN = "Seller"
 
 # Always empty since emails 2 and 3 became threaded replies (they inherit the thread
@@ -99,6 +107,41 @@ def load_config(path: pathlib.Path = CONFIG) -> dict:
         if not cfg.get(req):
             raise RuntimeError(f"{path}: {req} is missing or empty")
     return cfg
+
+
+
+def set_approved_validation(svc, sheet_id: str, tab: str) -> None:
+    """Make the Approved column a strict Y/N dropdown, data rows only.
+
+    Mirrors `review_queue.set_decision_validation`. **`strict` is the point, not the
+    dropdown.** A free-text approval column accepts "Yes ", "yep", "APPROVED" and a stray
+    space, none of which `build_approved.py` recognises — so a reviewer would mark a row
+    approved, watch nothing happen, and have no way to see why. Rejecting the value at
+    entry makes that impossible rather than merely unlikely.
+
+    Header row excluded: row 1 is the contract with the exporter and is never validated.
+    """
+    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute(
+        num_retries=rq.SHEETS_RETRIES)
+    gid = next((s["properties"]["sheetId"] for s in meta["sheets"]
+                if s["properties"]["title"] == tab), None)
+    if gid is None:
+        raise RuntimeError(f"tab {tab!r} not found when setting validation")
+    hdr = (svc.spreadsheets().values().get(spreadsheetId=sheet_id, range=f"{tab}!A1:AZ1")
+           .execute(num_retries=rq.SHEETS_RETRIES).get("values") or [[]])[0]
+    if "Approved" not in hdr:
+        return
+    col = hdr.index("Approved")
+    svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests": [
+        {"setDataValidation": {
+            "range": {"sheetId": gid, "startRowIndex": 1,
+                      "startColumnIndex": col, "endColumnIndex": col + 1},
+            "rule": {"condition": {"type": "ONE_OF_LIST",
+                                   "values": [{"userEnteredValue": v}
+                                              for v in APPROVED_CHOICES]},
+                     "strict": True,
+                     "showCustomUi": True}}}]}
+        ).execute(num_retries=rq.SHEETS_RETRIES)
 
 
 def seller_for(mailbox: str) -> str:
@@ -196,6 +239,9 @@ def main(argv=None) -> int:
             ).execute(num_retries=rq.SHEETS_RETRIES)
             created = True
             print(f"created tab {tab!r} with a {len(NEW_TAB_COLUMNS)}-column header")
+            set_approved_validation(svc, sheet_id, tab)
+            print(f"  Approved column is a {'/'.join(APPROVED_CHOICES)} dropdown "
+                  f"(strict: anything else is rejected)")
         except HttpError as e:
             raise rq._explain_http_error(e, sheet_id, who) from None
 
