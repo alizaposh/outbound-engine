@@ -26,6 +26,26 @@ value (enum in `config/hubspot-properties.md`):
 - **`not_now`** — positive or neutral, but explicitly later.
 - **`not_qualified`** — structural non-fit (out of business, doesn't run ticketed events).
 - **`wrong_contact`** — the sender has left, or isn't the right person.
+
+**A `wrong_contact` who volunteered a NEW ROLE gets asked about it (added 2026-09-14).**
+Real reply: *"I no longer work at Chopin. I'm now the Programs and Booking Manager at the
+legendary Churchill's Pub. For the Chopin Foundation you can email info@chopin.org..."*
+
+The draft thanked him and stopped, which is what the rule said — and the rule was written
+for a different situation. *"Ask nothing further"* exists so the engine does not pester a
+stranger for a colleague's contact details. **This person is not a stranger:** he
+disqualified himself for the company we mailed and, unprompted, told us he now runs
+booking somewhere that sells tickets. He is a better prospect than the one we wrote to.
+
+So the draft now congratulates the move and **asks** whether ticketing is something he
+handles there. Ask, never assert — we know nothing about the new company beyond its name,
+so no claim about its events, its size, or what it needs.
+
+The referral rule is unchanged: the replacement addresses he volunteered go in the queue
+row for a human, and the engine still creates no contact.
+
+**A `wrong_contact` who names no new role still stops after the thank-you.** The
+distinction is whether *they* offered the opening.
 - **`asked_to_stop`** — explicit removal / unsubscribe request.
 - **`out_of_office`** — an away/on-leave auto-responder.
 - **`automated_reply`** — any other machine-generated reply.

@@ -31,16 +31,18 @@ Six guarantees:
   6. NEITHER out_of_office NOR automated_reply ADVANCES THE LEAD, and only one resumes.
      Smartlead halts follow-ups on ANY reply and cannot tell a human from a machine, so
      something must unfreeze a lead who never engaged -- but not always us:
-       - **out_of_office: Smartlead resumes it, we do not.** It has its own OOO
-         auto-pause with an auto-restart after N days. Resuming immediately would
-         override an intentional wait and mail someone who is still away, which is the
-         exact thing the pause exists to prevent.
-       - **automated_reply: we resume.** Smartlead's feature is out-of-office
-         specifically, so a ticketing autoresponder or a delivery notice is not covered,
-         and nothing else would ever restart that lead.
-     The residual risk is recorded rather than solved: if Smartlead MISSES an
-     out-of-office and reads it as a real reply, the lead stays frozen and our report is
-     the only signal. See instructions/reply-handling.md.
+       - **out_of_office: WE resume it, on a date.** Corrected 2026-09-09. This said
+         "Smartlead resumes it, we do not" on the belief that Smartlead had its own OOO
+         auto-pause with an auto-restart. No such setting is exposed on the campaign,
+         `stop_lead_settings` is REPLY_TO_AN_EMAIL so ANY reply ends the lead, and seven
+         test replies Smartlead itself labelled out-of-office all landed COMPLETED rather
+         than PAUSED. Left alone, a prospect who was merely on holiday would get email 1
+         and never hear from us again. So the return date is read out of the
+         auto-responder into `outbound_resume_after`, and `scripts/resume_sequences.py`
+         restarts the lead when it arrives. `resume: False` here still means "not now",
+         not "never".
+       - **automated_reply: we resume, immediately.** Nobody is absent, so there is
+         nothing to wait for.
 
 Endpoints were verified against a live throwaway campaign on 2026-08-31. There is no
 "replies since timestamp" endpoint: the path is per-campaign statistics filtered to
@@ -78,10 +80,10 @@ INTENTS = {
     "not_qualified":   {"status": "disqualified", "resume": False, "queue": True},
     "wrong_contact":   {"status": "disqualified", "resume": False, "queue": True},
     "asked_to_stop":   {"status": "opted_out",    "resume": False, "queue": True},
-    # out_of_office does NOT resume as of 2026-09-02: Smartlead has its own OOO
-    # auto-pause with an auto-restart after N days, and resuming immediately would
-    # override an intentional wait and mail someone who is still away. See
-    # instructions/reply-handling.md.
+    # out_of_office does not resume HERE, but it is not abandoned: reply_check writes
+    # outbound_resume_after and scripts/resume_sequences.py restarts the lead on that
+    # date. The earlier note claimed Smartlead had its own OOO auto-restart to defer to;
+    # it does not -- see guarantee 6.
     "out_of_office":   {"status": None,           "resume": False, "queue": False},
     # automated_reply STILL resumes. Smartlead's feature is specifically out-of-office,
     # so a non-away machine reply -- a ticketing autoresponder, a delivery notice -- is
@@ -542,9 +544,20 @@ save. What each one says (from instructions/reply-handling.md):
                            thing".
   asked_to_stop         -> one line confirming they are removed. Nothing else, ever.
   not_qualified         -> short and friendly, no pitch.
-  wrong_contact         -> thank them, and ask nothing further of them. Do not ask them
-                           to forward it or for the new person's details; a human decides
-                           what to do with a referral.
+  wrong_contact         -> thank them, and ask nothing further ABOUT THE OLD COMPANY.
+                           Do not ask them to forward it or for the replacement's
+                           details; a human decides what to do with a referral.
+                           **BUT: if they volunteered a NEW ROLE somewhere else, ask
+                           about THAT.** Someone who writes "I've moved to X, I'm now
+                           their booking manager" has disqualified themselves for the
+                           company we mailed and self-identified as a prospect at
+                           another. They are not a stranger being pestered -- they chose
+                           to tell us. One line: congratulate the move, then ASK whether
+                           ticketing is something they handle there. Ask, never assert:
+                           we know nothing about the new company beyond its name, so no
+                           claim about its events, size, or what it needs.
+                           If they named no new role, the first rule stands and the draft
+                           stops after the thank-you.
 
 No link on any intent except interested and question.
 
