@@ -370,6 +370,18 @@ def main(argv=None) -> int:
 
     if a.verify:
         return verify_campaign(Smartlead(api_key()), a.verify, cfg, repair=a.repair)
+    # --approval-note defaults to the facts of THIS run, so the approver is not composing
+    # a sentence per campaign (2026-09-14). Most of what makes a note useful later is
+    # derivable: which CSV was reviewed, how many rows, and when. WHO approved is not
+    # derivable and stays required.
+    #
+    # It is a default, not a replacement: pass --approval-note to say something the facts
+    # do not carry ("copy reviewed with the SDR", "approved for a 10-lead test batch").
+    if a.approved_by and not a.approval_note and a.csv:
+        n_rows = sum(1 for _ in csv.DictReader(a.csv.open(encoding="utf-8"))) \
+            if a.csv.exists() else 0
+        a.approval_note = (f"reviewed {n_rows} draft(s) in {a.csv.name} on "
+                           f"{dt.date.today().isoformat()}")
     needed = [n for n, v in (("--csv", a.csv), ("--audience", a.audience),
                              ("--usecase", a.usecase), ("--mailboxes", a.mailboxes),
                              ("--approved-by", a.approved_by),

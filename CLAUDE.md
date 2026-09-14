@@ -26,6 +26,36 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 1. **Never launch or send anything without explicit human approval.** In v1, no
    campaign goes live without a recorded approval in Slack. No reply is auto-sent
    outside the categories explicitly allowed in `instructions/reply-handling.md`.
+
+   **Who approves: the outbound owner, NOT the requesting rep** (decided 2026-09-14).
+   Reps submit a list and get copy back; they are not copy reviewers, and making each
+   one read ~36 drafts before their own campaign runs would be a bottleneck nobody asked
+   for. One approver also means one consistent standard, which is what caught the claim
+   problems this engine has actually produced. `--approved-by` on
+   `scripts/create_campaign.py` carries that name onto the Smartlead campaign, and
+   `--approval-note` defaults to the facts of the run (which CSV, how many drafts, what
+   date) so approving is a skim and a reply, not an essay.
+
+   **This is a stage, not the destination. The intent is a fully automated process once
+   the copy is proven out.** Auto-approval of a clean run is the goal; it is not safe
+   *yet*, and the reason is specific rather than cautious:
+
+   > **Every claim problem found so far was found by a human reading the copy, not by a
+   > check.** "The marketplace brings attendees automatically", "the marketing side is
+   > where we add the most", the text-blast framing — each was spotted in review, and a
+   > machine check was added *afterwards*. The validator is retrospective: it prevents
+   > recurrence of failures already seen and cannot catch novel drift. Auto-approving
+   > clean runs today would have shipped every one of those, because they all passed
+   > validation at the time.
+
+   **The exit criterion, so this is a decision and not a habit:** after **five
+   consecutive campaigns** where the owner's review finds nothing the checks had not
+   already flagged, the checks have demonstrably caught up to human judgement on the
+   copy as it currently stands, and auto-approving a run with **0 FAIL and 0 WARN** is
+   defensible. Runs with any finding keep going to a human regardless. Log each review
+   outcome in `BACKLOG.md` so the count is evidence rather than a feeling, and note that
+   a substantial change to the copy spec resets it — new copy means new failure modes the
+   checks have not seen.
    **A scheduled job delivering a reply a human marked `Approve` is not auto-sending**
    — a person read that exact text and chose to send it; only the delivery is
    automated. The `auto_send_intents` allowlist, which *would* send with no human, is
