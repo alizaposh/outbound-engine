@@ -88,6 +88,11 @@ NEW_TAB_COLUMNS = [
     # lived in a Slack message and the campaign got built because someone remembered to
     # run a command -- a step that can be forgotten is not a gate.
     "Approved", "Ranking (X/5)", "Feedback",
+    # Stamped by build_approved.py with the campaign a row was built into. EMPTY means
+    # "approved but not yet built", which is what makes per-row dedup possible: a tab
+    # can be approved in batches and each batch gets its own campaign, instead of the
+    # second batch being silently skipped because the tab already had one.
+    "Built into",
 ]
 
 

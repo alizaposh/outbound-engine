@@ -229,6 +229,7 @@ The parser accepts "Your name", "Requested by", "Name", "Rep", "Requester" or
 | `Approved` | **human** — a strict `Y`/`N` dropdown. `Y` builds the campaign |
 | `Ranking (X/5)` | **human** |
 | `Feedback` | **human** |
+| `Built into` | engine — the campaign this row was built into. Empty means approved but not yet built |
 
 Emails 2 and 3 have no subject column because they send with `subject: ""` and thread as
 "Re: ...".
@@ -271,6 +272,21 @@ the tab, not from the generated CSV on disk. Before this, `create_campaign.py --
 the CSV only, so a rep who fixed a line in the sheet would have watched the original go
 to Smartlead — the same failure `send_replies` guarantee 3 exists to prevent, one stage
 earlier. Edit the sheet and the edit is what sends.
+
+**Approval reaches a campaign at the NEXT heartbeat, not the next morning.**
+`build_approved` runs in all three slots: approve in the morning and midday builds it,
+approve at midday and the afternoon does, approve in the evening and the morning does.
+
+**That cadence is only safe because the dedup is per ROW.** Each built row is stamped with
+its campaign name in `Built into` and never offered again. A per-tab check would have
+broken here: approve 10 rows, let midday build them, approve 20 more, and a tab-level
+"already has a campaign" test skips the tab — orphaning those 20 silently. Per-row means
+the second batch becomes its own campaign (`Tab-b2`), which is also how a reviewer working
+through a long list across sittings would expect it to behave.
+
+**Rows are stamped only AFTER the campaign exists.** Stamping first would mark rows built
+into a campaign that then failed to create, and nothing would ever retry them — the same
+ordering reason `send_replies` writes `sending` before its POST but `sent` after.
 
 **Partial approval is allowed and is the point.** Approve 30 of 36 and the campaign
 carries 30; the other 6 stay eligible for a later one. A single bad draft no longer

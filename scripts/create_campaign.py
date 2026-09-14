@@ -359,6 +359,11 @@ def main(argv=None) -> int:
                     help="output of scripts/run_generation.py, after human approval")
     ap.add_argument("--audience", help="e.g. ra-premium")
     ap.add_argument("--usecase", help="e.g. switch")
+    ap.add_argument("--campaign-name",
+                    help="exact campaign name, overriding the derived one. Used by "
+                         "build_approved.py, which needs a batch suffix the naming code "
+                         "here cannot know about -- a second approved batch from one "
+                         "review tab must not collide with the first.")
     ap.add_argument("--requester",
                     help="first name of the rep who requested this, from the Slack "
                          "form's 'Your name' field. Names the campaign to match its "
@@ -456,7 +461,9 @@ def main(argv=None) -> int:
     # A same-day second campaign from the same rep gets "-2", matching the tab suffix
     # rule. Smartlead does not enforce unique names, so without this two campaigns would
     # be indistinguishable in the UI and in the weekly report.
-    if a.requester:
+    if a.campaign_name:
+        name = a.campaign_name
+    elif a.requester:
         who = re.sub(r"[^A-Za-z0-9]", "", a.requester.split()[0]).title()
         base = f"{who}-{dt.date.today().isoformat()}"
         # A local client: the module-level `sl` is not built until later in this

@@ -5,8 +5,8 @@ Invoked by the Claude Desktop scheduled task described in
 `instructions/scheduled-tasks.md`. Business-hours cadence, weekdays.
 
     slot=morning   -> approved replies, approved campaigns, reply check + the syncs
-    slot=midday    -> reply check
-    slot=afternoon -> reply check
+    slot=midday    -> approved campaigns + reply check
+    slot=afternoon -> approved campaigns + reply check
     slot=weekly    -> the campaign review (Mondays, its own routine)
 
 **The heartbeat is the point, and "every time" is what makes it one.** A report that
@@ -81,8 +81,15 @@ PY = sys.executable
 SLOTS = {
     "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
                    "sync_bounces", "close_sequences", "resume_sequences", "sync_sends"],
-    "midday":    ["reply_check"],
-    "afternoon": ["reply_check"],
+    # `build_approved` runs in ALL THREE slots (2026-09-14). An approval should reach a
+    # DRAFTED campaign at the next heartbeat rather than waiting for tomorrow morning:
+    # approve in the morning and midday builds it, approve at midday and the afternoon
+    # does, approve in the evening and the morning does. Safe to run repeatedly because
+    # its dedup is PER ROW -- a built row carries its campaign name in `Built into` and
+    # is never offered again -- so a second approved batch becomes its own campaign
+    # instead of being skipped.
+    "midday":    ["build_approved", "reply_check"],
+    "afternoon": ["build_approved", "reply_check"],
     # Mondays only, via its own routine. Separate from the daily slots because it is a
     # REPORT, not a job that keeps state correct -- running it daily would append six
     # near-identical history rows a week and bury the weekly signal it exists to show.
