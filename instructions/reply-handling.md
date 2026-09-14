@@ -70,8 +70,8 @@ are no longer in the enum, and **nothing routes to either**:
 
 | Intent | outbound_status write | outbound_suppressed | Smartlead sequence | Action |
 |---|---|---|---|---|
-| interested | replied | no | stop | Answer (send any materials asked for) **in the persona's voice**; share the **meeting owner's** booking link from `config/meeting-routing.md` |
-| question | replied | no | stop | Answer the question, then share the **meeting owner's** booking link (`config/meeting-routing.md`) — persona stays the correspondent |
+| interested | replied | no | stop | Answer (send any materials asked for) **in the persona's voice**; share **the sender's own** booking link from `config/meeting-routing.md` |
+| question | replied | no | stop | Answer the question, then share **the sender's own** booking link (`config/meeting-routing.md`) — the meeting lands on their calendar |
 | objection | replied | no | stop | Acknowledge, leave the door open, **no call and no link** — see below |
 | not_now | replied | no | stop | Acknowledge; **set `outbound_recycle_after`** (see recycle windows below); nurture later |
 | not_interested | replied | no | stop | Polite close; **set `outbound_recycle_after`**; stays recyclable. Flag firm/definitive rejections for optional human review — a human may manually suppress, automation does not |

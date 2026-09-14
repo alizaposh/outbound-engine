@@ -369,8 +369,12 @@ class HubSpotWriter:
         d = self._call("POST", "/crm/v3/objects/contacts/search",
                        {"filterGroups": [{"filters": [
                            {"propertyName": "email", "operator": "EQ", "value": email}]}],
+                        # outbound_sender decides WHOSE booking link goes in the draft.
+                        # Written once at enrolment, so a reply months later still
+                        # resolves to the person who actually wrote to them.
                         "properties": ["email", "outbound_status",
-                                       "outbound_recycle_after"], "limit": 1})
+                                       "outbound_recycle_after",
+                                       "outbound_sender"], "limit": 1})
         res = d.get("results") or []
         if not res:
             return None, {}
@@ -585,27 +589,57 @@ THREAD (oldest first):
 MEETING_ROUTING = ROOT / "config" / "meeting-routing.md"
 
 
-def meeting_routing() -> tuple[str, str]:
-    """(owner name, booking link) from config/meeting-routing.md.
+def booking_links() -> dict[str, str]:
+    """{sender first name: booking link} from config/meeting-routing.md.
 
-    Parsed, never restated. `meeting-routing.md` exists so changing the meeting owner is
-    a config edit in one place, and hardcoding the link here would defeat that.
+    Parsed, never restated. Changing a link, or adding a sender, is a config edit in one
+    place; hardcoding here would defeat that.
 
-    This closes a real gap: the action map REQUIRES `interested` and `question` drafts to
-    share the owner's booking link, and the classifier was never told the link existed.
-    Drafts promised to "send over a few time slots" instead, which is a human doing it by
-    hand -- and getting the meeting booked is the entire point of an interested reply.
+    **One link per sender as of 2026-09-14.** It used to be a single owner: every meeting
+    routed to Zach because he was the SDR and the only person taking them. He was promoted
+    to AE, so each sender takes their own. A prospect corresponding with Carl should not
+    be handed Zach's calendar.
     """
     text = MEETING_ROUTING.read_text(encoding="utf-8")
-    link = re.search(r"\|\s*Booking link\s*\|\s*`?(https?://\S+?)`?\s*\|", text)
-    owner = re.search(r"\|\s*(?:Owner|Meeting owner|Name)\s*\|\s*`?([^|`]+?)`?\s*\|",
-                      text, re.I)
-    if not link:
+    block = re.search(r"\|\s*Sender\s*\|\s*Booking link\s*\|(.*?)(?=\n\n|\n[^|])",
+                      text, re.S | re.I)
+    links: dict[str, str] = {}
+    if block:
+        for row in block.group(1).splitlines():
+            m = re.match(r"\s*\|\s*([A-Za-z][\w .'-]*?)\s*\|\s*`?(https?://\S+?)`?\s*\|",
+                         row)
+            if m and m.group(1).strip().lower() not in ("sender", "---"):
+                links[m.group(1).strip()] = m.group(2)
+    if not links:
         raise RuntimeError(
-            f"no booking link found in {MEETING_ROUTING.name}. Expected a table row "
-            "'| Booking link | <url> |'. Refusing to draft a meeting reply with no link "
+            f"no booking links found in {MEETING_ROUTING.name}. Expected a '| Sender | "
+            "Booking link |' table. Refusing to draft a meeting reply with no link "
             "rather than silently omitting it.")
-    return (owner.group(1).strip() if owner else "the meeting owner"), link.group(1)
+    return links
+
+
+def booking_link_for(sender: str, links: dict[str, str] | None = None) -> tuple[str, str]:
+    """(sender name, their link). Raises on an unknown or missing sender.
+
+    **A hard error, not a fallback.** Falling back to another sender's calendar would
+    hand a prospect the wrong person's time while looking like it worked, and defaulting
+    to "the first link in the table" would quietly recreate the single-owner behaviour
+    this replaced. A draft that stops for a human is the cheaper failure.
+    """
+    links = links if links is not None else booking_links()
+    who = (sender or "").strip()
+    if not who:
+        raise RuntimeError(
+            "no outbound_sender on this contact, so there is no way to know whose "
+            "booking link belongs in the draft. It is written once at enrolment by "
+            "create_campaign.py; a contact without it was not enrolled by the engine.")
+    for name, link in links.items():
+        if name.lower() == who.lower():
+            return name, link
+    raise RuntimeError(
+        f"sender {who!r} has no row in {MEETING_ROUTING.name} (known: "
+        f"{', '.join(sorted(links))}). Add one rather than letting the draft go out with "
+        "somebody else's calendar.")
 
 
 def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
@@ -661,13 +695,15 @@ def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
     return norm, (inbounds[-1] if inbounds else None)
 
 
-def classify(client, model: str, thread: list[dict]) -> dict:
+def classify(client, model: str, thread: list[dict], sender: str = "") -> dict:
     rendered = "\n\n".join(
         f"[{'PROSPECT' if m['inbound'] else 'US'} {m['at']}] {m['subject']}\n{m['body']}"
         for m in thread)
     # The prospect's own words are what get classified, but the whole thread is supplied:
     # reply-handling.md step 3 requires reading the full conversation before acting.
-    owner, link = meeting_routing()
+    # The SENDER'S link, not a single owner's. Raises on an unknown or missing sender
+    # rather than handing the prospect somebody else's calendar -- see booking_link_for.
+    owner, link = booking_link_for(sender)
     prompt = (CLASSIFY_PROMPT
               .replace("{booking_link}", link)
               .replace("{owner}", owner)
@@ -910,7 +946,11 @@ def _self_test() -> int:
                   {"inbound": True, "at": "2026-08-30T09:00:00Z", "subject": "Re: quick one",
                    "body": text}]
         try:
-            return classify(client, model, thread)["intent"]
+            # A real sender is required: booking_link_for refuses an empty one rather
+            # than handing out a default calendar, so the self-test must name someone.
+            # Any sender with a row in meeting-routing.md works -- this exercises
+            # classification, not routing.
+            return classify(client, model, thread, sender="Carl")["intent"]
         except Exception as e:
             return f"ERROR {e}"
 
@@ -1003,7 +1043,13 @@ def main(argv=None) -> int:
                 skipped += 1
                 continue
 
-            res = classify(client, model, messages)
+            # The contact is fetched BEFORE classifying, because the draft needs the
+            # SENDER'S booking link and outbound_sender lives on the contact. It used to
+            # be fetched after, when every meeting routed to one owner and the link was
+            # a constant.
+            cidhs, existing = hs.find_by_email(email) if email else (None, {})
+            res = classify(client, model, messages,
+                           sender=existing.get("outbound_sender", ""))
             intent = res["intent"]
             spec = INTENTS[intent]
             processed += 1
@@ -1016,7 +1062,6 @@ def main(argv=None) -> int:
             if intent == "asked_to_stop":
                 props["outbound_suppressed"] = "true"
                 props["outbound_opt_out_date"] = now.date().isoformat()
-            cidhs, existing = hs.find_by_email(email) if email else (None, {})
             recycle = recycle_date(intent, newest["at"], res.get("named_return_date"),
                                    existing.get("outbound_recycle_after"))
             if recycle:

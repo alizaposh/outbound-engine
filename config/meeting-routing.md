@@ -5,25 +5,48 @@ hardcoding a name.** `instructions/reply-handling.md` drives interested replies 
 meeting; the person and link come from here, so changing the owner is a config edit in
 one place rather than a search across instruction files.
 
-## Meeting owner (single)
+## Booking links, one per sender (changed 2026-09-14)
 
-| Field | Value |
+**A meeting belongs to whoever sent the email.** The sender shares their own link, and
+the booking lands on their calendar.
+
+| Sender | Booking link |
 |---|---|
-| Name | Zach Hickman |
-| Role | SDR |
-| Booking link | `https://meetings.hubspot.com/zach-hickman` |
+| Carl | `https://meetings.hubspot.com/carl-newmark` |
+| Brooke | `https://meetings.hubspot.com/brooke-carrobis` |
+| Zach | `https://meetings.hubspot.com/zach-hickman/partnerships` |
 
-- **One owner in v1.** Every meeting from every sender persona lands with Zach. There
-  is no round-robin and no territory split.
-- **The booking link is a HubSpot meetings link**, so a booking made through it lands
-  natively in HubSpot — which is what lets the native "Date of last meeting booked in
-  meetings tool" property carry the date, per the v1 meeting-tracking decision in
-  `config/hubspot-properties.md`. A non-HubSpot scheduler would break that.
-- **Never paste a booking link into an opener.** Per `config/personas.md`, both
-  personas open reply-based; a scheduling link appears only after the prospect shows
+**This replaced a single owner.** Every meeting used to route to Zach regardless of who
+sent the email, because he was the SDR and the only person taking them. He was promoted
+to AE on 2026-09-14, so he is a correspondent like Carl and Brooke and takes his own
+meetings. **A prospect who has been corresponding with Carl should not be handed Zach's
+calendar** — that was a deliberate handoff while one person owned meetings, and it is
+now just confusing.
+
+- **Which sender is looked up from the CONTACT, not the campaign.** `outbound_sender` is
+  written once at enrolment and never changed, so a reply months later still resolves to
+  the person who actually wrote to them. Using the campaign would break as soon as a
+  contact appeared in two.
+- **Links are HubSpot meetings links**, so a booking lands natively in HubSpot — which is
+  what lets the native "Date of last meeting booked in meetings tool" property carry the
+  date, per `config/hubspot-properties.md`. A non-HubSpot scheduler would break that.
+- **Adding a sender means adding a row here.** A sender with no row is a hard error in
+  `scripts/reply_check.py`: it refuses to draft rather than silently omitting the link or
+  falling back to someone else's calendar. Handing a prospect the wrong person's calendar
+  is worse than a draft that stops for a human.
+- **Never paste a booking link into an opener.** Per `config/personas.md` the cold
+  sequence is reply-based; a scheduling link appears only after the prospect shows
   interest.
 
-## Sender personas vs meeting owner
+## ~~Sender personas vs meeting owner~~ HISTORICAL
+
+> **Superseded 2026-09-14.** This section works through whether a persona-fronted email
+> should hand the meeting to someone else, which was the live question while Zach was the
+> SDR and sole meeting owner. Each sender now takes their own meetings, so there is no
+> handoff to design. Kept because the persona/mailbox reasoning above it is still
+> accurate and the trade-offs are worth not re-deriving.
+
+## Sender personas vs meeting owner (historical)
 
 These are different things and the distinction drives the open question below.
 
@@ -53,7 +76,7 @@ The sending persona stays the correspondent; the meeting belongs to Zach.
   conversation.
 
 What the reply handler does with this: draft the reply in the persona's voice, include
-the meeting owner's booking link from this file, and flag the thread for Zach once the
+the sender's own booking link from this file, and flag the thread for that sender once the
 conversation goes beyond a first reply.
 
 ## Consumers

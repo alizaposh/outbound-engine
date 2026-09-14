@@ -57,14 +57,17 @@ is allowed inside a sender's own lines and nowhere else.
 | Carl       | I'm Carl, I manage partnerships at Posh. |
 | Brooke     | I'm Brooke, I run partnerships at Posh. |
 | Brooke     | I'm Brooke, I manage partnerships at Posh. |
-| Zach       | I'm Zach, I help organizers get set up on Posh. |
+| Zach       | I'm Zach, I run partnerships at Posh. |
 | Zach       | I'm Zach, I manage partnerships at Posh. |
 
 - **It belongs at the OPENING of email 1**, not the end. Placement is set by the voice
   anchor in `instructions/message-generation.md`.
 - One line per sender, used across all campaigns for now.
-- Zach's differs on purpose: he is the SDR and meeting owner, so "I help organizers get
-  set up" fits, while Carl and Brooke are partnerships correspondents.
+- **All three senders now use the same two lines** (changed 2026-09-14). Zach's used to
+  read "I help organizers get set up on Posh", which fit while he was the SDR and the
+  single meeting owner. He was promoted to AE, so he is a partnerships correspondent like
+  Carl and Brooke and introduces himself the same way. Nothing in the copy should still
+  imply he occupies a different role.
 
 ## Rules
 - **The sign-off name must match the mailbox's `From` name.** A signature that
@@ -77,8 +80,10 @@ is allowed inside a sender's own lines and nowhere else.
 - Names are first-name only. The line "Posh" is appended after it automatically, so
   do not include it here.
 - **Which persona sends does not change who takes the meeting.** All three sign their
-  own emails, and every meeting books with Zach regardless
-  (`config/meeting-routing.md`). Carl and Brooke are correspondents, not meeting owners.
+  own emails, and each sender's meetings land on their OWN calendar
+  (`config/meeting-routing.md`). Changed 2026-09-14: meetings used to route to Zach
+  regardless of sender, because he was the SDR and the only person taking them. He was
+  promoted to AE, so all three are correspondents who take their own meetings.
 
 ## Resolved 2026-08-31: when the mailbox is assigned
 The mailbox is assigned at **generation** time (the caller passes `--mailbox`), and
