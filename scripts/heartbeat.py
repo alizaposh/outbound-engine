@@ -5,8 +5,8 @@ Invoked by the Claude Desktop scheduled task described in
 `instructions/scheduled-tasks.md`. Business-hours cadence, weekdays.
 
     slot=morning   -> approved replies, approved campaigns, reply check + the syncs
-    slot=midday    -> approved campaigns + reply check
-    slot=afternoon -> approved campaigns + reply check
+    slot=midday    -> reply check
+    slot=afternoon -> reply check
     slot=weekly    -> the campaign review (Mondays, its own routine)
 
 **The heartbeat is the point, and "every time" is what makes it one.** A report that
@@ -81,15 +81,18 @@ PY = sys.executable
 SLOTS = {
     "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
                    "sync_bounces", "close_sequences", "resume_sequences", "sync_sends"],
-    # `build_approved` runs in ALL THREE slots (2026-09-14). An approval should reach a
-    # DRAFTED campaign at the next heartbeat rather than waiting for tomorrow morning:
-    # approve in the morning and midday builds it, approve at midday and the afternoon
-    # does, approve in the evening and the morning does. Safe to run repeatedly because
-    # its dedup is PER ROW -- a built row carries its campaign name in `Built into` and
-    # is never offered again -- so a second approved batch becomes its own campaign
-    # instead of being skipped.
-    "midday":    ["build_approved", "reply_check"],
-    "afternoon": ["build_approved", "reply_check"],
+    # `build_approved` is MORNING ONLY, by decision on 2026-09-14. It was briefly in all
+    # three slots so an approval reached a campaign within hours; that was reverted
+    # because it produces one campaign PER BATCH, and a reviewer approving a list over a
+    # morning would get two or three campaigns for one list -- each needing its own
+    # unsubscribe toggles in the Smartlead UI, since those have no API.
+    #
+    # One slot a day means one review sitting maps to one campaign per list, which is
+    # what a human actually wants to manage. The cost is that an afternoon approval waits
+    # until the next morning, and that is the right trade: the prospect is not waiting on
+    # hours, and the reviewer is spared duplicate UI work.
+    "midday":    ["reply_check"],
+    "afternoon": ["reply_check"],
     # Mondays only, via its own routine. Separate from the daily slots because it is a
     # REPORT, not a job that keeps state correct -- running it daily would append six
     # near-identical history rows a week and bury the weekly signal it exists to show.

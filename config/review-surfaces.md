@@ -273,16 +273,21 @@ the CSV only, so a rep who fixed a line in the sheet would have watched the orig
 to Smartlead — the same failure `send_replies` guarantee 3 exists to prevent, one stage
 earlier. Edit the sheet and the edit is what sends.
 
-**Approval reaches a campaign at the NEXT heartbeat, not the next morning.**
-`build_approved` runs in all three slots: approve in the morning and midday builds it,
-approve at midday and the afternoon does, approve in the evening and the morning does.
+**Approval is picked up by the MORNING heartbeat**, so one review sitting produces one
+campaign per list. It briefly ran in all three slots so approvals landed within hours;
+that was reverted 2026-09-14, because building per batch means a reviewer working through
+a list over one morning gets two or three campaigns for it — and each campaign needs its
+own unsubscribe toggles in the Smartlead UI, which have no API. An afternoon approval
+waiting until the next morning is the cheaper cost: the prospect is not waiting on hours,
+and nobody repeats UI work.
 
-**That cadence is only safe because the dedup is per ROW.** Each built row is stamped with
-its campaign name in `Built into` and never offered again. A per-tab check would have
-broken here: approve 10 rows, let midday build them, approve 20 more, and a tab-level
-"already has a campaign" test skips the tab — orphaning those 20 silently. Per-row means
-the second batch becomes its own campaign (`Tab-b2`), which is also how a reviewer working
-through a long list across sittings would expect it to behave.
+**Dedup is still per ROW, and that is deliberate even on a daily cadence.** Each built
+row is stamped with its campaign name in `Built into` and never offered again. The
+alternative — a per-tab "this tab already has a campaign" check — **silently orphans**
+any row approved after the first build. Per-row means a late approval becomes its own
+campaign (`Tab-b2`) instead of vanishing: visible and recoverable rather than lost.
+**To get one campaign per list, approve in a single pass** and let one morning run take
+it all.
 
 **Rows are stamped only AFTER the campaign exists.** Stamping first would mark rows built
 into a campaign that then failed to create, and nothing would ever retry them — the same
