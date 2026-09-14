@@ -97,12 +97,19 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
   running `scripts/heartbeat.py`, which posts to Slack on every run so a missed slot is
   visible rather than silent — see `instructions/scheduled-tasks.md`.
 
-**v1 scope caveat — campaign creation is not fully hands-off.** Enabling Smartlead's
-HubSpot activity logging is a per-campaign UI toggle with no API endpoint. Every
-campaign therefore has one mandatory manual step (a human enabling activity logging
-in the Smartlead UI before sends start), gated in instructions/campaign-creation.md.
-This is the single point where v1 requires a human in the Smartlead UI; everything
-else in campaign creation is API-driven.
+**v1 scope caveat — campaign creation is not fully hands-off.** One per-campaign
+setting, **"Optimize Email Delivery" OFF**, has no API endpoint and must be set by a
+human in the Smartlead UI before sends start. It disables HTML and takes the unsubscribe
+link with it, so it is not optional. Gated in instructions/campaign-creation.md.
+
+**Corrected 2026-09-14:** this caveat also named HubSpot activity logging as a mandatory
+manual gate. That was wrong — not manual but **impossible**. Smartlead confirmed
+(2026-09-09) that HubSpot sync cannot be enabled for API-imported leads, which is every
+lead this engine sends, so the instruction asked for something nobody could do.
+`scripts/sync_sends.py` replaces it and runs in the morning heartbeat; verified on
+campaign 3921033, where all 25 contacts carry timeline engagements and a populated "Last
+Contacted". **A gate that cannot be satisfied is worse than no gate**: it stalls a launch
+and invites the reader to assume the campaign is unsafe.
 
 **Deferred (not v1). Do not wire into the live flow:**
 - **Lead qualification.** See `instructions/lead-qualification.DEFERRED.md`. The

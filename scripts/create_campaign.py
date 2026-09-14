@@ -25,7 +25,7 @@ Five guarantees:
      that put the wrong name in 18 of 34 emails once already, one level up. Every lead in
      the CSV must be signed by one sender, and every mailbox passed in must belong to
      them. Run the script once per sender.
-  6. TWO MANUAL UI GATES ARE PRINTED, NOT ASSUMED. HubSpot activity logging and
+  6. ONE MANUAL UI GATE IS PRINTED, NOT ASSUMED. "Optimize Email Delivery" and
      "Optimize Email Delivery" are not reachable by API (verified 2026-08-31: both
      rejected with "is not allowed"), so the run ends by naming them.
 
@@ -226,7 +226,16 @@ def verify_campaign(sl, cid, cfg, repair: bool = False) -> int:
         bad = [b for b in bad if b not in ("track_settings", "stop_lead_settings")]
 
     print("\nCANNOT be checked from the API -- confirm by eye in the UI every time:")
-    print("  - HubSpot activity logging ON")
+    # HubSpot activity logging was listed here as a mandatory gate until 2026-09-14.
+    # It is IMPOSSIBLE, not merely manual: Smartlead support confirmed on 2026-09-09
+    # that HubSpot sync cannot be enabled for API-imported leads, which is every lead
+    # this engine sends. scripts/sync_sends.py was built to replace it and runs in the
+    # morning heartbeat. Telling a human to go and set a toggle that does not exist for
+    # our leads is worse than saying nothing: they cannot comply, and they may conclude
+    # the campaign is unsafe to launch.
+    print("  - HubSpot activity logging: NOT NEEDED, and not possible for API-imported "
+          "leads. scripts/sync_sends.py logs sends and replies to the contact timeline "
+          "instead; log_sends_enabled is true and it runs in the morning heartbeat.")
     print("  - 'Add unsubscribe message in all emails' ON")
     print("  - 'Optimize Email Delivery' OFF")
     if bad:
@@ -644,9 +653,11 @@ def main(argv=None) -> int:
     print(f"""
 NOT LAUNCHED, and not launchable until a human acts. Before starting it:
 
-  1. HubSpot activity logging ON  (campaign's HubSpot settings)
-     No API endpoint exists for this; verified again 2026-08-31. Without it the campaign
-     logs NOTHING to HubSpot, silently, and the reply loop reads HubSpot.
+  1. HubSpot activity logging: NOTHING TO DO. Smartlead cannot sync HubSpot activity
+     for API-imported leads at all (support, 2026-09-09), so this was never a toggle we
+     could set. scripts/sync_sends.py writes sends AND replies to the contact timeline
+     from the morning heartbeat instead -- verified on campaign 3921033, where all 25
+     contacts carry engagements and a populated "Last Contacted".
   2. "Optimize Email Delivery" OFF
      No API endpoint either. It disables HTML and takes the unsubscribe link with it.
   3. Confirm the unsubscribe link renders on the FIRST REAL SEND.

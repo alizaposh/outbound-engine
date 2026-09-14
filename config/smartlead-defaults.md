@@ -115,7 +115,17 @@ Why this is a hard gate and not a nicety: a working opt-out is a legal requireme
 outbound email (CAN-SPAM), and the suppression rules in `config/hubspot-properties.md`
 assume prospects have a way to opt out in the first place.
 
-## HubSpot activity logging (MANDATORY per campaign — MANUAL UI STEP, no API)
+## ~~HubSpot activity logging (MANDATORY per campaign — MANUAL UI STEP)~~ SUPERSEDED
+
+> **This whole section is obsolete, kept only so the reasoning is traceable. Read
+> "BOTH vendor paths are dead" further down instead.** It describes activity logging as a
+> mandatory manual toggle. It is not manual — it is **impossible** for our leads, because
+> Smartlead cannot enable HubSpot sync for API-imported leads and every lead this engine
+> sends is API-imported. `scripts/sync_sends.py` replaces it entirely.
+>
+> Left here because the two facts below — per campaign, UI only — are accurate about
+> Smartlead's feature, and because deleting the section would hide why the engine ever
+> expected a human to do this.
 
 Smartlead's HubSpot activity logging is what makes native "Last Contacted" /
 "Last Activity Date" update and what logs replies onto the contact record. Two

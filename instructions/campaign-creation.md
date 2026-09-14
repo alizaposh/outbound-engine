@@ -36,10 +36,13 @@ different copy. The reasons not to are operational, not technical.
    permanently — and unblending later is not possible, because the campaign id is the
    only link (`outbound_last_campaign_id` on the contact).
 
-**The cost, stated plainly:** two manual UI gates per campaign (HubSpot activity logging
-ON, "Optimize Email Delivery" OFF — neither reachable by API). One campaign per
-submission means a human in the Smartlead UI for every submission. That is the known v1
-caveat in `CLAUDE.md`, and it is the price of all five properties above.
+**The cost, stated plainly:** the unsubscribe settings per campaign — "Add unsubscribe
+message in all emails" ON and "Optimize Email Delivery" OFF, neither reachable by API.
+One campaign per submission therefore means a human in the Smartlead UI for every
+submission. That is the known v1 caveat in `CLAUDE.md`, and it is the price of all five
+properties above. (HubSpot activity logging was listed here as a second gate until
+2026-09-14; it is impossible for API-imported leads and `scripts/sync_sends.py` replaces
+it — see step 3 below.)
 
 **Is there a cap on campaigns?** Not one the API exposes — `/account`, `/subscription`
 and `/user` all 404, and no quota endpoint exists. Campaign count is very unlikely to
@@ -109,13 +112,17 @@ Three details worth keeping in mind:
    `config/smartlead-defaults.md`).
 2. **Configure sending:** schedule/timezone, assigned **warmed** mailboxes, daily
    limit (~30/mailbox/day ceiling), and inter-email delays. All from defaults.
-3. **HubSpot activity logging — STOP and hand off to a human. Manual UI step, no API.**
-   Activity logging is per-campaign and can **only** be toggled in the Smartlead UI
-   (campaign's HubSpot settings); there is no API endpoint for it. A campaign that
-   sends without it logs nothing to HubSpot — silently, with no error. Claude Code
-   cannot complete this step: ask a human to enable it and confirm they have, before
-   any sends start. Full rule + verification gate in the "HubSpot activity logging"
-   section of `config/smartlead-defaults.md`.
+3. **HubSpot activity logging — NOTHING TO DO. Corrected 2026-09-14.**
+   This step used to say "STOP and hand off to a human". **It was asking for something
+   impossible, not merely manual.** Smartlead support confirmed on 2026-09-09 that
+   HubSpot sync *cannot be enabled for leads added by API import*, and every lead this
+   engine sends is API-imported — so there was no toggle for the human to find. The
+   engine's own logging replaced it: `scripts/sync_sends.py` writes sends **and** replies
+   to the contact timeline, runs in the morning heartbeat, and is verified on campaign
+   3921033 where all 25 contacts carry engagements and a populated "Last Contacted".
+   **A gate nobody can satisfy is worse than no gate at all** — it stalls the launch and
+   makes the campaign look unsafe. See "BOTH vendor paths are dead" in
+   `config/smartlead-defaults.md`.
 4. **Unsubscribe settings — MANUAL UI, and compliance-critical.** The body already
    carries Smartlead's real tag, `%unsubscribe-text%` (`UNSUBSCRIBE_TOKEN` in
    `scripts/assemble.py`), but two per-campaign toggles decide whether it renders, and
