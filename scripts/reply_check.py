@@ -614,6 +614,9 @@ def booking_links() -> dict[str, str]:
                          row)
             if m and m.group(1).strip().lower() not in ("sender", "---"):
                 links[m.group(1).strip()] = m.group(2)
+    fb = re.search(r"\*\*Fallback sender:\s*`?([A-Za-z][\w .'-]*?)`?\*\*", text)
+    if fb:
+        links["__fallback__"] = fb.group(1).strip()
     if not links:
         raise RuntimeError(
             f"no booking links found in {MEETING_ROUTING.name}. Expected a '| Sender | "
@@ -646,8 +649,17 @@ def booking_link_for(sender: str, links: dict[str, str] | None = None
     behaviour this replaced.
     """
     links = links if links is not None else booking_links()
+    fallback = links.get("__fallback__", "")
+    links = {k: v for k, v in links.items() if k != "__fallback__"}
     who = (sender or "").strip()
     if not who:
+        # Unknowable sender: no HubSpot contact, so outbound_sender cannot be read. Fall
+        # back rather than draft a reply the prospect cannot book from -- a warm lead who
+        # cannot book is worse than one booking with the fallback owner. The queue row
+        # says the fallback was used so a reviewer can substitute the real link.
+        for name, link in links.items():
+            if name.lower() == fallback.lower():
+                return f"{name} (fallback)", link
         return "", ""
     for name, link in links.items():
         if name.lower() == who.lower():
@@ -721,9 +733,9 @@ def classify(client, model: str, thread: list[dict], sender: str = "") -> dict:
     # rather than handing the prospect somebody else's calendar -- see booking_link_for.
     owner, link = booking_link_for(sender)
     if not link:
-        # No HubSpot contact for this lead, so whose calendar to offer is unknowable.
-        # Say so in the draft instead of inventing a link or silently dropping the ask --
-        # a reviewer can paste the right one, and a fabricated URL is unrecoverable.
+        # Only reachable if meeting-routing.md names no fallback sender, or names one
+        # with no link row. Keep the honest placeholder for that case rather than
+        # inventing a URL; send_replies refuses to send it.
         link = "[NO BOOKING LINK — reviewer must add the sender's own]"
         owner = "the sender"
     prompt = (CLASSIFY_PROMPT
@@ -738,6 +750,10 @@ def classify(client, model: str, thread: list[dict], sender: str = "") -> dict:
         if raw.lower().startswith("json"):
             raw = raw[4:]
     out = json.loads(raw.strip())
+    # Recorded so the queue row can tell a reviewer the link is NOT the sender's own.
+    # Without it the draft looks identical to a correctly-routed one.
+    if "(fallback)" in owner:
+        out["_link_fallback"] = owner.replace(" (fallback)", "")
     if out.get("intent") not in INTENTS:
         raise RuntimeError(f"classifier returned an unknown intent: {out.get('intent')!r}")
     return out
@@ -1138,6 +1154,15 @@ def main(argv=None) -> int:
                     "draft_response": res.get("draft_response", ""),
                     "smartlead_message_id": newest["id"],
                     "smartlead_stats_id": newest.get("stats_id", "")}
+                # Say so when the booking link is NOT the sender's own. The draft looks
+                # identical either way, so without this a reviewer has no way to know
+                # the prospect is being pointed at the fallback calendar.
+                if res.get("_link_fallback"):
+                    payload["review_reason"] = (
+                        f"{rq.review_reason_for(intent)} — booking link is "
+                        f"{res['_link_fallback']}'s (FALLBACK: this lead has no HubSpot "
+                        f"contact, so the real sender is unknown). Substitute the "
+                        f"sender's own link if you know it.")
                 if a.apply:
                     r = rq.append_reply(payload, service=svc, cfg=cfg, store=store)
                     print(f"      queue: {'row ' + str(r['row']) if r['appended'] else r['skipped']}")

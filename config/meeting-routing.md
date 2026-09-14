@@ -16,6 +16,21 @@ the booking lands on their calendar.
 | Brooke | `https://meetings.hubspot.com/brooke-carrobis` |
 | Zach | `https://meetings.hubspot.com/zach-hickman` |
 
+**Fallback sender: `Zach`** (set 2026-09-14). Used only when the sender is *unknowable* —
+a Smartlead lead with no HubSpot contact, so `outbound_sender` cannot be read. Rather
+than draft a reply with no way to book, the prospect gets Zach's calendar and Zach takes
+the meeting.
+
+**Why a fallback here and not a hard stop.** The earlier design refused to draft at all,
+on the grounds that handing over the wrong person's calendar is misleading. That is true
+and it is the smaller cost: **a warm lead who cannot book is worse than one booking with
+Zach**, who ran every meeting until 2026-09-14 anyway. The reviewer is told the fallback
+was used, so they can substitute the real sender's link if they know it.
+
+**The fallback NEVER applies to a named sender with no row here.** That is a config gap —
+somebody added a sender to `senders.md` and forgot this file — and it affects every
+contact that sender mails, so it stays a hard error.
+
 **This replaced a single owner.** Every meeting used to route to Zach regardless of who
 sent the email, because he was the SDR and the only person taking them. He was promoted
 to AE on 2026-09-14, so he is a correspondent like Carl and Brooke and takes his own

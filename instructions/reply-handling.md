@@ -81,6 +81,24 @@ are no longer in the enum, and **nothing routes to either**:
 | out_of_office | unchanged | no | **we resume it, on a date** | Do NOT advance the lead or write status=replied. Write `outbound_resume_after` from the return date in the auto-reply (else +14d); `resume_sequences.py` restarts it then. See "Who resumes an out-of-office" below |
 | automated_reply | unchanged | no | RESUME | Ignore; do NOT advance the lead or write status=replied |
 
+**Booking links route to the SENDER** (`config/meeting-routing.md`), looked up from
+`outbound_sender` on the contact — written once at enrolment, so a reply months later
+still resolves to whoever actually wrote to them.
+
+**If the sender is unknowable, the link falls back to Zach's calendar.** That happens
+when the lead has no HubSpot contact at all: a Smartlead-only lead, a hand-uploaded list,
+or a contact deleted after enrolment. The draft would otherwise have no way for a warm
+prospect to book, and **a lead who cannot book is worse than one booking with Zach**, who
+took every meeting until 2026-09-14 regardless of sender.
+
+The queue row's `review_reason` says the fallback was used, so a reviewer can substitute
+the real sender's link if they know it. Without that note the draft looks identical to a
+correctly-routed one.
+
+**A NAMED sender with no row in `meeting-routing.md` is still a hard error**, not a
+fallback. That means somebody added a sender to `senders.md` and forgot the routing file,
+which affects every contact that sender mails, so it should be loud.
+
 ### Recycle windows — `outbound_recycle_after` (set on not_now / not_interested)
 
 A decline is a *wait*, not a suppression. The handler writes a date to
