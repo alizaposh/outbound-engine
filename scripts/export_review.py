@@ -75,7 +75,11 @@ DEAD_COLUMNS = ("message_2_subject", "message_3_subject")
 NEW_TAB_COLUMNS = [
     "Seller", "first_name", "last_name", "email",
     "message_1_subject", "message_1_body", "message_2_body", "message_3_body",
-    "Ranking (X/5)", "Feedback",
+    # `Approved` is the machine-readable trigger: scripts/build_approved.py reads it and
+    # builds a DRAFTED campaign from the rows marked Y. Before it existed the approval
+    # lived in a Slack message and the campaign got built because someone remembered to
+    # run a command -- a step that can be forgotten is not a gate.
+    "Approved", "Ranking (X/5)", "Feedback",
 ]
 
 

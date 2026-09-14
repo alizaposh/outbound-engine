@@ -226,6 +226,7 @@ The parser accepts "Your name", "Requested by", "Name", "Rep", "Requester" or
 | `first_name`, `last_name`, `email` | engine |
 | `message_1_subject` | engine — the subject for the WHOLE sequence |
 | `message_1_body`, `message_2_body`, `message_3_body` | engine |
+| `Approved` | **human** — `Y` builds the campaign; anything else does not |
 | `Ranking (X/5)` | **human** |
 | `Feedback` | **human** |
 
@@ -246,3 +247,28 @@ reviewer's own columns and the reason the sheet exists, since feedback becomes r
 **Existing tabs are untouched.** Rows map to each tab's own header BY NAME, so Test1-Test12
 keep their 24 columns and still populate correctly. This changes only tabs the engine
 creates.
+
+
+### The `Approved` column is the trigger (added 2026-09-14)
+
+Writing **`Y`** on a row marks that contact's copy approved. `scripts/build_approved.py`
+reads the tab in the morning heartbeat and creates a DRAFTED campaign from the approved
+rows.
+
+**This mirrors the reply queue deliberately.** There, `decision = Approve` *is* the
+instruction `send_replies` acts on. Here the approval previously lived in a Slack message
+or in somebody's head, and the campaign got built because a person remembered to run a
+command. A step that can be forgotten is not a gate.
+
+**THE SHEET IS THE COPY THAT SHIPS.** `build_approved.py` reads the message bodies from
+the tab, not from the generated CSV on disk. Before this, `create_campaign.py --csv` read
+the CSV only, so a rep who fixed a line in the sheet would have watched the original go
+to Smartlead — the same failure `send_replies` guarantee 3 exists to prevent, one stage
+earlier. Edit the sheet and the edit is what sends.
+
+**Partial approval is allowed and is the point.** Approve 30 of 36 and the campaign
+carries 30; the other 6 stay eligible for a later one. A single bad draft no longer
+blocks a curated list, which is the same reasoning as the validation retries.
+
+**Launch is still manual.** This produces a DRAFTED campaign. The unsubscribe settings
+have no API, so a human still opens Smartlead — see `instructions/campaign-creation.md`.

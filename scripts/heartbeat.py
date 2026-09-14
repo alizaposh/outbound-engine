@@ -4,7 +4,7 @@
 Invoked by the Claude Desktop scheduled task described in
 `instructions/scheduled-tasks.md`. Business-hours cadence, weekdays.
 
-    slot=morning   -> approved replies, then reply check + the four syncs
+    slot=morning   -> approved replies, approved campaigns, reply check + the syncs
     slot=midday    -> reply check
     slot=afternoon -> reply check
     slot=weekly    -> the campaign review (Mondays, its own routine)
@@ -38,7 +38,10 @@ Five guarantees:
      row sends only if a human typed `Approve` into it. The heartbeat contributes no
      judgement of its own and must never be given any — it decides *when to look*, never
      *what to send*. Do not add a job here that originates a message.
-     It still cannot launch a campaign or write anything the jobs would not write.
+     It still cannot LAUNCH a campaign. `build_approved` was added to the morning slot
+     on 2026-09-14 and it CREATES campaigns, but only DRAFTED ones, only from rows a
+     human marked `Approved` in the review Sheet, and launching remains a manual act in
+     the Smartlead UI because the unsubscribe settings have no API.
 """
 from __future__ import annotations
 
@@ -76,8 +79,8 @@ PY = sys.executable
 # gone before close_sequences looks, so it closes the lead that was just revived. See the
 # docstring in resume_sequences.py.
 SLOTS = {
-    "morning":   ["send_replies", "reply_check", "sync_unsubscribes", "sync_bounces",
-                   "close_sequences", "resume_sequences", "sync_sends"],
+    "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
+                   "sync_bounces", "close_sequences", "resume_sequences", "sync_sends"],
     "midday":    ["reply_check"],
     "afternoon": ["reply_check"],
     # Mondays only, via its own routine. Separate from the daily slots because it is a
@@ -91,7 +94,8 @@ JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sy
               "sync_sends": "Activity logging",
               "send_replies": "Approved replies",
               "resume_sequences": "Out-of-office restarts",
-              "campaign_report": "Weekly campaign review"}
+              "campaign_report": "Weekly campaign review",
+              "build_approved": "Approved campaigns"}
 
 # Extra arguments per job. `send_replies` is capped because the heartbeat runs it
 # unattended and nobody reads a dry run first: a reviewer who drag-fills `Approve` down
@@ -124,6 +128,7 @@ SUMMARY_PATTERNS = [
     re.compile(r"^\d+ resumed, \d+ blocked.*$", re.M),            # resume_sequences
     re.compile(r"^no contact has a resume date.*$", re.M),
     re.compile(r"^history: .*$", re.M),                          # campaign_report
+    re.compile(r"^\d+ campaign\(s\) built.*$", re.M),            # build_approved
 ]
 
 
@@ -165,6 +170,9 @@ ATTENTION_COUNTS = [
     # this system can produce, so they light the amber.
     re.compile(r"(\d+) failed"),                 # send_replies: refused by Smartlead
     re.compile(r"(\d+) approved row\(s\) NOT sent"),   # send_replies: over the cap
+    # A campaign was built and is DRAFTED: it needs a human in the Smartlead UI before
+    # it can send, so the amber light is the prompt to go and do that.
+    re.compile(r"(\d+) campaign\(s\) built"),
 ]
 
 
