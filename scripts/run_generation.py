@@ -41,6 +41,20 @@ import validate  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 POSITIONS = (1, 2, 3)
 MAX_ATTEMPTS = 2          # one retry; malformed JSON has been transient in practice
+# Regenerations allowed when the copy PARSED but FAILED validation. Distinct from
+# MAX_ATTEMPTS, which covers malformed JSON.
+#
+# **Why this exists (2026-09-14).** Validation failures were terminal: the row was
+# written FAIL and `create_campaign.py` then refused the batch, so the only ways forward
+# were `--skip-failed` (dropping the contact) or a human edit. On a 36-contact list a
+# different row failed on most runs, which meant reps' curated contacts were being
+# dropped for a reason the model could have fixed if asked. The findings are specific --
+# a banned phrase, a length, a missing beat -- so they make good feedback.
+#
+# 3 because the observed failures are single-phrase problems that clear on one retry. A
+# contact still failing after three attempts is hitting something structural, and the
+# committed fallback copy is a better answer than a fourth roll of the dice.
+VALIDATION_ATTEMPTS = 3
 MAX_TOKENS = 2000
 
 GMV_PRO_GATE = 50_000
@@ -145,6 +159,9 @@ class ContactResult:
     error: str = ""
     used_fallback: bool = False
     shape: str = ""
+    # How many generate+validate rounds this contact took. 1 means it
+    # passed first time; >1 means a FAIL was fed back and fixed.
+    validation_rounds: int = 1
 
     @property
     def status(self) -> str:
@@ -1019,6 +1036,7 @@ def role_register(jobtitle: str | None) -> str:
 def research_note(c: Contact, persona, basis, platform_known,
                   sender_name: str = "", sender_intro: str = "",
                   subject: str = "", why_now: str = "",
+                  validation_feedback: list | None = None,
                   shape_keys: dict | None = None,
                   shape_specs: dict | None = None, opening: str = "",
                   angle: str = "") -> dict:
@@ -1090,6 +1108,22 @@ def research_note(c: Contact, persona, basis, platform_known,
         # THE SUBJECT IS SUPPLIED, NOT REQUESTED. With no list the model improvised and
         # two lines covered 23 of 36 contacts. Given as the subject to USE, for the same
         # reason the attempt callback is: an example is a template.
+        # WHAT THE LAST ATTEMPT GOT WRONG. Present only on a retry.
+        #
+        # Without this the retry is just a re-roll: same prompt, different dice, and the
+        # same phrase likely to reappear. The findings are specific -- the exact banned
+        # phrase, the word count against its target, the missing beat -- so they are
+        # actionable in a way "try again" is not.
+        "previous_attempt_failed": validation_feedback or None,
+        "previous_attempt_guidance": (
+            "Your last attempt for this contact FAILED validation on the points listed "
+            "in `previous_attempt_failed`. Fix exactly those and change nothing else: "
+            "the shape, the supplied lines and the approved claims were all fine.\n"
+            "A banned phrase means REWORD that clause, not rewrite the email. A length "
+            "finding means cut or add words in the body, never drop a required beat. "
+            "Do not substitute a different claim to route around the problem -- that is "
+            "how an unapproved capability gets introduced."
+            if validation_feedback else None),
         "subject_line": subject or None,
         "subject_guidance": (
             "Use `subject_line` EXACTLY as given for message_1. It was chosen for this "
@@ -1297,9 +1331,58 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                          shape_keys=keys, shape_specs=specs,
                          opening=opening, angle=angle)
     res.shape = "/".join(f"{p}{keys[p]}" for p in POSITIONS if keys.get(p))
-    emails, attempts, bid, err = generate_with_retry(
-        client, model, rulebook, instruction, note)
-    res.attempts, res.bedrock_message_id = attempts, bid
+
+    # GENERATE, VALIDATE, AND RETRY ON A VALIDATION FAILURE.
+    #
+    # A FAIL used to be terminal: the row was stamped FAIL and create_campaign.py then
+    # refused the whole batch, leaving only --skip-failed (drop the contact) or a hand
+    # edit. On a 36-contact list a different row failed on most runs, so reps' curated
+    # contacts were being dropped for problems the model could fix if told. The findings
+    # name the exact phrase, length or missing beat, so they are precise feedback.
+    #
+    # Only FAIL triggers a retry. WARNs are advisory by design -- retrying them would
+    # spend three times the tokens chasing an opener repetition nobody would notice.
+    emails = None
+    total_attempts = 0
+    feedback: list[str] = []
+    for round_no in range(1, VALIDATION_ATTEMPTS + 1):
+        note = research_note(c, persona, basis, platform_known, sender_name,
+                             sender_intro, subject=subject, why_now=why_now,
+                             shape_keys=keys, shape_specs=specs, opening=opening,
+                             angle=angle, validation_feedback=feedback or None)
+        emails, attempts, bid, err = generate_with_retry(
+            client, model, rulebook, instruction, note)
+        total_attempts += attempts
+        res.bedrock_message_id = bid
+        if emails is None:
+            break                                  # malformed JSON; fallback handles it
+
+        trial = []
+        for position in POSITIONS:
+            m = emails[f"message_{position}"]
+            body_repaired, records = repair.repair(m["body"])
+            body_final = assemble.assemble(body_repaired, mailbox,
+                                           identity=identity, sender_map=sender_map)
+            v = validate.validate_email(
+                m.get("subject", ""), body_final, position=position, footer=footer,
+                token=token, literals=literals, regexes=regexes, raw_body=m["body"],
+                competitor_known=platform_known,
+                allowed_names=[c.prospect_org, c.company, c.first_name, c.last_name,
+                               c.current_competitor, c.city],
+                label=f"{c.display} message_{position}")
+            trial.append(MessageResult(position, m.get("subject", ""), m["body"],
+                                       body_final, records, v))
+        res.messages = trial                        # keep the newest attempt either way
+        fails = [(mr.position, f) for mr in trial
+                 for f in (mr.validation.findings if mr.validation else [])
+                 if f.severity == validate.FAIL]
+        if not fails:
+            res.validation_rounds = round_no
+            break
+        feedback = [f"email {pos}: {f.check} -- {f.detail}" for pos, f in fails]
+        res.validation_rounds = round_no
+
+    res.attempts = total_attempts
     if emails is None:
         # Recover with committed copy so the contact is not left unusable, but keep the
         # failure on the row and out of the normal PASS/WARN/FAIL vocabulary. A
@@ -1315,24 +1398,31 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
         assert len(res.messages) == len(POSITIONS), "fallback must fill all three"
         return res
 
-    # The three-position guarantee. Not delegated to a caller.
-    for position in POSITIONS:
-        m = emails[f"message_{position}"]
-        body_repaired, records = repair.repair(m["body"])
-        body_final = assemble.assemble(body_repaired, mailbox,
-                                       identity=identity, sender_map=sender_map)
-        v = validate.validate_email(
-            m.get("subject", ""), body_final, position=position, footer=footer, token=token,
-            literals=literals, regexes=regexes, raw_body=m["body"],
-            competitor_known=platform_known,
-            # Proper nouns legitimately present in this email: the organizer's brand,
-            # the person, their city, and the COMPETITOR. Platform names are often all
-            # caps ("DICE"), which the shouting rule flagged until they were supplied.
-            allowed_names=[c.prospect_org, c.company, c.first_name, c.last_name,
-                           c.current_competitor, c.city],
-            label=f"{c.display} message_{position}")
-        res.messages.append(MessageResult(position, m.get("subject", ""), m["body"],
-                                          body_final, records, v))
+    # LAST RESORT: still failing after every retry, so use the committed fallback copy.
+    #
+    # **No contact is ever dropped.** Reps curate these lists and expect the people on
+    # them to be reached; losing one to a phrasing problem the engine could not fix is
+    # the wrong trade. The fallback is pre-approved static copy from
+    # `config/generation-failure-fallback.md`, so the row is sendable, and it carries
+    # FALLBACK_STATUS rather than PASS so nobody mistakes it for model output that
+    # cleared review.
+    #
+    # The three positions are already in res.messages from the last trial, so this
+    # REPLACES them rather than appending -- appending would have produced six messages.
+    if any(mr.validation and mr.validation.failed for mr in res.messages):
+        res.error = (f"validation failed after {res.validation_rounds} round(s); "
+                     f"using committed fallback copy. Last: "
+                     + "; ".join(feedback)[:300])
+        res.used_fallback = True
+        res.messages = []
+        for position in POSITIONS:
+            m = failure_fallback[f"message_{position}"]
+            body_final = assemble.assemble(m["body"], mailbox, identity=identity,
+                                           sender_map=sender_map)
+            res.messages.append(MessageResult(position, m.get("subject", ""), m["body"],
+                                              body_final))
+        assert len(res.messages) == len(POSITIONS), "fallback must fill all three"
+        return res
 
     assert len(res.messages) == len(POSITIONS), "all three positions must be validated"
     assert all(m.validation is not None for m in res.messages)
@@ -1360,7 +1450,8 @@ COLUMNS = ["hs_object_id", "first_name", "last_name", "email", "job_title", "com
            "sender", "mailbox",
            "persona", "persona_basis", "platform_known", "current_competitor",
            "estimated_gmv_usd", "vertical", "validation", "generation_error",
-           "attempts", "repairs_applied", "sequence_findings", "shape", "bedrock_message_id",
+           "attempts", "validation_rounds", "repairs_applied", "sequence_findings",
+           "shape", "bedrock_message_id",
            "message_1_subject", "message_1_body",
            "message_2_subject", "message_2_body",
            "message_3_subject", "message_3_body"]
@@ -1381,6 +1472,10 @@ def to_row(r: ContactResult, sender_name: str = "", mailbox: str = "") -> dict:
         "sender": sender_name, "mailbox": mailbox,
         "vertical": c.vertical or "", "validation": r.status,
         "generation_error": r.error, "attempts": r.attempts,
+        # How many generate+validate rounds this contact needed. 1 = clean first time.
+        # >1 means a FAIL was fed back and fixed, which is the only way to see the retry
+        # working in production -- the final row looks identical either way.
+        "validation_rounds": r.validation_rounds,
         "repairs_applied": sum(len(m.repairs) for m in r.messages),
         "sequence_findings": "; ".join(f.detail for f in r.sequence_findings),
         "shape": r.shape,
