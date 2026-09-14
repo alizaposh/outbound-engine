@@ -68,18 +68,43 @@ def col_letter(i: int) -> str:
     return s
 
 
-def is_suppressed(props: dict) -> str | None:
+def is_suppressed(props: dict, intent: str = "") -> str | None:
     """Reason this contact must not be emailed, or None.
 
     Mirrors gate 1 of the pre-send filter: the engine's own flag OR HubSpot's native
     opt-out OR a terminal status. Reading only one under-suppresses.
+
+    **A removal CONFIRMATION is allowed through (2026-09-14).** An `asked_to_stop` reply
+    suppresses the contact, and the check then refused to send the one line telling them
+    so -- the suppression this reply caused blocked the answer to that same reply. The
+    person is left having said "stop" into silence, unsure whether it registered. Sending
+    "you're removed" is both the humane answer and the one that stops them asking again.
+
+    The exemption is deliberately narrow:
+      - ONLY for intent `asked_to_stop`. No other intent may mail a suppressed contact.
+      - NEVER when `hs_email_optout` is set. That is HubSpot's global opt-out, written
+        only by a human honouring an all-email request, and it means no mail of any kind.
+        The engine never writes it (reply_check guarantee 5), so its presence is a
+        person's explicit decision and outranks this courtesy.
+      - NEVER when the status is `bounced`. Nothing can be delivered there anyway.
+      - One confirmation only, which dedup already guarantees: the queue holds one row
+        per Smartlead message id, so a second reply is the only way to get a second row.
     """
+    native = str(props.get("hs_email_optout") or "").lower() in ("true", "1")
+    status = (props.get("outbound_status") or "").lower()
+    confirming_a_stop = (intent or "").strip().lower() == "asked_to_stop"
+
+    if native:
+        return "hs_email_optout is true (native opt-out); no mail of any kind"
+    if status == "bounced":
+        return "outbound_status is bounced"
+    if confirming_a_stop:
+        # outbound_suppressed / opted_out here are what THIS reply set. Let the
+        # confirmation go.
+        return None
     if str(props.get("outbound_suppressed") or "").lower() in ("true", "1"):
         return "outbound_suppressed is true"
-    if str(props.get("hs_email_optout") or "").lower() in ("true", "1"):
-        return "hs_email_optout is true (native opt-out)"
-    status = (props.get("outbound_status") or "").lower()
-    if status in ("opted_out", "bounced"):
+    if status == "opted_out":
         return f"outbound_status is {status}"
     return None
 
@@ -131,7 +156,10 @@ def main(argv=None) -> int:
            .execute(num_retries=rq.SHEETS_RETRIES).get("values") or [[]])[0]
     idx = {h: i for i, h in enumerate(hdr)}
     missing = [c for c in ("decision", "draft_response", "campaign",
-                           "smartlead_stats_id", "sent_at", "email") if c not in idx]
+                           "smartlead_stats_id", "sent_at", "email",
+                           # `intent` is read so an asked_to_stop confirmation can be
+                           # told apart from any other send to a suppressed contact.
+                           "intent") if c not in idx]
     if missing:
         raise RuntimeError(
             f"the queue tab is missing column(s) {missing}. Sending needs them; "
@@ -193,7 +221,7 @@ def main(argv=None) -> int:
         found = hs.search_by_email([email], SUPPRESSION_PROPS) if email else {}
         props = found.get(email.lower(), {})
         if props:
-            reason = is_suppressed(props)
+            reason = is_suppressed(props, cell(row, "intent"))
             if reason:
                 print(f"  row {n} {email}: REFUSING, {reason}. Approved in the sheet, but "
                       "consent changed after it was queued.")

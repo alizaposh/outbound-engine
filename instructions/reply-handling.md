@@ -222,6 +222,23 @@ Thursday may have opted out in between and the row cannot know that. And it clai
 row *before* sending, so a crash leaves `sending …` and blocks a retry rather than
 risking a duplicate reply from a supposed person.
 
+**A removal confirmation is exempt, added 2026-09-14.** An `asked_to_stop` reply
+suppresses the contact, and the suppression check then refused to send the one line
+telling them so — **the suppression that reply caused blocked the answer to that same
+reply.** Observed live on a real prospect who replied "blocked": approved in the sheet,
+refused at send, leaving him having said stop into silence with no idea it registered.
+Sending "you're removed from our list" is both the humane answer and the one that stops
+him asking again.
+
+The exemption is narrow on purpose:
+- **Only `asked_to_stop`.** No other intent may mail a suppressed contact.
+- **Never when `hs_email_optout` is set.** That is HubSpot's global opt-out, written only
+  by a human honouring an all-email request. The engine never writes it, so its presence
+  is a person's explicit decision and outranks this courtesy.
+- **Never when the status is `bounced`** — nothing is deliverable there anyway.
+- **One confirmation only**, which dedup already guarantees: one queue row per Smartlead
+  message id, so a second reply is the only way to get a second row.
+
 ## HubSpot updates
 
 Write **only** the engine's own `outbound_*` properties. **No native HubSpot sales
