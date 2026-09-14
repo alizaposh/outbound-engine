@@ -14,7 +14,7 @@ the booking lands on their calendar.
 |---|---|
 | Carl | `https://meetings.hubspot.com/carl-newmark` |
 | Brooke | `https://meetings.hubspot.com/brooke-carrobis` |
-| Zach | `https://meetings.hubspot.com/zach-hickman/partnerships` |
+| Zach | `https://meetings.hubspot.com/zach-hickman` |
 
 **This replaced a single owner.** Every meeting used to route to Zach regardless of who
 sent the email, because he was the SDR and the only person taking them. He was promoted
