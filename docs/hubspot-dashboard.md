@@ -61,11 +61,13 @@ from `config/analysis-defaults.md`, the same block the weekly report parses, so 
 dashboard and the report cannot disagree. Move `positive_intents` there and re-run
 `build_reporting.py` to see the diff.
 
-**List 1941, `Outbound — Interested (needs follow-up)`, is wrong and should be deleted.**
-It was a probe built while establishing that the lists API worked at all. List **1948
-(`Positive replies`)** supersedes it on definition — same intent filter, but scoped to
-enrolled contacts and derived from config rather than hardcoded — but the real problem is
-the **name**, and it is not a cosmetic one.
+**List 1941, `Outbound — Interested (needs follow-up)`, was DELETED on 2026-09-15** —
+soft-deleted, so HubSpot keeps it restorable rather than purged. It was a probe built
+while establishing that the lists API worked at all. List **1948 (`Positive replies`)**
+supersedes it on definition — same intent filter, but scoped to enrolled contacts and
+derived from config rather than hardcoded — but the real problem was the **name**, and it
+was not a cosmetic one. The reasoning is kept here because it generalises to any list
+added later.
 
 `needs follow-up` claims the contact is waiting on a human. **That is never what the state
 means.** Follow-up is drafted automatically by `reply_check.py` and sent automatically by
@@ -93,6 +95,13 @@ property — `reply_check.py` setting it when it queues a draft and `send_replie
 clearing it after a successful send. That is a genuine change to two scripts, not a list
 definition, and it would put a second copy of the queue beside the Sheet (see golden
 rule 2 in `CLAUDE.md` on why the Sheet is the single record).
+
+Deleting a DYNAMIC list touches no contact data — membership is computed on read, not
+stored — so `breakalegparty@gmail.com` kept `outbound_status=replied`,
+`outbound_reply_intent=interested` and its campaign id, and remains in list 1948. To
+restore 1941, re-create it; the filter was `outbound_reply_intent IS_ANY_OF
+[question, interested]` with no enrolment scope, which is the other reason 1948 is the
+better list.
 
 ---
 

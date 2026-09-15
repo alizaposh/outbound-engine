@@ -56,7 +56,7 @@ CONTACTS = "0-1"
 #     refuses; and not the property's real type (STRING/DATE), which demands a `value`
 #     that a presence test has no business supplying.
 #   * a booleancheckbox is BOOL + IS_EQUAL_TO with a real boolean.
-#   * a select is ENUMERATION + IS_ANY_OF -- the one shape already proven by list 1941.
+#   * a select is ENUMERATION + IS_ANY_OF -- read off a probe list before it was deleted.
 # ALL_PROPERTY is type-agnostic, so it serves the string and the date property alike.
 def has(prop: str) -> dict:
     return {"property": prop, "filterType": "PROPERTY",
@@ -80,7 +80,7 @@ def is_any(prop: str, values: list[str]) -> dict:
 
 
 def branch(filters: list[dict]) -> dict:
-    """The AND-inside-OR shape HubSpot stores. Read back off list 1941 rather than
+    """The AND-inside-OR shape HubSpot stores. Read back off a real list rather than
     guessed; a hand-built filterBranch is accepted and then matches nothing."""
     return {"filterBranchType": "OR", "filterBranchOperator": "OR", "filters": [],
             "filterBranches": [{"filterBranchType": "AND", "filterBranchOperator": "AND",
