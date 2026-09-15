@@ -1055,7 +1055,7 @@ def main(argv=None) -> int:
     cfg = rq.load_surface_config()
     store = rq.get_processed_id_store(svc, cfg["REPLY_REVIEW_SHEET_ID"],
                                      cfg["REPLY_REVIEW_TAB"])
-    processed = queued = skipped = 0
+    processed = queued = skipped = blocked = 0
 
     for camp in campaigns:
         cid = camp.get("id")
@@ -1074,12 +1074,12 @@ def main(argv=None) -> int:
                 # classify, suppress, or draft a reply against the wrong person.
                 print(f"  {email}: replied, but no Smartlead lead id on this campaign; "
                       "skipped rather than risk reading the wrong thread")
-                skipped += 1
+                blocked += 1
                 continue
             messages, newest = read_thread(sl.thread(cid, lead_id))
             if not newest:
                 print(f"  {email}: marked replied but no inbound message found; skipped")
-                skipped += 1
+                blocked += 1
                 continue
             if newest["id"] and store.is_processed(newest["id"]):
                 print(f"  {email}: already processed {newest['id']}; skipped")
@@ -1180,7 +1180,16 @@ def main(argv=None) -> int:
     # run reporting "1 queued for review" while the sheet stays empty is exactly how
     # someone concludes the queue is broken.
     verb = "queued for review" if a.apply else "WOULD be queued (dry run, sheet unchanged)"
-    print(f"\n{processed} reply(s) processed, {queued} {verb}, {skipped} skipped")
+    # `skipped` and `blocked` are reported separately because they mean opposite
+    # things. A lead stays marked "replied" in Smartlead for good, so every run re-reads
+    # every reply it has ever handled and skips it: that count only ever grows and is the
+    # healthy steady state. `blocked` is a reply the engine could NOT read -- no Smartlead
+    # lead id, or no inbound message on the thread -- which is a real prospect whose reply
+    # nobody has seen. Summed into one number, the second is invisible behind the first,
+    # and gets more invisible every week as the dedup count climbs.
+    print(f"\n{processed} reply(s) processed, {queued} {verb}, "
+          f"{skipped} already handled"
+          + (f", ** {blocked} COULD NOT BE READ **" if blocked else ""))
     print(f"{sl.calls} Smartlead calls, {hs.calls} HubSpot calls")
     if not a.apply:
         print("DRY RUN: nothing was written anywhere.")
