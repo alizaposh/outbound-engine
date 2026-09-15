@@ -29,12 +29,12 @@ min_delivered_for_rate: 200
 # report is worse than one that shouldn't be there: the first is invisible, the second
 # is at least arguable.
 #
-# 3930942 is the reply-handling draft-quality test from 2026-09-09. Seven replies, all
-# sent by hand from aliza.mayer+*@gmail.com to exercise the ten intents. Those addresses
-# are not HubSpot contacts, so the report could see Smartlead's 7 replies but classify
-# none of them, and raised "7 unaccounted replies" every run. Kept in Smartlead on
-# purpose to demonstrate how the test worked.
-exclude_campaigns: [3930942]
+# EMPTY as of 2026-09-15. It held 3930942, the reply-handling draft-quality test, which
+# has now been deleted from Smartlead -- so there is nothing to exclude. Its seven
+# synthetic +tag leads were also the sole source of every "unmatched" count in the
+# morning heartbeat, which means an unmatched contact is now a real signal rather than
+# expected noise.
+exclude_campaigns: []
 
 # Confidence level for every interval printed. 0.95 -> the familiar 95% interval.
 confidence: 0.95

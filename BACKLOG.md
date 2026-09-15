@@ -1529,6 +1529,34 @@ missing feature is a better prospect than a stranger.
 
 *Trigger:* a former-organizer field existing in HubSpot with a churn date.
 
+## Test campaign 3930942 deleted — 2026-09-15
+
+The reply-handling draft-quality test: 7 synthetic `aliza.mayer+*@gmail.com` leads, one
+per intent, used on 2026-09-09 to prove classification and drafting. Kept for a few days
+to demonstrate the test, then deleted once the real reply loop had proven itself in
+production on Andrew, Rafa and Tromac.
+
+**Three things referenced it and were cleaned up in the same pass**, because a deletion
+that leaves dangling references is how a stale config becomes a bug later:
+
+1. **`exclude_campaigns` is now empty.** It existed only to stop this campaign's 7
+   unclassifiable replies raising the "unaccounted replies" warning every Monday.
+2. **Six orphaned reply-queue rows were stamped**, not deleted. Approving one after the
+   campaign was gone would have POSTed a reply to a campaign that no longer exists. They
+   were NOT removed because the queue IS the dedup store (reply_check guarantee 3 keys on
+   `smartlead_message_id`), and deleting the rows would let a replayed message re-queue.
+   Stamping `sent_at` makes them inert while preserving that record — `send_replies` now
+   reports `0 sent, 4 skipped`.
+3. **Every "unmatched" count dropped to zero.** Activity logging went from 7 unmatched to
+   **0 unmatched, 61 contacts already current**.
+
+**That last point is the real gain.** Those 7 leads were the sole source of every
+unmatched count in the morning heartbeat, so "7 unmatched" was permanent expected noise —
+and noise in a health signal trains you to skip it. An unmatched contact now means
+something genuinely needs reconciling: an email in Smartlead with no HubSpot record, a
+contact merged or deleted after enrolment, or leads uploaded outside the engine. The
+count should stay at zero, and a non-zero one is worth reading.
+
 ## Prior-interaction callbacks wired into intake — 2026-09-10, on Aliza's prompt
 
 Asked whether previous HubSpot conversations could enrich the copy so it sounds less
