@@ -234,11 +234,15 @@ scripts/                   ← Python (stdlib + anthropic only)
                              four places and produced by none, so "meetings booked" was
                              permanently zero. Refuses to credit a booking that predates
                              enrolment. DRY RUN BY DEFAULT. Runs last in the morning
-  build_reporting.py       ← creates the 13 DYNAMIC HubSpot lists the dashboard clicks
+  build_reporting.py       ← creates the 15 DYNAMIC HubSpot lists the dashboard clicks
                              into. Intent buckets parsed from analysis-defaults.md, so
                              the dashboard cannot disagree with the weekly report.
-                             Not scheduled: the lists are dynamic. See
-                             docs/hubspot-dashboard.md for the UI half, which has no API
+                             Not scheduled: the lists are dynamic. Idempotent: existing
+                             lists are kept, never edited. See docs/hubspot-dashboard.md
+                             for the UI half. **Report/dashboard CREATION has no API at
+                             all** -- those endpoints 404 rather than 403, so granting
+                             reporting.full.write (done 2026-09-15) does not and cannot
+                             open them; the scope is what allows these lists
   sync_bounces.py          ← Smartlead bounces -> HubSpot outbound_status=bounced.
                              DRY RUN BY DEFAULT. Never sets outbound_suppressed: a
                              bounce is a deliverability fact, not a consent decision

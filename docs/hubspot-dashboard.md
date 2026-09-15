@@ -3,10 +3,33 @@
 **What this gives you:** every engine metric as a number you can click to get the exact
 contacts behind it.
 
-`scripts/build_reporting.py` has already created the thirteen lists. This file is the
-part that cannot be automated: **assembling the dashboard itself.** The reports and
-dashboards APIs (`/reports/v2/reports`, `/reports/v2/dashboards`) both return 404 on this
-portal, so the tiles go on by hand, once. Budget five minutes.
+`scripts/build_reporting.py` has already created the fifteen lists. This file is the
+part that cannot be automated: **assembling the dashboard itself.** The tiles go on by
+hand, once. Budget five minutes.
+
+## Do not spend time looking for a reports API — there isn't one
+
+Settled 2026-09-15, after the portal's private app was granted `reporting.full.read`,
+`reporting.full.write` and `reporting.full.edit`. **The scopes made no difference, and
+the reason is worth recording so nobody re-runs this experiment:**
+
+| Probe | Result | What it means |
+|---|---|---|
+| `/reports/v2/reports`, `/reports/v3/reports`, `/reporting/v{1,2,3}/reports`, `/reports/v*/dashboards`, `/reports/v3/custom-reports` | **404** | The endpoint does not exist. Scope-independent |
+| `/dashboard/v2/dashboard` | **401** | Legacy endpoint; rejects private-app tokens outright |
+| `/crm/v3/objects/reports` | **400** | `REPORT` is not a supported object type |
+| `/events/v3/events`, `/analytics/v2/*` | **403** | Real, but need *web-analytics* scopes — website traffic, not outbound |
+
+**404 is the load-bearing detail.** A 403 would mean "your token lacks permission", and
+more scopes would fix it. A 404 means there is nothing behind the URL, so no grant can
+open it. HubSpot's docs agree — report creation is documented as UI-only, the
+`reporting-v2` reference now redirects to a *legacy* archive, and the community request
+for a create/manage reports API is still open with no committed support.
+
+What `reporting.full.write` *did* buy is not nothing: it is what lets
+`build_reporting.py` create the fifteen lists. In HubSpot a list is simultaneously the
+number and the click-through set behind it, so **the reporting layer is already built by
+API.** Only the visual arrangement of tiles is manual.
 
 ---
 
@@ -26,6 +49,8 @@ refresh them. All are prefixed `Outbound — ` so they sort together in the list
 | Outbound — Deferred (come back later) | 1950 | `not_now`, `wrong_contact`. A date, not a loss |
 | Outbound — Auto-responders | 1951 | `out_of_office`, `automated_reply`. **Not** replies |
 | Outbound — No response | 1952 | Sequence finished, nobody answered. Contactable again |
+| Outbound — Disqualified | 1958 | Not a fit; excluded by the eligibility gate, not by suppression |
+| Outbound — Replied, awaiting next step | 1959 | Status is `replied` — the live conversations |
 | Outbound — Opted out | 1953 | Asked to stop or unsubscribed. Never contact again |
 | Outbound — Bounced | 1954 | Undeliverable |
 | Outbound — Suppressed | 1955 | Excluded from every future campaign |
@@ -36,6 +61,13 @@ from `config/analysis-defaults.md`, the same block the weekly report parses, so 
 dashboard and the report cannot disagree. Move `positive_intents` there and re-run
 `build_reporting.py` to see the diff.
 
+**Ignore list 1941, `Outbound — Interested (needs follow-up)`.** It was a probe built
+while establishing that the lists API worked at all, and list **1948
+(`Positive replies`)** supersedes it: same intent filter, but correctly scoped to
+enrolled contacts, and derived from config rather than hardcoded. 1941 is left in place
+rather than deleted because it is harmless and may be somebody's saved view by now —
+just don't build a tile on it, or that tile will drift the day the config changes.
+
 ---
 
 ## Read this before you add a single tile
@@ -43,22 +75,34 @@ dashboard and the report cannot disagree. Move `positive_intents` there and re-r
 **Status and intent are two different axes. Do not add them together.**
 
 - `outbound_status` is a **lifecycle state**: every enrolled contact has exactly one, so
-  those tiles sum to the Enrolled total.
+  the six status tiles sum to Enrolled exactly. Verified 2026-09-15:
+  `57 in sequence + 0 no response + 1 disqualified + 1 replied + 2 opted out + 0 bounced
+  = 61 = Enrolled`. **Use that as your check after building** — if it doesn't add up,
+  either a tile is filtered wrong or list membership is still recalculating.
 - `outbound_reply_intent` is **what the reply said**: only repliers have one, and it
   persists after the status moves on.
 
 As of 2026-09-15 all three repliers sit at a *different* status — one `replied`, one
-`opted_out`, one `disqualified`. So "Replied (human) = 3" overlaps the Opted out tile.
-That is correct behaviour, not double counting, but a tile row that adds intent counts to
-status counts will produce a number that means nothing.
+`opted_out`, one `disqualified`. So "Replied (human) = 3" overlaps the Opted out and
+Disqualified tiles. That is correct behaviour, not double counting, but a tile row that
+adds intent counts to status counts will produce a number that means nothing.
+
+`Disqualified` and `Replied, awaiting next step` exist **because of** that reconciliation.
+The first pass shipped without them and the status tiles summed to 59 of 61 — a
+two-contact shortfall that reads as a broken filter when it was really two documented
+states nobody had built a tile for.
 
 Group the dashboard the same way:
 
 ```
 row 1  volume     Enrolled · In sequence · No response
 row 2  outcomes   Replied (human) · Meetings booked · Positive · Negative · Deferred
-row 3  hygiene    Opted out · Bounced · Suppressed · Auto-responders · Paused for OOO
+row 3  pipeline   Replied awaiting next step · Disqualified
+row 4  hygiene    Opted out · Bounced · Suppressed · Auto-responders · Paused for OOO
 ```
+
+Row 1 plus rows 3–4 are the status axis and must total Enrolled. Row 2 is the intent
+axis and must not be added to them.
 
 ---
 
@@ -117,15 +161,15 @@ booking that predates enrolment; see its guarantee 2.
 
 ---
 
-## Known caveat: the Enrolled tile reads one high
+## Resolved: the Enrolled tile read one high
 
-Contact `aliza.mayer@gmail.com` (id `218660792892`) still carries
-`outbound_last_campaign_id = 3930942`, the reply-handling test campaign that was deleted
-from Smartlead on 2026-09-15. Real enrolled is **61** (36 on 3955179 + 25 on 3921033);
-the tile says 62, and since that address will never reply it drags every rate down
-slightly and permanently.
+Contact `aliza.mayer@gmail.com` (id `218660792892`) carried
+`outbound_last_campaign_id = 3930942`, the reply-handling test campaign deleted from
+Smartlead on 2026-09-15. It inflated Enrolled to 62 against a true **61** (36 on 3955179
++ 25 on 3921033), and since that address will never reply it would have dragged every
+rate down permanently. **Cleared 2026-09-15.** Nothing else pointed at 3930942.
 
-To fix, clear the property on that one contact:
+To restore it, if a future test needs that contact enrolled again:
 
 ```bash
 ./.venv/bin/python - <<'PY'
@@ -133,8 +177,17 @@ import sys; sys.path.insert(0, "scripts")
 from reply_check import HubSpotWriter
 from eligibility import env_token
 print(HubSpotWriter(env_token(), True).write("218660792892",
-      {"outbound_last_campaign_id": ""}))
+      {"outbound_last_campaign_id": "3930942"}))
 PY
 ```
 
-Nothing else points at 3930942, so this is the whole of the cleanup.
+### Two consistency traps this exposed, both relevant when you read a tile
+
+1. **HubSpot search is eventually consistent.** Counting immediately after the write
+   still returned 62; it read 61 about ten seconds later. A count taken straight after a
+   write is not verification of that write — read the property back directly instead.
+2. **Dynamic list membership lags the search index, by considerably more.** The property
+   was provably empty and the search was already reporting 61 while list 1944 still said
+   62. Lists recalculate on HubSpot's own schedule, so **a tile disagreeing with a fresh
+   query is normal for a while after any property change** and is not evidence that a
+   filter is wrong.

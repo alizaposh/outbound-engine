@@ -119,6 +119,13 @@ def specs(cfg: dict) -> list[tuple[str, str, dict]]:
          branch([enrolled, is_any("outbound_reply_intent", machine)])),
         ("No response", "sequence finished, nobody answered; contactable again",
          branch([enrolled, is_any("outbound_status", ["no_response"])])),
+        # Needed for the status axis to reconcile to Enrolled. Without it the status
+        # tiles summed to 59 of 61 and the two missing contacts looked like a filter bug
+        # rather than a state nobody had built a tile for.
+        ("Disqualified", "not a fit; excluded from future campaigns by the eligibility gate",
+         branch([enrolled, is_any("outbound_status", ["disqualified"])])),
+        ("Replied, awaiting next step", "status is replied; the live conversations",
+         branch([enrolled, is_any("outbound_status", ["replied"])])),
         ("Opted out", "asked to stop or unsubscribed; never contact again",
          branch([enrolled, is_any("outbound_status", ["opted_out"])])),
         ("Bounced", "undeliverable; a deliverability fact, not a consent decision",
