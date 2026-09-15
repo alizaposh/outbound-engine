@@ -143,10 +143,18 @@ axis and must not be added to them.
 
 ## Build it
 
-1. **Reports → Dashboards → Create dashboard.** Name it `Outbound engine`. Start from
-   **blank**, not a template — the templates are built on native sales properties this
-   engine deliberately does not write in v1 (see `config/hubspot-properties.md`), so
-   every tile would read zero.
+**BUILT 2026-09-15. The dashboard is `Outbound AI Email Engine Reporting`.** Use that
+name when referring to it; the steps below are how it was made, kept for rebuilding it or
+adding tiles.
+
+Its numbers on the day it was built, as a baseline to compare against if a tile ever
+looks wrong: Enrolled 61 · In sequence 57 · Replied (human) 3 · Meetings booked 0 ·
+Positive/Negative/Deferred 1/1/1 · Opted out 2 · Disqualified 1 · Replied-awaiting 1 ·
+Suppressed 2 · No response, Bounced, Auto-responders, Paused-for-OOO all 0.
+
+1. **Reports → Dashboards → Create dashboard.** Start from **blank**, not a template —
+   the templates are built on native sales properties this engine deliberately does not
+   write in v1 (see `config/hubspot-properties.md`), so every tile would read zero.
 2. For each metric: **Add report → Create custom report → Single object → Contacts.**
 3. Set the visualization to **Summary / single number**.
 4. Add one filter: **List membership → is a member of → `Outbound — <name>`.**
