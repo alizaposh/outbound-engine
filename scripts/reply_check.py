@@ -930,20 +930,25 @@ def _self_test() -> int:
     # -- resume_date: an out-of-office must come back, and only out_of_office may
     _today = dt.datetime.now(dt.timezone.utc).date()
     _far = (_today + dt.timedelta(days=400)).isoformat()
+    # Reply dates are relative to TODAY, not hardcoded. A fixed "2026-09-01" passed until
+    # the calendar reached 2026-09-15, when 09-01 + 14 days WAS today and the
+    # never-resume-before-tomorrow floor moved it -- so the suite broke on a date rather
+    # than on a change. A test that fails when nothing was edited trains you to ignore it.
+    _recent = (_today - dt.timedelta(days=2)).isoformat()
     check("a named return date wins",
-          resume_date("out_of_office", "2026-09-01", _far, cfg), _far)
+          resume_date("out_of_office", _recent, _far, cfg), _far)
     check("no named date falls back to the configured wait",
-          resume_date("out_of_office", "2026-09-01", None, cfg),
-          (dt.date(2026, 9, 1) + dt.timedelta(days=cfg["resume_ooo_default_days"]))
-          .isoformat())
+          resume_date("out_of_office", _recent, None, cfg),
+          (_today - dt.timedelta(days=2)
+           + dt.timedelta(days=cfg["resume_ooo_default_days"])).isoformat())
     # A stale auto-responder must not resume instantly just because its date has passed.
     check("a named date in the past resolves to tomorrow, never today or earlier",
           resume_date("out_of_office", "2020-01-01", "2020-01-05", cfg),
           (_today + dt.timedelta(days=1)).isoformat())
     check("an unparseable named date falls back rather than raising",
-          resume_date("out_of_office", "2026-09-01", "whenever", cfg),
-          (dt.date(2026, 9, 1) + dt.timedelta(days=cfg["resume_ooo_default_days"]))
-          .isoformat())
+          resume_date("out_of_office", _recent, "whenever", cfg),
+          (_today - dt.timedelta(days=2)
+           + dt.timedelta(days=cfg["resume_ooo_default_days"])).isoformat())
     # Only out_of_office. automated_reply resumes immediately; a human reply never does.
     for _i in INTENTS:
         if _i != "out_of_office":
