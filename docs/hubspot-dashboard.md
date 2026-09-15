@@ -61,12 +61,38 @@ from `config/analysis-defaults.md`, the same block the weekly report parses, so 
 dashboard and the report cannot disagree. Move `positive_intents` there and re-run
 `build_reporting.py` to see the diff.
 
-**Ignore list 1941, `Outbound — Interested (needs follow-up)`.** It was a probe built
-while establishing that the lists API worked at all, and list **1948
-(`Positive replies`)** supersedes it: same intent filter, but correctly scoped to
-enrolled contacts, and derived from config rather than hardcoded. 1941 is left in place
-rather than deleted because it is harmless and may be somebody's saved view by now —
-just don't build a tile on it, or that tile will drift the day the config changes.
+**List 1941, `Outbound — Interested (needs follow-up)`, is wrong and should be deleted.**
+It was a probe built while establishing that the lists API worked at all. List **1948
+(`Positive replies`)** supersedes it on definition — same intent filter, but scoped to
+enrolled contacts and derived from config rather than hardcoded — but the real problem is
+the **name**, and it is not a cosmetic one.
+
+`needs follow-up` claims the contact is waiting on a human. **That is never what the state
+means.** Follow-up is drafted automatically by `reply_check.py` and sent automatically by
+`send_replies.py`; the only human step is marking `Approve`, and that queue is the Reply
+Review Queue Sheet, not HubSpot. When this was checked on 2026-09-15 the list's single
+member, `breakalegparty@gmail.com`, had been answered at `14:06:40Z` that morning — so
+the list was inviting a rep to duplicate a reply the engine had already sent.
+
+**A truthful version cannot be built from existing properties, which is why this is a
+deletion and not a rename.** Distinguishing "they replied and we have not answered" from
+"they replied and we have" needs their-last-reply compared against our-last-send.
+`outbound_last_logged_send` gives our side, and the native `hs_sales_email_last_replied`
+gives theirs — but it is a **hidden** property, and HubSpot rejects property filters
+against hidden properties outright (tested; `COMPARATIVE_DATE` is otherwise a valid
+operation). Nothing the engine currently writes records "we answered this reply":
+`send_replies.py` writes to the Sheet and to Smartlead, and nothing to HubSpot.
+
+**1948 stays, and is accurate, because it is a cumulative metric rather than a queue.**
+"How many positive replies has the engine produced" stays true after we answer; "who
+still needs answering" does not. Keep that distinction when adding any future list — a
+tile that reads as a to-do list has to be able to empty itself, and these cannot.
+
+If a HubSpot-visible "waiting on us" list is wanted later, it needs an engine-written
+property — `reply_check.py` setting it when it queues a draft and `send_replies.py`
+clearing it after a successful send. That is a genuine change to two scripts, not a list
+definition, and it would put a second copy of the queue beside the Sheet (see golden
+rule 2 in `CLAUDE.md` on why the Sheet is the single record).
 
 ---
 
