@@ -228,6 +228,17 @@ scripts/                   ← Python (stdlib + anthropic only)
                              auto-reply named. Without it a prospect who was merely on
                              holiday gets email 1 and is never contacted again. Runs
                              AFTER close_sequences (see its docstring). DRY RUN BY DEFAULT
+  sync_meetings.py         ← native engagements_last_meeting_booked -> outbound_status=
+                             meeting_booked. THE OUTCOME METRIC, which nothing wrote
+                             until 2026-09-15: the value was documented and guarded in
+                             four places and produced by none, so "meetings booked" was
+                             permanently zero. Refuses to credit a booking that predates
+                             enrolment. DRY RUN BY DEFAULT. Runs last in the morning
+  build_reporting.py       ← creates the 13 DYNAMIC HubSpot lists the dashboard clicks
+                             into. Intent buckets parsed from analysis-defaults.md, so
+                             the dashboard cannot disagree with the weekly report.
+                             Not scheduled: the lists are dynamic. See
+                             docs/hubspot-dashboard.md for the UI half, which has no API
   sync_bounces.py          ← Smartlead bounces -> HubSpot outbound_status=bounced.
                              DRY RUN BY DEFAULT. Never sets outbound_suppressed: a
                              bounce is a deliverability fact, not a consent decision

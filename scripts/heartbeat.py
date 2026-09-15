@@ -78,9 +78,18 @@ PY = sys.executable
 # while that date is set, and resume_sequences clears it. Reverse them and the date is
 # gone before close_sequences looks, so it closes the lead that was just revived. See the
 # docstring in resume_sequences.py.
+#
+# `sync_meetings` runs LAST, and only in the morning. Last because it promotes a status
+# every job ahead of it may have just written -- reply_check sets `replied`,
+# close_sequences sets `no_response`, and a booking supersedes either -- so reading after
+# they have all settled means one pass sees the day's final state instead of racing it.
+# Morning-only because it feeds the weekly report rather than anything time-sensitive:
+# `meeting_booked` is a number a human reads on a dashboard, and recording it hours
+# earlier changes nothing for the prospect, who has already got the meeting.
 SLOTS = {
     "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
-                   "sync_bounces", "close_sequences", "resume_sequences", "sync_sends"],
+                   "sync_bounces", "close_sequences", "resume_sequences", "sync_sends",
+                   "sync_meetings"],
     # `build_approved` is MORNING ONLY, by decision on 2026-09-14. It was briefly in all
     # three slots so an approval reached a campaign within hours; that was reverted
     # because it produces one campaign PER BATCH, and a reviewer approving a list over a
@@ -105,6 +114,7 @@ JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sy
               "send_replies": "Approved replies",
               "resume_sequences": "Out-of-office restarts",
               "campaign_report": "Weekly campaign review",
+              "sync_meetings": "Meetings booked",
               "build_approved": "Approved campaigns"}
 
 # Extra arguments per job. `send_replies` is capped because the heartbeat runs it
@@ -137,6 +147,8 @@ SUMMARY_PATTERNS = [
     re.compile(r"^\d+ sent, \d+ skipped, \d+ failed.*$", re.M),   # send_replies
     re.compile(r"^\d+ resumed, \d+ blocked.*$", re.M),            # resume_sequences
     re.compile(r"^no contact has a resume date.*$", re.M),
+    re.compile(r"^\d+ promoted, \d+ already current.*$", re.M),    # sync_meetings
+    re.compile(r"^no engine-enrolled contact has booked.*$", re.M),
     re.compile(r"^history: .*$", re.M),                          # campaign_report
     re.compile(r"^\d+ campaign\(s\) built.*$", re.M),            # build_approved
 ]

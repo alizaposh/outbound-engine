@@ -30,6 +30,25 @@ Do not add properties that duplicate what Smartlead already holds.
 Meetings booked are tracked in v1 via the `meeting_booked` value on `outbound_status`
 (no dedicated date property — see "Deferred to v2" below).
 
+**Written by `scripts/sync_meetings.py`, in the morning heartbeat, as of 2026-09-15.**
+Until that date this paragraph described an intention rather than a behaviour: the value
+was listed above, protected from being overwritten by `sync_unsubscribes.py` and
+`close_sequences.py`, and **never written by anything.** A contact who replied, received
+a booking link and booked stayed `replied` for good, so the engine's headline outcome
+metric was structurally always zero. Two lessons worth keeping:
+
+- **A value being *documented* and *defended* is not evidence anything produces it.**
+  Four code sites referenced `meeting_booked`; every one was a read or a guard. The guards
+  made the gap harder to see, because the code looked as though it handled the state.
+- **It surfaced only when the metric was asked for.** Nothing failed, no check went red —
+  a dashboard tile would simply have read zero and been believed.
+
+The source is native: the booking links in `config/meeting-routing.md` are HubSpot
+meetings links, so a booking populates `engagements_last_meeting_booked` on its own, and
+`sync_meetings.py` promotes the status from it. It will **not** credit a booking that
+predates enrolment — 358 contacts in this portal have booked a meeting at some point, and
+crediting those would inflate the one number the engine is judged on. See its guarantee 2.
+
 ### Rules that ride on these
 
 - **OOO must not change status.** When `outbound_reply_intent = out_of_office`, do
