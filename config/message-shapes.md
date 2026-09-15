@@ -499,6 +499,14 @@ short, no ask, no new information.
 - Happy to connect whenever the timing suits.
 - Either way, wishing you a strong run of shows.
 - Glad to talk whenever it makes sense.
+- Hope it's a strong season for you.
+- Either way, good luck out there.
+- Happy to pick this up whenever.
+- Hope the shows go well either way.
+- Around whenever you want to talk.
+- Either way, all the best with the calendar.
+- Here if it's ever useful.
+- No rush at all on my end.
 
 **Count matters as much as wording, and this is the reason.** Email 3 is the shortest
 email in the sequence and has only two moving parts: its shape's opener and this closer.
