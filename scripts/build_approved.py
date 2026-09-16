@@ -65,7 +65,25 @@ BUILT_COL = "Built into"
 YES = {"y", "yes", "approved", "true", "1"}
 # Only tabs the engine created. Test1..Test12 are historical copy reviews a human made
 # and must never be treated as a campaign waiting to be built.
-TAB_PATTERN = re.compile(r"^[A-Z][A-Za-z0-9]*-\d{4}-\d{2}-\d{2}(-\d+)?$")
+# The suffix accepts LETTERS as well as digits as of 2026-09-16, so a multi-sender round
+# can name its tabs `Aliza-2026-09-16-Brooke` / `-Carl` / `-Zach`.
+#
+# One request per sender is not optional -- guarantee 5 of create_campaign allows one
+# sending identity per campaign, and this script refuses a tab whose approved rows span
+# senders -- so a 186-contact round across three senders is three tabs no matter what they
+# are called. The numeric-only suffix forced them to be `Aliza-2026-09-16`, `-2`, `-3`,
+# which is worse than cosmetic: the tab name becomes the CAMPAIGN name in Smartlead, so
+# three campaigns would arrive distinguishable only by a trailing digit, and picking the
+# wrong one to launch is silent.
+#
+# Keeping the requester FIRST is what makes this safe: `requester` below is
+# tab.split("-")[0], which feeds --approved-by. Naming the tabs `Brooke-2026-09-16`
+# instead would have credited Brooke with approving copy the outbound owner approved,
+# quietly falsifying the audit trail that golden rule 1 exists to keep.
+#
+# The date is still mandatory, so the historical Test1..Test12 copy-review tabs remain
+# unmatched and are still never treated as buildable.
+TAB_PATTERN = re.compile(r"^[A-Z][A-Za-z0-9]*-\d{4}-\d{2}-\d{2}(-[A-Za-z0-9]+)?$")
 
 
 def approved_rows(svc, sheet_id: str, tab: str) -> tuple[list[dict], int, int]:

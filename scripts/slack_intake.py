@@ -219,6 +219,32 @@ def parse_request(text: str) -> tuple[str | None, str]:
     return list_id, brief
 
 
+# The band from config/smartlead-defaults.md, "How big should a campaign be". Kept as
+# numbers here and prose there; if they ever disagree that file wins.
+SIZE_IDEAL = (100, 200)
+
+
+def size_note(requested: int) -> str:
+    """Advice for a rep whose request is unusually small or large, or "".
+
+    **Advisory, never a gate.** A rep who genuinely has 30 leads should get their 30
+    leads, and one with 400 should get them across two rounds rather than a refusal --
+    so this returns text to say, and nothing that changes what runs. Size is not a
+    deliverability risk (Smartlead paces per mailbox whatever the campaign size); it is a
+    duration and review-effort question, which is the rep's to weigh.
+    """
+    lo, hi = SIZE_IDEAL
+    if requested < 50:
+        return (f"{requested} is on the small side. Approval and the manual Smartlead "
+                f"step cost the same per campaign at any size, so {lo}-{hi} gets a lot "
+                f"more signal for the same overhead. Worth batching with another ask.")
+    if requested > 250:
+        return (f"{requested} will run over two weeks and needs the in-flight ceiling "
+                f"raised. Two rounds of ~{hi} land sooner and let the first round's "
+                f"replies inform the second.")
+    return ""
+
+
 def decide_capacity(in_flight: int, requested: int, ceiling: int) -> tuple[bool, str]:
     """(accept now, reason). Guarantee 4.
 
@@ -574,6 +600,7 @@ def main(argv=None) -> int:
             continue
 
         ok, why = decide_capacity(flight, size, ceiling)
+        note = size_note(size)
         print(f"  {ts} list {list_id} ({size} contacts) "
               f"{'form' if form else 'free text'} angle={angle[:60]!r}")
         print(f"    capacity: {why}")
@@ -588,6 +615,10 @@ def main(argv=None) -> int:
                 print("    still queued; not repeating the reply")
             continue
 
+        if note:
+            # Said once, at submission, when it can still change what the rep does.
+            # Advisory only: an unusual size is never a reason to refuse a request.
+            print(f"    size note: {note}")
         res = run_pipeline(list_id, brief, a.mailbox, a.apply, angle=angle,
                            requester=requester)
         if res.get("eligible") == 0:
@@ -616,12 +647,21 @@ def main(argv=None) -> int:
         flight += size                            # so a second request this run sees it
         handled += 1
         print(f"    pipeline: {res['steps']}, review tab {res['tab']}")
+        # The approval sentence here was stale and actively misleading: it read "Reply
+        # here with approval and I will build the campaign", which was true when
+        # approval lived in a Slack thread. Approval is now the `Approved` column in the
+        # review tab, read by scripts/build_approved.py in the morning heartbeat, and
+        # per golden rule 1 it is the OUTBOUND OWNER who approves rather than the
+        # requesting rep. A rep who replied "approved" in this thread would have been
+        # doing nothing at all, and waiting on a campaign that never got built.
         print("    " + sl.reply(channel, ts,
               f"{TAG_ACCEPTED} HubSpot list {list_id}, {size} contacts — copy drafted"
               + (f" with your angle: _{angle}_" if angle else " (no angle given)") + ".\n"
               f"Review tab *{res['tab']}* in the generation review sheet.\n"
-              f"Reply here with approval and I will build the campaign. "
-              f"**Nothing sends until a human launches it.**"))
+              f"Outbound review happens in that tab, not in this thread — the campaign "
+              f"is built from the rows marked Approved there.\n"
+              f"**Nothing sends until a human launches it in Smartlead.**"
+              + (f"\n\n_Note on size:_ {note}" if note else "")))
 
     print(f"\n{handled} accepted, {queued} queued, {rejected} rejected")
     if not a.apply:

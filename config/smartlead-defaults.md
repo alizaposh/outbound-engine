@@ -102,6 +102,57 @@ track_settings: [DONT_EMAIL_OPEN, DONT_LINK_CLICK]   # BOTH off. Open tracking o
 send_as_plain_text: false
 ```
 
+## How big should a campaign be
+
+**Tell a rep: 100-200 contacts per request.** Decided 2026-09-16.
+
+**Campaign size is almost unrelated to deliverability risk, and that is the thing most
+people get backwards.** The risk lever is the per-mailbox DAILY RATE, which Smartlead
+enforces at `max_new_leads_per_day: 15` whatever the campaign size. A 500-lead campaign
+sends no faster from any one mailbox than a 50-lead campaign; it just runs longer.
+Smartlead imposes no meaningful per-campaign cap. So "keep campaigns small to protect the
+domains" is not a real strategy — the pacing already does that, and shrinking campaigns
+only shrinks the signal.
+
+What size actually governs is **DURATION**, and that is arithmetic. One sender has 4
+mailboxes, so 60 sends/day, and each contact costs 3 sends:
+
+| Contacts, one sender | Sends | Days to push | Campaign length |
+|---|---|---|---|
+| 46 | 138 | 2.3 | ~7 days, delay-bound |
+| 100 | 300 | 5 | ~8 days |
+| **140** | 420 | 7 | **~7-9 days — the knee** |
+| 200 | 600 | 10 | ~13 days |
+| 400 | 1200 | 20 | ~3 weeks |
+
+`seq_delay_days: [0, 3, 4]` means a sequence takes 7 days on its own. **Below ~140 per
+sender the delays bind, not throughput**, so the campaign finishes in about that 7-9 days
+regardless. Above ~140 it stretches, and a three-week campaign means slow feedback and
+copy approved a month earlier still landing in inboxes.
+
+Three senders at ~60 each is why **100-200 for the whole request** is the band: it fills
+the fleet, finishes inside two weeks, and accumulates toward the 200-delivered floor in
+`config/analysis-defaults.md` where a reply rate stops being noise.
+
+- **Under ~50 is fine but inefficient.** Approval and the manual Smartlead UI step cost
+  the same per campaign whatever its size, so a 30-lead request pays full overhead for a
+  fraction of the signal. Batch small asks together instead.
+- **Over ~250 needs `max_leads_in_flight` raised** and runs 2+ weeks. Two rounds beat one.
+- **Never size on how many leads exist. Size on how many a human will READ.** At 200
+  contacts that is 600 bodies in one review tab, and the reviewer is the real bottleneck —
+  not the mailboxes. This is what golden rule 1's auto-approval exit criterion in
+  `CLAUDE.md` exists to relieve.
+
+**Small campaigns do NOT cost you measurement.** `campaign_report.py` pools every
+campaign into an "ACROSS ALL N CAMPAIGN(S)" total and applies the 200-delivered floor to
+that total, so a series of 46-lead campaigns reaches a quotable rate just as a single
+200-lead one does. Worth stating because the opposite is the intuitive assumption, and it
+would otherwise argue for oversized campaigns for the wrong reason.
+
+**One sender per campaign is fixed** (`create_campaign.py` guarantee 5), so a request
+spanning senders becomes one campaign each. `scripts/split_by_sender.py` does that split,
+keeping existing ownership and least-loading the remainder.
+
 ## Sequence
 - 3 emails per prospect.
 - **Inter-email delays: 3 days to email 2, then 4 more to email 3** (`seq_delay_days`).
