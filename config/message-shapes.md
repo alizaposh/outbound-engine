@@ -36,10 +36,13 @@ Are you locked in on your ticketing platform right now?
   for the no-name case too — `Hey there,` then a blank line, then the first sentence.
   Added as an explicit rule 2026-09-16 after 40 of 558 emails shipped as
   "Hey there, Reached out before. Trying again in case timing is better." on a single
-  line. **All 40 were contacts with no first name**, because the prompt's no-name branch
-  described the greeting in prose instead of showing it, while every named contact got
-  this skeleton and honoured it. `repair.split_greeting` now enforces the blank line
-  mechanically, so this rule is documentation of a guarantee rather than a hope.
+  line. **25 of the 40 had no first name and 15 did** — so 47% of nameless contacts
+  against 11% of named ones. The prompt's no-name branch describing the greeting in prose
+  instead of showing it makes it four times worse, but it is not the whole cause: the
+  model ignores this skeleton about one time in nine even when it is right there.
+  That is the useful lesson. An exemplar beats an instruction and **an exemplar is still
+  not a guarantee**, so the blank line is enforced mechanically by
+  `repair.split_greeting` and this rule documents a guarantee rather than a hope.
 - **The question is present-tense and flat.** No year, no season, no "looking ahead to".
 - **Name the offer as a bundle**, from the Offer variants at the end of this file. Never
   compress it into "value" or "what we could do for you".

@@ -262,10 +262,13 @@ def split_greeting(text: str) -> tuple[str, list[RepairRecord]]:
     whenever a first name exists. The no-name branch of the prompt replaced that exemplar
     with prose -- "'Hey there' or straight into the sentence" -- and 40 of 558 emails on
     list 1902 came back as "Hey there, Reached out before. Trying again in case timing is
-    better." on one line. Every one was a nameless contact; not one named contact did it.
+    better." on one line -- 25 of them nameless and 15 named, which is 47% of nameless
+    contacts against 11% of named ones.
 
-    That is the finding this project keeps arriving at: **an exemplar beats an
-    instruction, and neither is a guarantee.** The prompt is fixed alongside this, but a
+    So the no-name branch makes it four times worse without being the whole cause: the
+    model drops the blank line about one time in nine even when the skeleton shows it.
+    That is the finding this project keeps arriving at, in its sharper form: **an
+    exemplar beats an instruction, and an exemplar is still not a guarantee.** The prompt is fixed alongside this, but a
     prompt cannot promise a layout, so the promise lives here in code where it is
     deterministic. Cosmetic and mechanical, like the sign-off strip -- it moves a line
     break and changes not one word of copy.
