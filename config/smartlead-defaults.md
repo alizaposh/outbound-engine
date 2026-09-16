@@ -4,7 +4,13 @@ Default settings applied when creating a campaign, unless a brief overrides them
 Lock these once the Smartlead account exists (Phase 1).
 
 ## Sending limits
-- Per-mailbox daily ceiling: **~30 messages/mailbox/day** (initial operating ceiling).
+- Per-mailbox daily ceiling: **15 messages/mailbox/day.** Corrected 2026-09-16 — this
+  line read "~30" while `max_new_leads_per_day` below said 15 and all 12 Smartlead
+  accounts report `message_per_day: 15`. The 30 was an aspirational figure from before
+  the account existed, and it survived as a planning number: **it overstates fleet
+  capacity by 2×** (180/day, not 360/day), which is exactly the error that matters when
+  sizing a large round.
+- Fleet capacity: **12 mailboxes × 15 = 180/day**, or 60/day per sender identity.
 - Ramp: start low, increase gradually as mailboxes build sending history.
 - Scaling rule: add domains/mailboxes to grow volume. Never spike an existing mailbox.
 
@@ -34,7 +40,7 @@ log_sends_enabled: true             # scripts/sync_sends.py writes engine sends 
                                     # only logs mail from a HubSpot seat. SET TO FALSE the
                                     # day Smartlead supports it, or every activity is
                                     # logged twice.
-max_leads_in_flight: 100            # INTAKE ceiling for scripts/slack_intake.py. Counts
+max_leads_in_flight: 250            # INTAKE ceiling for scripts/slack_intake.py. Counts
                                     # leads inside ACTIVE/DRAFTED/PAUSED campaigns, not
                                     # sends per day: a lead occupies capacity for about
                                     # the length of the sequence (~7 days at [0,3,4]), so
@@ -56,6 +62,33 @@ max_leads_in_flight: 100            # INTAKE ceiling for scripts/slack_intake.py
                                     # campaign alongside one in flight.
                                     # Still well short of 180/day. Raise further only
                                     # with a reason, and never to clear a backlog.
+                                    #
+                                    # RAISED 100 -> 250 on 2026-09-16 for a 204-lead
+                                    # round split across ALL THREE senders. 36 in
+                                    # flight + 204 = 240, so 100 would have QUEUED it
+                                    # and the morning would have produced nothing.
+                                    #
+                                    # The arithmetic, since "raise only with a reason":
+                                    # 612 sends for the new 204 plus ~72 still owed on
+                                    # the 36 in flight = ~684, spread over the ~11 days
+                                    # a [0,3,4] sequence occupies once ramp is included
+                                    # -- about 60-70/day against the 180/day the fleet
+                                    # carries, so roughly 35-40% utilisation, or ~63%
+                                    # in the compressed case where Smartlead front-loads
+                                    # email 1. Previous rounds ran near 10%.
+                                    #
+                                    # THE SPLIT ACROSS THREE SENDERS IS WHAT MAKES THIS
+                                    # SAFE, and it is a condition rather than a detail.
+                                    # The same 204 on Brooke and Zach alone is 8
+                                    # mailboxes, not 12, which pushes the same volume to
+                                    # 70-95% of each mailbox's 15/day cap for about five
+                                    # days. Use scripts/split_by_sender.py, which keeps
+                                    # existing ownership and least-loads the rest.
+                                    #
+                                    # All 12 mailboxes were warmup ACTIVE at 99-100%
+                                    # reputation when this was raised. Revisit if any
+                                    # mailbox drops, and do NOT treat 250 as headroom
+                                    # for a single-sender campaign of that size.
 seq_delay_days: [0, 3, 4]           # email 1 immediately, 2 after 3 days, 3 after 4 more
 stop_lead_settings: REPLY_TO_AN_EMAIL   # stop-on-reply; already the Smartlead default
 track_settings: [DONT_EMAIL_OPEN, DONT_LINK_CLICK]   # BOTH off. Open tracking off
