@@ -58,6 +58,12 @@ from eligibility import HubSpot, env_token  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# Populated by ids_from_csv in --leads mode, so the writer can emit the ORIGINAL row for
+# each contact rather than a two-column reduction of it. Empty in --list mode, where
+# HubSpot is the only source and id+email is genuinely all there is.
+ORIGINAL_ROWS: dict[str, dict] = {}
+ORIGINAL_FIELDS: list[str] = []
+
 # HubSpot owner id -> sender first name, lower case. Read from /crm/v3/owners; kept here
 # rather than looked up so the mapping is reviewable and a renamed owner cannot silently
 # change who signs an email.
@@ -105,6 +111,20 @@ def ids_from_csv(hs: HubSpot, path: pathlib.Path) -> tuple[list[str], list[str]]
     eligibility.py carries hs_object_id through, so the fallback is for a hand-made file.
     """
     rows = list(csv.DictReader(path.open(encoding="utf-8-sig")))
+    # **Keep the whole input row.** The first version of this script wrote only
+    # hs_object_id and email, which silently discarded first_name, prospect_org, city,
+    # vertical and current_competitor -- every field eligibility.py had just assembled.
+    # Generation then saw 46 of 46 contacts as "an email address and no other data at
+    # all" and refused the batch on the sparse-share ceiling. That guard is the only
+    # reason this was caught before 186 contacts of generation ran on stripped input, and
+    # the lesson is the narrow one: a script that PARTITIONS rows must not also reshape
+    # them.
+    for r in rows:
+        key = (r.get("hs_object_id") or "").strip() or (r.get("email") or "").strip().lower()
+        if key:
+            ORIGINAL_ROWS[key] = dict(r)
+    if rows:
+        ORIGINAL_FIELDS.extend(k for k in rows[0].keys() if k)
     ids, need_lookup = [], []
     for r in rows:
         cid = (r.get("hs_object_id") or "").strip()
@@ -235,11 +255,26 @@ def main(argv=None) -> int:
         if not a.apply:
             print(f"\n  would write {len(rows)} row(s) -> {path}")
             continue
-        with path.open("w", newline="", encoding="utf-8") as fh:
-            w = csv.writer(fh)
-            w.writerow(["hs_object_id", "email"])
-            for c in rows:
-                w.writerow([c["hs_object_id"], c["email"]])
+        if ORIGINAL_FIELDS:
+            # --leads: write back exactly the columns that came in.
+            with path.open("w", newline="", encoding="utf-8") as fh:
+                w = csv.DictWriter(fh, fieldnames=ORIGINAL_FIELDS)
+                w.writeheader()
+                for c in rows:
+                    orig = (ORIGINAL_ROWS.get(c["hs_object_id"])
+                            or ORIGINAL_ROWS.get((c.get("email") or "").lower()))
+                    if orig is None:
+                        raise SystemExit(
+                            f"ABORT: no input row for {c.get('email')!r}; refusing to "
+                            f"write a partial file.")
+                    w.writerow({k: orig.get(k, "") for k in ORIGINAL_FIELDS})
+        else:
+            # --list: HubSpot membership gives ids and addresses; eligibility enriches.
+            with path.open("w", newline="", encoding="utf-8") as fh:
+                w = csv.writer(fh)
+                w.writerow(["hs_object_id", "email"])
+                for c in rows:
+                    w.writerow([c["hs_object_id"], c["email"]])
         print(f"\n  wrote {len(rows)} row(s) -> {path}")
 
     print("\nNext, one run PER SENDER (each becomes its own campaign):")
