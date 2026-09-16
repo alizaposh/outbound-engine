@@ -144,7 +144,7 @@ SUMMARY_PATTERNS = [
     re.compile(r"^\d+ closed, \d+ already current.*$", re.M),   # close_sequences
     re.compile(r"^no finished sequences.*$", re.M),
     re.compile(r"^\d+ engagement\(s\) (?:written|would be written).*$", re.M),
-    re.compile(r"^\d+ sent, \d+ skipped, \d+ failed.*$", re.M),   # send_replies
+    re.compile(r"^\d+ sent, \d+ already sent, \d+ failed.*$", re.M),   # send_replies
     re.compile(r"^\d+ resumed, \d+ blocked.*$", re.M),            # resume_sequences
     re.compile(r"^no contact has a resume date.*$", re.M),
     re.compile(r"^\d+ promoted, \d+ already current.*$", re.M),    # sync_meetings

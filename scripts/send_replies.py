@@ -178,7 +178,7 @@ def main(argv=None) -> int:
         return (r[i] if i < len(r) else "").strip()
 
     hs = HubSpot(env_token())
-    sent = skipped = failed = capped = 0
+    sent = already_sent = needs_fix = refused = failed = capped = 0
     seen_threads: set[str] = set()
 
     for n, row in enumerate(rows, start=2):
@@ -189,8 +189,9 @@ def main(argv=None) -> int:
         if decision not in SENDING_DECISIONS:
             continue
         if cell(row, "sent_at"):
-            print(f"  row {n} {email}: already stamped {cell(row,'sent_at')!r}; skipped")
-            skipped += 1
+            print(f"  row {n} {email}: already stamped {cell(row,'sent_at')!r}; "
+                  "nothing to do")
+            already_sent += 1
             continue
         body = cell(row, "draft_response")
         stats_id = cell(row, "smartlead_stats_id")
@@ -214,7 +215,7 @@ def main(argv=None) -> int:
             problems.append("a reply to this thread was already sent in this run")
         if problems:
             print(f"  row {n} {email}: SKIPPED, {'; '.join(problems)}")
-            skipped += 1
+            needs_fix += 1
             continue
 
         # The cap sits HERE, below the well-formedness checks and above the send, so a
@@ -234,7 +235,7 @@ def main(argv=None) -> int:
             if reason:
                 print(f"  row {n} {email}: REFUSING, {reason}. Approved in the sheet, but "
                       "consent changed after it was queued.")
-                skipped += 1
+                refused += 1
                 continue
         else:
             print(f"  row {n} {email}: no HubSpot contact, so suppression cannot be "
@@ -271,7 +272,18 @@ def main(argv=None) -> int:
             print(f"      sent. {detail}")
             sent += 1
 
-    print(f"\n{sent} sent, {skipped} skipped, {failed} failed"
+    # Three reasons a row does not send, reported separately because only one of them
+    # is routine. `already_sent` rows keep their sent_at stamp for good, so this count
+    # climbs forever and means the opposite of a problem. `needs_fix` is an approved row
+    # the engine REFUSED as malformed -- an empty draft, an unreplaced booking-link
+    # placeholder -- and a human has to edit the sheet before it can ever go. `refused` is
+    # a row whose prospect opted out after approval, which is the safety gate working but
+    # also the one case where a reviewer's Approve will never be honoured. Summed into one
+    # "skipped" they were indistinguishable, and the healthy count is the one that grows,
+    # so the two that need a person were always going to end up buried behind it.
+    print(f"\n{sent} sent, {already_sent} already sent, {failed} failed"
+          + (f", ** {needs_fix} NEED FIXING **" if needs_fix else "")
+          + (f", {refused} refused (consent changed)" if refused else "")
           + (f", {capped} over the cap" if capped else ""))
     if capped:
         print(f"{capped} approved row(s) NOT sent: the --limit {a.limit} cap was reached. "

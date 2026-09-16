@@ -171,19 +171,19 @@ def main(argv=None) -> int:
         return 0
 
     existing = {c.get("name") for c in (Smartlead(api_key()).call("GET", "/campaigns") or [])}
-    built = skipped = 0
+    built = idle = blocked = failed = 0
     for tab in candidates:
         rows, total, already = approved_rows(svc, sheet_id, tab)
         if total == -1:
             print(f"  {tab}: no {APPROVED_COL!r} column -- created before approvals "
                   f"existed. Add the column to use it, or regenerate the list.")
-            skipped += 1
+            idle += 1
             continue
         if not rows:
             note = f", {already} already built" if already else ""
             print(f"  {tab}: 0 of {total} row(s) approved and unbuilt{note}; "
                   f"nothing to build")
-            skipped += 1
+            idle += 1
             continue
 
         senders = {r.get("Seller", "").strip() for r in rows if r.get("Seller", "").strip()}
@@ -192,7 +192,7 @@ def main(argv=None) -> int:
             print(f"  {tab}: SKIPPED, approved rows span sender(s) {sorted(senders)}; "
                   f"a campaign mixing senders would send one person's copy from "
                   f"another's mailbox")
-            skipped += 1
+            blocked += 1
             continue
         sender = senders.pop()
         boxes = a.mailboxes or ",".join(sorted(
@@ -200,7 +200,7 @@ def main(argv=None) -> int:
             if who == sender))
         if not boxes:
             print(f"  {tab}: SKIPPED, no mailboxes found for sender {sender!r}")
-            skipped += 1
+            blocked += 1
             continue
 
         # The requester's first name is the tab name's own prefix, which is where it came
@@ -231,7 +231,7 @@ def main(argv=None) -> int:
         out = (p.stdout or "") + (p.stderr or "")
         if p.returncode != 0:
             print(f"    FAILED: {out.strip().splitlines()[-1][:160] if out.strip() else '?'}")
-            skipped += 1
+            failed += 1
             continue
         for line in out.splitlines():
             if "created campaign" in line or "uploaded" in line or "status:" in line:
@@ -242,7 +242,15 @@ def main(argv=None) -> int:
         print(f"    stamped {len(rows)} row(s) with {cname!r} in {BUILT_COL!r}")
         built += 1
 
-    print(f"\n{built} campaign(s) built, {skipped} tab(s) skipped")
+    # `idle` is the overwhelmingly common case and means nothing is wrong: a tab whose
+    # rows are all built already, or which nobody has approved yet. It grows with every
+    # campaign ever run, so it must not share a number with the two cases that need a
+    # person -- `blocked`, a tab that CANNOT build (approved rows spanning senders, or a
+    # sender with no mailbox), and `failed`, where create_campaign itself errored. Under
+    # one "skipped" count a genuinely stuck list looked exactly like a quiet morning.
+    print(f"\n{built} campaign(s) built, {idle} tab(s) with nothing to build"
+          + (f", ** {blocked} BLOCKED **" if blocked else "")
+          + (f", ** {failed} FAILED **" if failed else ""))
     if not a.apply:
         print("DRY RUN: nothing was created.")
     print("A built campaign is DRAFTED. It cannot send until a human sets the "
