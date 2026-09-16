@@ -43,11 +43,18 @@ recency_fields:
 has_group_exclude_value: "yes"          # has_group = yes -> existing customer
 
 excluded_owners:                        # name -> hubspot_owner_id, resolved 2026-08-24.
-                                        # 7 names: Rob Dong removed 2026-09-11, see notes.
+                                        # 6 names: Rob Dong removed 2026-09-11 and
+                                        # Bastian Delalande 2026-09-16, see notes.
   - Dani Edelstein      # 82992386   danielle@posh.vip
-  - Bastian Delalande   # 89417305   bastian@posh.vip
   - Ty Scearce          # 91700241   ty@posh.vip
   - Pavlos Tiftikidis   # 87936293   pavlos@posh.vip
+                                        # KEPT deliberately. On 2026-09-16 the one
+                                        # contact of his on list 1902 turned out to be
+                                        # mis-assigned and the owner was corrected by
+                                        # hand -- but the GATE stays, because outreach to
+                                        # contacts he genuinely owns is still barred.
+                                        # Fixing one record is not a reason to open the
+                                        # rule that protects the rest.
   - Avante Price        # 10486941   avante@posh.vip
   - Jenny Blake         # 90391601   jenny@posh.vip
   - Will Heyman         # 90391665   will@posh.vip
@@ -161,9 +168,20 @@ list necessary.
   signals that actually mean active work are still enforced and were kept deliberately:
   `in HubSpot sequence`, the recency gates on `notes_last_contacted` /
   `hs_last_sales_activity_timestamp`, and `has CSM`. A contact Rob is genuinely working
-  will trip one of those; a contact he merely owns will not. The other seven names remain
+  will trip one of those; a contact he merely owns will not. The other names remain
   — remove one only with the same evidence, a real list where that owner is blocking
   contacts nobody is touching.
+- **Bastian Delalande removed 2026-09-16**, on exactly that evidence: on list 1902 his
+  ownership was blocking **8 contacts** none of the active-work gates objected to. Same
+  finding as Rob Dong, one list later, which is the second data point that ownership is a
+  weak proxy for "someone is working this".
+- **Pavlos Tiftikidis KEPT on the same list, deliberately.** His single contact on 1902
+  was mis-assigned and the owner was corrected by hand in HubSpot, so that record now
+  clears the gate on its own. **The gate itself stays**: outreach to contacts he
+  genuinely owns is still barred, and correcting one mis-assigned record is not evidence
+  about the rest. Worth keeping the distinction visible, because "this contact should not
+  have been his" and "his contacts should be contactable" look similar in a list of
+  exclusion reasons and mean opposite things.
 - **`hs_lead_status`** — the excluded values are now `IN_PROGRESS` and `OPEN_DEAL`
   (uppercase, underscored). **`CONNECTED` was removed 2026-09-11**: it is residue from
   the previous CRM rather than a claim about current engagement, so it was excluding

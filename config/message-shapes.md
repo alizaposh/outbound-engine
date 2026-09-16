@@ -294,6 +294,12 @@ Naming the organization, when we have a real one:
 Generic, when we have neither. **These carry most of a cold list** — on the first real
 rep list only 9 of 36 contacts had a usable organization name and 1 had a known
 competitor, so a thin generic set is what actually reaches most prospects:
+**EXPANDED 8 -> 18 on 2026-09-16.** On the 177-contact round 51 contacts fell to this
+tier — the other 126 had a usable organization or competitor — and those 51 shared these
+8 lines, putting 12 on one subject. The org tier needs no expansion for the opposite
+reason: it interpolates a different name every time, so 118 contacts produced 118
+distinct subjects from 5 templates.
+
 - locked in on your ticketing setup?
 - ticketing setup for your events?
 - locked in on ticketing right now?
@@ -302,6 +308,16 @@ competitor, so a thin generic set is what actually reaches most prospects:
 - your current ticketing setup?
 - ticketing for your next run of events?
 - open to a ticketing conversation?
+- how are you handling ticketing?
+- what are you using for ticketing?
+- happy with your ticketing platform?
+- who runs ticketing on your side?
+- a ticketing question for you
+- ticketing plans for your next season?
+- still on the same ticketing platform?
+- rethinking ticketing this year?
+- your door and ticketing setup?
+- ticketing before your next run of shows?
 
 ## Offer variants (code picks one)
 
@@ -477,6 +493,12 @@ an exemplar cannot vary; only a slot can.
 
 Reply-based, one ask, **never a booking link** — the calendar goes out in the reply.
 
+**EXPANDED 8 -> 20 on 2026-09-16, ahead of a 177-contact round.** Measured rather than
+guessed: running `pick_variant` over the real 177 gave 8 distinct asks with **30 contacts
+sharing one**, the worst repetition anywhere in the sequence. Email 1 came out at 132
+distinct subjects and email 3 has 48 skeletons, so this list was the bottleneck — and it
+is the least visible one, because email 2 is a threaded reply nobody re-reads.
+
 - Free for 15 minutes this week?
 - Worth 15 minutes this week?
 - Any time this week for a quick call?
@@ -485,6 +507,18 @@ Reply-based, one ask, **never a booking link** — the calendar goes out in the 
 - Worth a conversation this week?
 - Free for a quick call in the next few days?
 - Happy to walk you through it — this week work?
+- Got 15 minutes this week?
+- Want me to send over what this would look like?
+- Any interest in seeing the numbers side by side?
+- Free to talk sometime this week?
+- Should I pull together what we would propose?
+- Want to see how this would work for your events?
+- Is this worth a look before your next run?
+- Can I send you the details?
+- Would a short call help?
+- Open to talking it through this week?
+- Want me to map this to your setup?
+- Free later this week for a quick one?
 
 ## Closer variants (code picks one)
 

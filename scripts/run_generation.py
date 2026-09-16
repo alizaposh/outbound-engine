@@ -754,6 +754,20 @@ def clean_org(raw: str | None, first: str | None, last: str | None) -> str | Non
     org = (raw or "").strip()
     if not org:
         return None
+    # **An email address is never an organization name.** On list 1902, 23 of 177
+    # contacts carried their own address in this field -- one value, aplay2k12@gmail.com,
+    # was the "org" for three different people -- which would have shipped subjects like
+    # "alexisklun@gmail.com x Posh" and body copy naming an inbox as the venue. FREE_MAIL
+    # already stopped this arriving via domain INFERENCE; nothing stopped it arriving as
+    # HubSpot free text, which is the same hole clean_city and the own-name rule above
+    # exist to close.
+    if "@" in org:
+        return None
+    # A bare domain is the same failure one step less obvious: "lanternroomkc.com" is not
+    # how a human writes the name. Returning None here hands the job to domain inference,
+    # which turns it into "Lantern Room" properly, so this loses nothing.
+    if re.fullmatch(r"[\w.-]+\.[a-z]{2,}", org, re.I) and " " not in org:
+        return None
     flat = _ALPHA_ONLY.sub("", org.lower())
     if not flat:
         return None                       # punctuation or digits only
