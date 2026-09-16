@@ -32,6 +32,14 @@ Are you locked in on your ticketing platform right now?
 %CTA%
 ```
 
+- **A BLANK LINE always follows the greeting.** It is in the skeleton above, and it holds
+  for the no-name case too — `Hey there,` then a blank line, then the first sentence.
+  Added as an explicit rule 2026-09-16 after 40 of 558 emails shipped as
+  "Hey there, Reached out before. Trying again in case timing is better." on a single
+  line. **All 40 were contacts with no first name**, because the prompt's no-name branch
+  described the greeting in prose instead of showing it, while every named contact got
+  this skeleton and honoured it. `repair.split_greeting` now enforces the blank line
+  mechanically, so this rule is documentation of a guarantee rather than a hope.
 - **The question is present-tense and flat.** No year, no season, no "looking ahead to".
 - **Name the offer as a bundle**, from the Offer variants at the end of this file. Never
   compress it into "value" or "what we could do for you".

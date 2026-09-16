@@ -238,6 +238,57 @@ def trim_middle_paragraph(text: str) -> tuple[str, list[RepairRecord]]:
     return "".join(paras), records
 
 
+# ---- greeting ------------------------------------------------------------------
+
+# A greeting line whose body text is not a paragraph away from it.
+#
+# Case-SENSITIVE on purpose. An earlier version used re.I, which silently defeated the
+# [A-Z0-9] test for "is the next thing a new sentence" and split "Hey Sam, tom and I run
+# this" -- a greeting followed by ordinary prose -- into two paragraphs. The capital is
+# the whole signal, so the greeting word carries its own case alternatives instead.
+_GREET = r"(?:[Hh]ey|[Hh]i|[Hh]ello)\b[^\n,]{0,40},"
+# "Hey there, Reached out before."
+GREETING_SAME_LINE = re.compile(rf"^([ \t]*{_GREET})[ \t]+([A-Z0-9][^\n]*)$", re.M)
+# "Hey there,\nReached out before." -- a line break, but not a paragraph. The (?!\n)
+# is what makes an already-correct greeting untouched.
+GREETING_ONE_NEWLINE = re.compile(rf"^([ \t]*{_GREET})\n(?!\n)([ \t]*[A-Z0-9])", re.M)
+
+
+def split_greeting(text: str) -> tuple[str, list[RepairRecord]]:
+    """Put a blank line between the greeting and the body.
+
+    **Why this is a repair and not a prompt rule.** The email-1 skeleton in
+    config/message-shapes.md already shows the blank line, and the model honours it
+    whenever a first name exists. The no-name branch of the prompt replaced that exemplar
+    with prose -- "'Hey there' or straight into the sentence" -- and 40 of 558 emails on
+    list 1902 came back as "Hey there, Reached out before. Trying again in case timing is
+    better." on one line. Every one was a nameless contact; not one named contact did it.
+
+    That is the finding this project keeps arriving at: **an exemplar beats an
+    instruction, and neither is a guarantee.** The prompt is fixed alongside this, but a
+    prompt cannot promise a layout, so the promise lives here in code where it is
+    deterministic. Cosmetic and mechanical, like the sign-off strip -- it moves a line
+    break and changes not one word of copy.
+    """
+    records = []
+
+    def _same(m):
+        records.append(RepairRecord(
+            "greeting_split", m.group(0).strip(), f"{m.group(1).strip()} / {m.group(2)}",
+            note="greeting shared its line with the body"))
+        return f"{m.group(1)}\n\n{m.group(2)}"
+
+    def _nl(m):
+        records.append(RepairRecord(
+            "greeting_split", m.group(0).strip(), f"{m.group(1).strip()} / {m.group(2)}",
+            note="greeting had a line break but not a paragraph"))
+        return f"{m.group(1)}\n\n{m.group(2)}"
+
+    text = GREETING_SAME_LINE.sub(_same, text)
+    text = GREETING_ONE_NEWLINE.sub(_nl, text)
+    return text, records
+
+
 # ---- driver -------------------------------------------------------------------
 
 def repair(body: str) -> tuple[str, list[RepairRecord]]:
@@ -250,7 +301,11 @@ def repair(body: str) -> tuple[str, list[RepairRecord]]:
     body, r0 = strip_signoff(body)
     body, r1 = normalize_dashes(body)
     body, r2 = trim_middle_paragraph(body)
-    return body, r0 + r1 + r2
+    # LAST, and that order matters. trim_middle_paragraph counts paragraphs, so splitting
+    # the greeting into its own paragraph first would change the count it reads and could
+    # make it trim a paragraph that was never surplus.
+    body, r3 = split_greeting(body)
+    return body, r0 + r1 + r2 + r3
 
 
 def format_records(records: list[RepairRecord], indent: str = "    ") -> str:

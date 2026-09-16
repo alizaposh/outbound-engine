@@ -1114,8 +1114,19 @@ def research_note(c: Contact, persona, basis, platform_known,
             "it does not go in the email.",
             "Do NOT guess an organization from the email address. A domain is not a "
             "brand name and the local part is not a person.",
-            "No first name is known, so open without one. 'Hey there' or straight into "
-            "the sentence. Never write an empty or placeholder greeting.",
+            # Was: "'Hey there' or straight into the sentence." That is an INSTRUCTION
+            # where every named contact gets an EXEMPLAR (the skeleton in
+            # message-shapes.md), and the difference showed: 40 of 558 emails on list
+            # 1902 opened "Hey there, Reached out before. Trying again..." on one line,
+            # and every single one was a nameless contact. Given the shape, the model
+            # keeps the shape.
+            "No first name is known, so greet without one. Write EXACTLY this layout, "
+            "with the blank line:\n"
+            "Hey there,\n"
+            "\n"
+            "<first sentence starts here>\n"
+            "Never put the first sentence on the same line as the greeting, and never "
+            "write an empty or placeholder greeting.",
             "Say less rather than padding. A short honest email outperforms a longer "
             "one carrying invented detail.",
         ] if basis == "fallback: minimal" else None),
