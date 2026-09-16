@@ -32,7 +32,28 @@ days_of_the_week: [1, 2, 3, 4, 5]   # weekdays only, Monday = 1
 start_hour: "09:00"
 end_hour: "17:00"
 min_time_btw_emails: 10             # minutes, spreads sends inside the window
-max_new_leads_per_day: 15           # per mailbox, matching the Smartlead account setting
+max_new_leads_per_day: 15           # CAMPAIGN-WIDE new leads per day, NOT per mailbox.
+                                    # The comment here said "per mailbox, matching the
+                                    # Smartlead account setting" until 2026-09-16 and was
+                                    # wrong on both halves. Two different settings exist
+                                    # and conflating them makes volume planning wrong by
+                                    # the mailbox count:
+                                    #   * campaign `max_leads_per_day` — how many NEW
+                                    #     leads ENTER the campaign each day. A ramp
+                                    #     control, campaign-wide.
+                                    #   * email account `message_per_day` (15 on all 12)
+                                    #     — the per-mailbox daily SEND cap. This is the
+                                    #     deliverability throttle and the binding one:
+                                    #     4 mailboxes per sender x 15 = 60 sends/day.
+                                    #
+                                    # **UNVERIFIED WHETHER THIS VALUE APPLIES.** We POST
+                                    # max_new_leads_per_day to /campaigns/{id}/schedule,
+                                    # but the campaigns read back max_leads_per_day = 50
+                                    # (3955179) and 30 (3921033) — neither is 15, and
+                                    # they differ from each other. Either the field name
+                                    # is ignored or these were set by hand in the UI.
+                                    # Check the three campaigns built 2026-09-17 against
+                                    # this value before trusting it.
 log_sends_enabled: true             # scripts/sync_sends.py writes engine sends and
                                     # replies to the HubSpot contact timeline. TRUE
                                     # because both vendor paths are unavailable: Smartlead
@@ -108,7 +129,7 @@ send_as_plain_text: false
 
 **Campaign size is almost unrelated to deliverability risk, and that is the thing most
 people get backwards.** The risk lever is the per-mailbox DAILY RATE, which Smartlead
-enforces at `max_new_leads_per_day: 15` whatever the campaign size. A 500-lead campaign
+enforces at the email account's `message_per_day: 15` whatever the campaign size. A 500-lead campaign
 sends no faster from any one mailbox than a 50-lead campaign; it just runs longer.
 Smartlead imposes no meaningful per-campaign cap. So "keep campaigns small to protect the
 domains" is not a real strategy — the pacing already does that, and shrinking campaigns
