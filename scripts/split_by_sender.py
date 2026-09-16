@@ -99,6 +99,36 @@ def read_contacts(hs: HubSpot, ids: list[str]) -> list[dict]:
     return out
 
 
+def ids_from_csv(hs: HubSpot, path: pathlib.Path) -> tuple[list[str], list[str]]:
+    """Contact ids from a csv. Prefers hs_object_id; falls back to resolving email.
+
+    eligibility.py carries hs_object_id through, so the fallback is for a hand-made file.
+    """
+    rows = list(csv.DictReader(path.open(encoding="utf-8-sig")))
+    ids, need_lookup = [], []
+    for r in rows:
+        cid = (r.get("hs_object_id") or "").strip()
+        if cid:
+            ids.append(cid)
+        elif (r.get("email") or "").strip():
+            need_lookup.append(r["email"].strip())
+    missing = []
+    for i in range(0, len(need_lookup), 100):
+        chunk = need_lookup[i:i + 100]
+        d = hs._call("POST", "/crm/v3/objects/contacts/batch/read",
+                     {"idProperty": "email", "properties": ["email"],
+                      "inputs": [{"id": e} for e in chunk]})
+        found = {}
+        for r in d.get("results") or []:
+            found[(r.get("properties") or {}).get("email", "").lower()] = r["id"]
+        for e in chunk:
+            if e.lower() in found:
+                ids.append(found[e.lower()])
+            else:
+                missing.append(e)
+    return ids, missing
+
+
 def assign(contacts: list[dict]) -> tuple[dict[str, list[dict]], dict[str, int]]:
     """Apply the three rules. Returns (sender -> rows, reason -> count)."""
     buckets: dict[str, list[dict]] = {s: [] for s in SENDERS}
@@ -128,6 +158,13 @@ def main(argv=None) -> int:
     # Not `required`, because that would make --self-test unrunnable -- the self-test
     # touches no API and needs no list. Checked below instead.
     ap.add_argument("--list", help="HubSpot list id to split")
+    # **Split AFTER eligibility, not before.** Splitting the raw list first looked right
+    # and balanced the wrong quantity: exclusions do not land evenly, so a 94/55/55 split
+    # of list 1902 became 93/44/40 once the gates ran -- Carl carrying more than twice
+    # Brooke or Zach, which is most of the load-spreading the split exists to achieve.
+    # Feeding the ELIGIBLE csv here balances contacts that will actually be mailed.
+    ap.add_argument("--leads", help="csv with an hs_object_id or email column; use this "
+                                    "to split an ELIGIBLE list from eligibility.py")
     ap.add_argument("--apply", action="store_true", help="write the CSVs")
     ap.add_argument("--out-dir", default=str(ROOT / "data"),
                     help="where the per-sender CSVs go")
@@ -136,15 +173,26 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.self_test:
         return _self_test()
-    if not a.list:
-        ap.error("--list is required (or use --self-test)")
+    if not a.list and not a.leads:
+        ap.error("one of --list or --leads is required (or use --self-test)")
+    if a.list and a.leads:
+        ap.error("--list and --leads are alternatives; pass one")
 
     hs = HubSpot(env_token())
     print("APPLY: CSVs will be written" if a.apply
           else "DRY RUN: no files written. Re-run with --apply.")
-    ids = list_members(hs, a.list)
+    if a.leads:
+        ids, missing = ids_from_csv(hs, pathlib.Path(a.leads))
+        label = f"csv {pathlib.Path(a.leads).name}"
+        if missing:
+            print(f"\n  {len(missing)} row(s) had no resolvable contact id and are "
+                  f"excluded: {', '.join(missing[:5])}"
+                  + (" ..." if len(missing) > 5 else ""))
+    else:
+        ids = list_members(hs, a.list)
+        label = f"list {a.list}"
     contacts = read_contacts(hs, ids)
-    print(f"\nlist {a.list}: {len(ids)} member(s), {len(contacts)} readable")
+    print(f"\n{label}: {len(ids)} member(s), {len(contacts)} readable")
 
     # Guarantee 5.
     no_email = [c for c in contacts if not (c.get("email") or "").strip()]
@@ -182,7 +230,8 @@ def main(argv=None) -> int:
         if not rows:
             print(f"\n  {s}: 0 contacts, no file")
             continue
-        path = out / f"split-{a.list}-{s}.csv"
+        stem = a.list or pathlib.Path(a.leads).stem
+        path = out / f"split-{stem}-{s}.csv"
         if not a.apply:
             print(f"\n  would write {len(rows)} row(s) -> {path}")
             continue
@@ -196,7 +245,8 @@ def main(argv=None) -> int:
     print("\nNext, one run PER SENDER (each becomes its own campaign):")
     for s in SENDERS:
         if buckets[s]:
-            print(f"  --leads data/split-{a.list}-{s}.csv  --mailbox {MAILBOX[s]}")
+            stem = a.list or pathlib.Path(a.leads).stem
+            print(f"  --leads data/split-{stem}-{s}.csv  --mailbox {MAILBOX[s]}")
     if not a.apply:
         print("\nDRY RUN: nothing was written.")
     return 0
