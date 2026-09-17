@@ -62,7 +62,9 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import repair  # noqa: E402
 import review_queue as rq  # noqa: E402
+import validate  # noqa: E402
 from enrich_callbacks import strip_quoted  # noqa: E402
 from eligibility import env_token, env_value, load_config  # noqa: E402
 
@@ -93,6 +95,17 @@ INTENTS = {
 }
 REPLY_CONFIG = ROOT / "config" / "reply-defaults.md"
 _DEFAULTS: dict | None = None
+# The same literals and regexes that gate every cold email, now applied to reply drafts
+# too. Lazily loaded so importing this module stays cheap and a missing config file
+# fails at use rather than at import.
+_BANNED_CACHE: tuple | None = None
+
+
+def banned_lists() -> tuple:
+    global _BANNED_CACHE
+    if _BANNED_CACHE is None:
+        _BANNED_CACHE = validate.load_banned()
+    return _BANNED_CACHE
 
 
 def defaults() -> dict:
@@ -1095,6 +1108,7 @@ def main(argv=None) -> int:
                 skipped += 1
                 continue
 
+            # (draft cleanup happens just below, after classify returns)
             # The contact is fetched BEFORE classifying, because the draft needs the
             # SENDER'S booking link and outbound_sender lives on the contact. It used to
             # be fetched after, when every meeting routed to one owner and the link was
@@ -1124,6 +1138,37 @@ def main(argv=None) -> int:
             # An out-of-office pauses the sequence rather than ending the relationship,
             # so it gets a date to come back on instead of a recycle window. Written
             # here, acted on by scripts/resume_sequences.py once the date arrives.
+            # **Clean the draft in CODE, not by asking.** The classifier prompt has said
+            # "no dashes" all along and still produced "Great to hear you're using
+            # Posh-we appreciate your business" -- an unspaced em dash -- on a real reply
+            # to a real prospect. Same finding as the greeting blank line: an instruction
+            # is not a guarantee, so the guarantee belongs here.
+            #
+            # A wider gap than the dash, and the reason this import exists at all: this
+            # module imported NEITHER validate NOR repair, so every reply draft bypassed
+            # dash normalisation and the banned-phrase list that all cold copy is held
+            # to. A reply can invent a capability just as easily as an opener can.
+            #
+            # Only normalize_dashes is applied, never the full repair() driver:
+            # strip_signoff removes a sign-off it believes the model wrote, and a reply
+            # draft legitimately has none yet, while trim_middle_paragraph counts
+            # paragraphs in copy that is one or two sentences long.
+            draft = res.get("draft_response", "")
+            if draft:
+                fixed, dash_records = repair.normalize_dashes(draft)
+                if dash_records:
+                    print(f"      draft: normalised {len(dash_records)} dash(es)")
+                res["draft_response"] = fixed
+                _lits, _res = banned_lists()
+                findings = validate.check_banned(
+                    "", fixed, literals=_lits, regexes=_res)
+                hard = [f for f in findings if getattr(f, "level", "") == "FAIL"]
+                if hard:
+                    # Reported on the row, never silently stripped: a banned phrase in a
+                    # draft is a signal about the draft, and a reviewer has to see it.
+                    res["_banned"] = "; ".join(
+                        getattr(f, "detail", "")[:80] for f in hard)
+                    print(f"      draft: BANNED PHRASE -- {res['_banned']}")
             resume_on = resume_date(intent, newest["at"], res.get("named_return_date"))
             if resume_on:
                 props["outbound_resume_after"] = resume_on
@@ -1171,6 +1216,10 @@ def main(argv=None) -> int:
                 # Say so when the booking link is NOT the sender's own. The draft looks
                 # identical either way, so without this a reviewer has no way to know
                 # the prospect is being pointed at the fallback calendar.
+                if res.get("_banned"):
+                    payload["review_reason"] = (
+                        f"{rq.review_reason_for(intent)} — DRAFT CONTAINS A BANNED "
+                        f"PHRASE: {res['_banned']}. Rewrite before approving.")
                 if res.get("_link_fallback"):
                     payload["review_reason"] = (
                         f"{rq.review_reason_for(intent)} — booking link is "
