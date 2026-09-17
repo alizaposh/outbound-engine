@@ -123,6 +123,30 @@ visible if it comes up again.
   retired-stats rule forbids, and ranking the bundle undercuts a bundle that is approved
   precisely because it is unquantified and undifferentiated. Name the elements neutrally
   or leave them out.
+- `\b(drive|driving|deliver|generate|generating|unlock)\s+(better|more|real|extra|higher|earlier)\s+\w+`
+- `\bearlier\s+conversions\b`
+  **Outcome promises attached to the offer** (2026-09-17). The offer is a code-picked
+  variant filled into `%OFFER%`, and it turned out the model REWRITES it about 11% of the
+  time -- 21 of 186 email-1 bodies on the live round did not contain any variant
+  verbatim. Six of those rewrites added performance claims the variants never make:
+  "focused on helping organizers drive better reach, earlier conversions, and generating
+  extra revenue", and "a marketing push to drive real reach".
+
+  `config/positioning.md` prohibits outcome promises and the approved bundle is
+  deliberately unquantified, so these are the ranking-claim fault in a new costume: a
+  controlled beat being paraphrased into a claim. **Four of the six had already been
+  delivered by the time this was found**, which is the argument for a machine check
+  rather than another line in the prompt.
+
+  Phrased against the VERB pattern rather than the exact sentences, so the next
+  paraphrase of the same idea is caught too.
+- `\bcustom\s+(offer|proposal)\b[^.\n]{0,40}:\s`
+  **A colon before the offer bundle** (2026-09-17). `config/message-shapes.md` says
+  plainly: "Do not use a colon before the list -- the bundle is what the proposal
+  contains, not a definition of it, and a colon reads as the latter." Nothing enforced
+  it, and 7 of 186 live emails read "I'd like to put a custom offer together for you:
+  dedicated account support, ...". A rule stated in a config file and checked nowhere is
+  a preference, not a rule.
 - `\btext[- ]?blasts?\b[^.]{0,70}(\d|\bx\b|\bdouble\b|\btriple\b|\btwice\b)`
 - `(\d|\bx\b|\bdouble\b|\btriple\b|\btwice\b)[^.]{0,70}\btext[- ]?blasts?\b`
   **A figure attached to text blasts** (2026-09-14). Text blasts became an approved

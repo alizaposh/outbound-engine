@@ -254,6 +254,30 @@ GREETING_SAME_LINE = re.compile(rf"^([ \t]*{_GREET})[ \t]+([A-Z0-9][^\n]*)$", re
 GREETING_ONE_NEWLINE = re.compile(rf"^([ \t]*{_GREET})\n(?!\n)([ \t]*[A-Z0-9])", re.M)
 
 
+# "Hey There," -- a capitalised "there" in the no-name greeting. 32 of 186 emails on the
+# live round carried it against 31 written correctly, so the model is close to a coin flip
+# on it. It reads as a mail-merge artifact, which is the single impression this copy
+# exists to avoid, and no check looked at greeting casing: check_subject_shape governs
+# the SUBJECT only.
+#
+# Deliberately narrow. Only the literal word "There" straight after a greeting is
+# lowered, so a prospect actually named Theresa, or any real name, is untouched.
+GREETING_CASE = re.compile(r"^([ \t]*(?:[Hh]ey|[Hh]i|[Hh]ello)[ \t]+)There\b", re.M)
+
+
+def fix_greeting_case(text: str) -> tuple[str, list[RepairRecord]]:
+    """Lower-case "There" in a no-name greeting. Whitespace-and-casing only."""
+    out = []
+
+    def _fix(m):
+        out.append(RepairRecord("greeting_case", m.group(0).strip(),
+                                f"{m.group(1).strip()} there",
+                                note="'There' is not a name"))
+        return f"{m.group(1)}there"
+
+    return GREETING_CASE.sub(_fix, text), out
+
+
 def split_greeting(text: str) -> tuple[str, list[RepairRecord]]:
     """Put a blank line between the greeting and the body.
 
@@ -346,7 +370,8 @@ def repair(body: str, sender_name: str = "") -> tuple[str, list[RepairRecord]]:
     # After split_greeting, so the greeting is its own paragraph and the intro's index
     # means what reorder_intro assumes it means.
     body, r4 = reorder_intro(body, sender_name)
-    return body, r0 + r1 + r2 + r3 + r4
+    body, r5 = fix_greeting_case(body)
+    return body, r0 + r1 + r2 + r3 + r4 + r5
 
 
 def format_records(records: list[RepairRecord], indent: str = "    ") -> str:

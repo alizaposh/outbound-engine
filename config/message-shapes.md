@@ -365,7 +365,7 @@ to be described concretely:
 - Happy to build you a custom proposal, with real account support behind it.
 
 Full bundle, exact approved wording:
-- I'd like to put a custom offer together for you with dedicated account support, financial incentives, marketing push and more.
+- I'd like to put a custom offer together for you with dedicated account support, financial incentives, a marketing push and more.
 - If there's room, I'd like to put a custom proposal together for you with dedicated account support, financial incentives and a marketing push.
 - Happy to put something custom together for you, with dedicated account support, financial incentives and marketing behind it.
 
