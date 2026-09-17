@@ -292,9 +292,44 @@ def split_greeting(text: str) -> tuple[str, list[RepairRecord]]:
     return text, records
 
 
+# ---- intro position ------------------------------------------------------------
+
+def reorder_intro(text: str, sender_name: str = "") -> tuple[str, list[RepairRecord]]:
+    """Move the sender introduction to directly after the greeting.
+
+    The shape is greeting, intro, opener. `validate.check_intro_first` FAILs any other
+    arrangement, and on 2026-09-17 that turned out not to be enough on its own: a request
+    whose angle was "reengage this contact, they churned last year" pushed the model to
+    open with the callback line instead, and it did so on **all three attempts**, so
+    generation gave up and shipped committed fallback copy. A correct check that produces
+    generic copy is not a good outcome.
+
+    So the order is enforced here instead. This is a MOVE, not a rewrite: the paragraphs
+    are reordered and not one word changes, which is the same licence normalize_dashes
+    and split_greeting work under.
+
+    Runs LAST in the driver, after split_greeting, because the paragraph boundary under
+    the greeting is what makes the intro's index meaningful at all.
+    """
+    if not sender_name:
+        return text, []
+    paras = text.split("\n\n")
+    stripped = [p.strip() for p in paras]
+    intro_at = next((i for i, p in enumerate(stripped)
+                     if re.search(rf"\bI'?m {re.escape(sender_name)}\b", p, re.I)), None)
+    # Nothing to do when there is no intro, or it already sits under the greeting.
+    if intro_at is None or intro_at <= 1 or len(paras) < 3:
+        return text, []
+    moved = paras.pop(intro_at)
+    paras.insert(1, moved)
+    return "\n\n".join(paras), [RepairRecord(
+        "intro_order", f"intro was paragraph {intro_at + 1}", "intro moved to paragraph 2",
+        note="shape is greeting, intro, opener")]
+
+
 # ---- driver -------------------------------------------------------------------
 
-def repair(body: str) -> tuple[str, list[RepairRecord]]:
+def repair(body: str, sender_name: str = "") -> tuple[str, list[RepairRecord]]:
     """Sign-off, then dashes, then the middle paragraph.
 
     Order matters. Sign-off removal changes what the last paragraph is, which the middle
@@ -308,7 +343,10 @@ def repair(body: str) -> tuple[str, list[RepairRecord]]:
     # the greeting into its own paragraph first would change the count it reads and could
     # make it trim a paragraph that was never surplus.
     body, r3 = split_greeting(body)
-    return body, r0 + r1 + r2 + r3
+    # After split_greeting, so the greeting is its own paragraph and the intro's index
+    # means what reorder_intro assumes it means.
+    body, r4 = reorder_intro(body, sender_name)
+    return body, r0 + r1 + r2 + r3 + r4
 
 
 def format_records(records: list[RepairRecord], indent: str = "    ") -> str:

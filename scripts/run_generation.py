@@ -1404,7 +1404,7 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
         trial = []
         for position in POSITIONS:
             m = emails[f"message_{position}"]
-            body_repaired, records = repair.repair(m["body"])
+            body_repaired, records = repair.repair(m["body"], sender_name)
             body_final = assemble.assemble(body_repaired, mailbox,
                                            identity=identity, sender_map=sender_map)
             v = validate.validate_email(
