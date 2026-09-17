@@ -86,7 +86,7 @@ the heartbeat.
 | `outbound-midday` | **Weekdays**, 1:05 PM | prompt below with `midday` |
 | `outbound-afternoon` | **Weekdays**, 4:25 PM | prompt below with `afternoon` |
 | `outbound-weekly` | **Mondays**, 10:15 AM | prompt below with `weekly` |
-| `outbound-intake` | **Weekdays**, hourly 9 AM–6 PM | the intake prompt below |
+| `outbound-intake` | **Weekdays**, every 5 min, 9 AM–6 PM | the intake prompt below |
 
 ### `outbound-intake`: why it is separate from the heartbeat
 
@@ -94,8 +94,23 @@ Requested 2026-09-17: a rep should not wait until the next heartbeat slot for th
 drafts. **True on-submit triggering is out of scope by decision, not by oversight** —
 CLAUDE.md v1 says "polling, no webhooks" and "no servers, queues, or webhook
 infrastructure", and a Slack Workflow Builder form cannot reach this laptop without one.
-Hourly polling is the closest honest equivalent: worst case an hour instead of a
-morning.
+Five-minute polling is the closest honest equivalent: worst case five minutes instead of
+a morning.
+
+**Five minutes rather than real time, deliberately.** Socket Mode would give true
+event-driven intake without a public URL, and it is only ~60 lines plus launchd
+supervision -- but the trigger is not the bottleneck. Generation runs 3-8 seconds per
+contact sequentially, so a 100-contact request is ~10 minutes of LLM work however it
+starts; instant triggering takes the rep's wait from ~15 minutes to ~10. The step change
+it sounds like, it is not.
+
+The deciding reason is operational rather than arithmetic: a listener is a DAEMON, and
+every other script in this repo runs and exits. The heartbeat's entire model is "silence
+means broken", which does not cover a process that hangs, holds a stale token, or dies
+quietly. That is the one failure mode this system has no answer for, and it is not worth
+adding to save five minutes. If real-time is ever wanted, keep intake in the three
+heartbeat slots as the safety net, add Socket Mode as a fast path only, and have the
+daemon post a daily "still alive" line so silence still means broken.
 
 **It runs `slack_intake.py` directly rather than a heartbeat slot, and that is the
 point.** The heartbeat posts to Slack on EVERY run by design (guarantee 4), so an hourly

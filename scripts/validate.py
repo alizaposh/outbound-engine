@@ -710,12 +710,52 @@ def check_why_now(subject: str, body: str, *, position: int = 2) -> list[Finding
     return []
 
 
+def check_intro_first(subject: str, body: str, *, position: int = 1,
+                      sender_name: str = "") -> list[Finding]:
+    """Email 1's sender introduction must be the FIRST paragraph after the greeting.
+
+    The skeleton in config/message-shapes.md is greeting, then `{sender.intro_line}`,
+    then the opener, and the prompt states the order explicitly. **Nineteen checks ran on
+    every email and not one of them looked at beat order**, so when the model swapped two
+    paragraphs it passed clean. Caught on a live intake run:
+
+        Hey Garrett,
+        We reached out a while back. Is it better timing now?      <- opener
+        I'm Brooke, I run partnerships at Posh.                    <- intro, too late
+
+    It reads as a stranger referring to a shared history before saying who they are,
+    which is worse than either beat alone and is the exact impression the intro exists to
+    prevent. Every other email in the same batch had it right, which is why a prose rule
+    was never going to be enough -- the model gets it right most of the time, and "most"
+    is what a validator is for.
+
+    Position 1 only. Emails 2 and 3 are threaded replies with no greeting and no
+    re-introduction by design.
+    """
+    if position != 1 or not sender_name:
+        return []
+    paras = [p.strip() for p in body.split("\n\n") if p.strip()]
+    if len(paras) < 3:
+        return []
+    intro_at = next((i for i, p in enumerate(paras)
+                     if re.search(rf"\bI'?m {re.escape(sender_name)}\b", p, re.I)), None)
+    if intro_at is None:
+        return []                      # a missing intro is check_length's problem, not this
+    # paras[0] is the greeting. The intro belongs at index 1.
+    if intro_at > 1:
+        return [Finding("intro_order", FAIL,
+                        f"the sender introduction is paragraph {intro_at + 1}; it must "
+                        f"come directly after the greeting, before the opener. Shape is "
+                        f"greeting, intro, opener (config/message-shapes.md).")]
+    return []
+
+
 # ---- driver -------------------------------------------------------------------
 
 def validate_email(subject: str, body: str, *, position: int, footer: str, token: str,
                    literals, regexes, raw_body: str | None = None,
                    label: str = "", competitor_known: bool = True,
-                   allowed_names=()) -> EmailResult:
+                   allowed_names=(), sender_name: str = "") -> EmailResult:
     res = EmailResult(label=label or f"message_{position}")
     res.findings += check_no_dashes(subject, body)
     res.findings += check_approved_stats(subject, body)
@@ -735,6 +775,8 @@ def validate_email(subject: str, body: str, *, position: int, footer: str, token
                                                competitor_known=competitor_known)
     res.findings += check_commercial_terms(subject, body)
     res.findings += check_length(subject, body, position=position, footer=footer)
+    res.findings += check_intro_first(subject, body, position=position,
+                                      sender_name=sender_name)
     if raw_body is not None:
         markers = [m for m in footer.splitlines() if m.strip()]
         res.findings += check_model_wrote_footer(subject, raw_body, footer_markers=markers)

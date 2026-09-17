@@ -763,6 +763,18 @@ def clean_org(raw: str | None, first: str | None, last: str | None) -> str | Non
     # exist to close.
     if "@" in org:
         return None
+    # **Never pitch Posh to Posh.** Garrett's test submission carried prospect_org
+    # "Posh Rev Ops" on a contact with an external address, and the subject came out as
+    # "ticketing for posh rev ops" -- us selling ticketing to ourselves. The eligibility
+    # filter catches internal records by lifecycle (his work address was excluded as
+    # `lifecycle customer`); it cannot catch one whose ADDRESS is external while the
+    # company field is ours.
+    #
+    # Matched against an explicit list of our own names, normalised, rather than "any org
+    # containing posh" -- a real prospect called "Posh Nails Studio" normalises to
+    # poshnailsstudio and keeps its name, which a substring test would have taken away.
+    if _ALPHA_ONLY.sub("", org.lower()) in OWN_ORG_NAMES:
+        return None
     # A bare domain is the same failure one step less obvious: "lanternroomkc.com" is not
     # how a human writes the name. Returning None here hands the job to domain inference,
     # which turns it into "Lantern Room" properly, so this loses nothing.
@@ -786,6 +798,13 @@ def clean_org(raw: str | None, first: str | None, last: str | None) -> str | Non
             return None
     return org
 
+
+# Our own company, in the forms it appears in HubSpot. Normalised (letters only, lower
+# case) so spacing and punctuation do not matter.
+OWN_ORG_NAMES = {
+    "posh", "poshgroup", "poshgroupinc", "poshvip", "poshrevops", "poshpartnerships",
+    "poshsales", "poshmarketing", "teamposh",
+}
 
 # Domains that say nothing about an organization. An inference from one of these would
 # be pure invention, so they never reach the model.
@@ -1394,6 +1413,7 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
                 competitor_known=platform_known,
                 allowed_names=[c.prospect_org, c.company, c.first_name, c.last_name,
                                c.current_competitor, c.city],
+                sender_name=sender_name,
                 label=f"{c.display} message_{position}")
             trial.append(MessageResult(position, m.get("subject", ""), m["body"],
                                        body_final, records, v))
