@@ -86,7 +86,7 @@ the heartbeat.
 | `outbound-midday` | **Weekdays**, 1:05 PM | prompt below with `midday` |
 | `outbound-afternoon` | **Weekdays**, 4:25 PM | prompt below with `afternoon` |
 | `outbound-weekly` | **Mondays**, 10:15 AM | prompt below with `weekly` |
-| `outbound-intake` | **Weekdays**, every 5 min, 9 AM–6 PM | the intake prompt below |
+| `outbound-intake` | **NOT a Desktop routine** — a launchd job, see below | every 5 min |
 
 ### `outbound-intake`: why it is separate from the heartbeat
 
@@ -127,19 +127,42 @@ only path.
 A no-op run is cheap: ~1.6s and a handful of API calls, because the capacity check walks
 campaigns rather than leads.
 
+### How it is actually installed: launchd, not Claude Desktop
+
+**INSTALLED AND RUNNING as of 2026-09-17.** `~/Library/LaunchAgents/vip.posh.outbound-intake.plist`
+
+```bash
+launchctl list | grep outbound-intake                     # is it registered
+launchctl print gui/$(id -u)/vip.posh.outbound-intake     # runs, last exit code
+launchctl kickstart -p gui/$(id -u)/vip.posh.outbound-intake   # run once now
+tail -f logs/intake.log                                   # what it did
 ```
-Run the outbound Slack intake for me.
 
-Working folder: this repo.
-Command: ./.venv/bin/python scripts/slack_intake.py --apply
+Two reasons it is not a Desktop routine like the other four. Desktop's schedule picker
+does not offer a 5-minute cadence; and launchd survives a reboot and login without
+anyone remembering to re-enable it, where a paused Desktop routine is the one failure
+the heartbeat cannot report.
 
-Report the last line of output. If it exits non-zero, say so and paste the error.
-Do not run any other script.
-```
+It runs `slack_intake.py --apply --business-hours-only`. **The business-hours rule lives
+in the script, not the schedule** — `in_business_hours()`, Mon–Fri 09:00–17:59, checked
+before any credential or API call, so an off-hours tick costs nothing and cannot fail on
+a missing token. An hour past the 17:00 send window on purpose, so a list submitted at
+the end of the day is still drafted that day.
 
-**`--apply` is not optional here either.** Without it the script reads the channel,
-decides what it would do, and posts nothing — so a rep's request sits unacknowledged
-while the log claims a healthy run. Same trap as the morning routine in 2026-09-10.
+`RunAtLoad` is **false**: installing this should not fire a real `--apply` run the instant
+it lands, before anyone has watched one. Use `kickstart` for that, as was done once at
+install.
+
+**Overlap needs no handling.** launchd will not start a second instance of a job while
+one is running, so a generation taking longer than five minutes delays the next tick
+rather than racing itself.
+
+**A quiet run posts nothing to Slack**, which is the whole point — nine health messages a
+day would train everyone to ignore the channel. The cost is that a broken intake job is
+silent, and that is covered by intake ALSO running in all three heartbeat slots: a dead
+launchd job shows up as requests only ever being picked up at 9:45, 1:05 and 4:25 and
+never in between. `logs/intake.log` is the other answer to "did it run", since it is
+appended on every tick.
 
 **Weekdays** is a built-in preset (Daily, skipping Sat/Sun) with a time picker — no cron
 needed. Set **working folder** to this repo; Desktop will ask you to trust it. Leave the

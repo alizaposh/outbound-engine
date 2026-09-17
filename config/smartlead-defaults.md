@@ -4,13 +4,26 @@ Default settings applied when creating a campaign, unless a brief overrides them
 Lock these once the Smartlead account exists (Phase 1).
 
 ## Sending limits
-- Per-mailbox daily ceiling: **15 messages/mailbox/day.** Corrected 2026-09-16 — this
-  line read "~30" while `max_new_leads_per_day` below said 15 and all 12 Smartlead
-  accounts report `message_per_day: 15`. The 30 was an aspirational figure from before
-  the account existed, and it survived as a planning number: **it overstates fleet
-  capacity by 2×** (180/day, not 360/day), which is exactly the error that matters when
-  sizing a large round.
-- Fleet capacity: **12 mailboxes × 15 = 180/day**, or 60/day per sender identity.
+- Per-mailbox daily ceiling: **30 messages/mailbox/day.** RAISED from 15 on 2026-09-17,
+  applied to all 12 accounts by `scripts/set_send_limits.py --limit 30 --apply` and
+  verified by read-back.
+  - The evidence for raising it: **189 lifetime cold sends across the four domains with
+    ZERO bounces**, all 12 mailboxes warmup ACTIVE at 99-100%, and the cap demonstrably
+    binding — Carl's four mailboxes were sitting at 12/12/12/13 of 15 while his 94-lead
+    campaign was rate-limited.
+  - 30 is the ceiling named in `CLAUDE.md` golden rule 4, so this is the top of the
+    documented range rather than a new frontier. `set_send_limits.py` warns above it.
+  - **What this does NOT measure.** Bounces are the easy signal; the real risk of more
+    volume is silent inbox-to-spam placement, and open and click tracking are both OFF by
+    deliberate decision (`track_settings`), so a degradation shows up only as a reply rate
+    drifting down — lagging and noisy at this volume. Read bounces AND replies before
+    going further, and per golden rule 4 the way past 30 is more mailboxes, not a higher
+    number here.
+- Fleet capacity: **12 mailboxes × 30 = 360/day**, or 120/day per sender identity.
+  - This line read "~30 messages/mailbox/day" while the account was actually set to 15
+    until 2026-09-16, overstating capacity by 2×. The figures above are now the measured
+    account state, not an aspiration; re-derive them from
+    `GET /email-accounts` rather than trusting this file if a decision turns on them.
 - Ramp: start low, increase gradually as mailboxes build sending history.
 - Scaling rule: add domains/mailboxes to grow volume. Never spike an existing mailbox.
 
@@ -41,10 +54,13 @@ max_new_leads_per_day: 15           # CAMPAIGN-WIDE new leads per day, NOT per m
                                     #   * campaign `max_leads_per_day` — how many NEW
                                     #     leads ENTER the campaign each day. A ramp
                                     #     control, campaign-wide.
-                                    #   * email account `message_per_day` (15 on all 12)
-                                    #     — the per-mailbox daily SEND cap. This is the
-                                    #     deliverability throttle and the binding one:
-                                    #     4 mailboxes per sender x 15 = 60 sends/day.
+                                    #   * email account `message_per_day` (30 on all 12
+                                    #     as of 2026-09-17) — the per-mailbox daily SEND
+                                    #     cap, and the deliverability throttle. 4
+                                    #     mailboxes per sender x 30 = 120 sends/day.
+                                    #     WRITTEN as `max_email_per_day`; the API reports
+                                    #     it as message_per_day and rejects that name on
+                                    #     write. Use scripts/set_send_limits.py.
                                     #
                                     # **UNVERIFIED WHETHER THIS VALUE APPLIES.** We POST
                                     # max_new_leads_per_day to /campaigns/{id}/schedule,
@@ -67,7 +83,10 @@ max_leads_in_flight: 250            # INTAKE ceiling for scripts/slack_intake.py
                                     # the length of the sequence (~7 days at [0,3,4]), so
                                     # a per-day ceiling would let a week of campaigns all
                                     # start on one morning. Deliberately well under the
-                                    # 180/day the mailboxes could carry.
+                                    # 180/day the mailboxes could carry at the time.
+                                    # (Fleet capacity is 360/day since 2026-09-17; this
+                                    # ceiling was not raised with it, because it paces
+                                    # young domains rather than tracking throughput.)
                                     #
                                     # RAISED 60 -> 100 on 2026-09-10, which the previous
                                     # note anticipated ("raise it as they age"). A
@@ -136,24 +155,29 @@ domains" is not a real strategy — the pacing already does that, and shrinking 
 only shrinks the signal.
 
 What size actually governs is **DURATION**, and that is arithmetic. One sender has 4
-mailboxes, so 60 sends/day, and each contact costs 3 sends:
+mailboxes at 30/day, so 120 sends/day, and each contact costs 3 sends. **Revised
+2026-09-17 when the cap went 15 -> 30; the knee doubled with it:**
 
 | Contacts, one sender | Sends | Days to push | Campaign length |
 |---|---|---|---|
-| 46 | 138 | 2.3 | ~7 days, delay-bound |
-| 100 | 300 | 5 | ~8 days |
-| **140** | 420 | 7 | **~7-9 days — the knee** |
-| 200 | 600 | 10 | ~13 days |
-| 400 | 1200 | 20 | ~3 weeks |
+| 46 | 138 | 1.2 | ~7 days, delay-bound |
+| 100 | 300 | 2.5 | ~7 days, delay-bound |
+| 200 | 600 | 5 | ~8 days |
+| **280** | 840 | 7 | **~7-9 days — the knee** |
+| 400 | 1200 | 10 | ~13 days |
+| 800 | 2400 | 20 | ~3 weeks |
 
-`seq_delay_days: [0, 3, 4]` means a sequence takes 7 days on its own. **Below ~140 per
+`seq_delay_days: [0, 3, 4]` means a sequence takes 7 days on its own. **Below ~280 per
 sender the delays bind, not throughput**, so the campaign finishes in about that 7-9 days
-regardless. Above ~140 it stretches, and a three-week campaign means slow feedback and
+regardless. Above ~280 it stretches, and a three-week campaign means slow feedback and
 copy approved a month earlier still landing in inboxes.
 
-Three senders at ~60 each is why **100-200 for the whole request** is the band: it fills
-the fleet, finishes inside two weeks, and accumulates toward the 200-delivered floor in
-`config/analysis-defaults.md` where a reply rate stops being noise.
+**The recommended request size stays 100-200, and the reason is no longer throughput.**
+At 30/day the fleet could carry far more; what has not changed is that a reviewer has to
+read every draft, and 200 contacts is already 600 bodies. The binding constraint moved
+from the mailboxes to the human, which is worth saying out loud because raising the cap
+makes it tempting to raise the request size with it. Revisit when auto-approval clears
+the exit criterion in golden rule 1, not because there is spare sending capacity.
 
 - **Under ~50 is fine but inefficient.** Approval and the manual Smartlead UI step cost
   the same per campaign whatever its size, so a 30-lead request pays full overhead for a

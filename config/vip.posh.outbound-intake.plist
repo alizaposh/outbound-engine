@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>vip.posh.outbound-intake</string>
+
+  <!-- The fast path for Slack campaign requests. Every 5 minutes; the script itself
+       exits immediately outside Mon-Fri 09:00-17:59 via --business-hours-only, so the
+       schedule stays a single number and the policy lives in code where it is tested.
+
+       launchd rather than a Claude Desktop routine for two reasons: Desktop's schedule
+       picker does not offer a 5-minute cadence, and launchd survives a reboot and login
+       without anyone remembering to re-enable it. The three heartbeat slots stay in
+       Claude Desktop -- they post to Slack every run, which is how a stopped heartbeat
+       is noticed, and this job is deliberately silent when there is nothing to do. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/alizamayer/Desktop/email-engine/outbound-engine/.venv/bin/python</string>
+    <string>/Users/alizamayer/Desktop/email-engine/outbound-engine/scripts/slack_intake.py</string>
+    <string>--apply</string>
+    <string>--business-hours-only</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/alizamayer/Desktop/email-engine/outbound-engine</string>
+
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <!-- Off at load. `launchctl kickstart` runs it once by hand; RunAtLoad would fire a
+       real --apply run the instant this is installed, before anyone has watched it. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- Appended, never truncated. This is the only record that the job ran at all, since
+       a quiet run posts nothing to Slack, so "did it run" is answered here. -->
+  <key>StandardOutPath</key>
+  <string>/Users/alizamayer/Desktop/email-engine/outbound-engine/logs/intake.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/alizamayer/Desktop/email-engine/outbound-engine/logs/intake.log</string>
+
+  <!-- launchd starts with almost no environment, so the venv python is given by absolute
+       path above and PATH is set here for the subprocesses slack_intake shells
+       (eligibility, callbacks, generation, export). Credentials are NOT here: they are
+       read from .env by the scripts, which keeps them out of a world-readable plist. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+  </dict>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <!-- Kill any stragglers when the run exits, so a hung generation subprocess cannot be
+       orphaned and left holding credentials.
+
+       Overlap needs no setting here: launchd does not start a second instance of a job
+       while one is still running, so a generation taking longer than 5 minutes simply
+       delays the next tick rather than racing itself. Worth stating because it is the
+       obvious worry with StartInterval and the obvious worry is unfounded. -->
+  <key>AbandonProcessGroup</key>
+  <false/>
+</dict>
+</plist>

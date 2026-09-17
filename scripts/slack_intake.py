@@ -148,6 +148,16 @@ SPLIT_WORDS = ("split", "all", "all three", "round robin", "round-robin", "rotat
                "spread", "everyone")
 
 
+# Mon-Fri, 09:00-17:59 local. An hour past the 17:00 send window so a list submitted at
+# the end of the day still gets drafted the same day.
+BUSINESS_DAYS, BUSINESS_HOURS = range(0, 5), range(9, 18)
+
+
+def in_business_hours(now: dt.datetime | None = None) -> bool:
+    n = now or dt.datetime.now()
+    return n.weekday() in BUSINESS_DAYS and n.hour in BUSINESS_HOURS
+
+
 def review_sheet_url() -> str:
     """A clickable link to the generation review Sheet.
 
@@ -826,6 +836,10 @@ def main(argv=None) -> int:
                          "deliberate multi-sender round run by hand; the scheduled "
                          "intake never uses it, because a rep's single request should "
                          "not become three campaigns to launch.")
+    ap.add_argument("--business-hours-only", action="store_true",
+                    help="exit immediately outside Mon-Fri 09:00-18:00 local. For a "
+                         "every-5-minutes launchd schedule, so the policy lives in code "
+                         "where it can be tested rather than in a cron expression.")
     ap.add_argument("--limit", type=int, default=20, help="messages to scan")
     ap.add_argument("--self-test", action="store_true",
                     help="prove parsing and the capacity rule with no API calls")
@@ -833,6 +847,14 @@ def main(argv=None) -> int:
 
     if a.self_test:
         return _self_test()
+
+    # Checked BEFORE any credential or API call, so an off-hours run costs nothing and
+    # cannot fail on a missing token. Reps do not submit lists at 3am, and a request that
+    # arrives overnight is picked up at 09:00 -- or sooner by the morning heartbeat,
+    # which runs intake regardless of this flag.
+    if a.business_hours_only and not in_business_hours():
+        print(f"outside business hours ({dt.datetime.now():%a %H:%M}); nothing to do.")
+        return 0
 
     token = env_value("SLACK_BOT_TOKEN")
     channel = env_value("SLACK_REQUEST_CHANNEL")
