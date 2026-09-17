@@ -50,6 +50,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import export_review as er  # noqa: E402
 import review_queue as rq  # noqa: E402
 from create_campaign import Smartlead, api_key  # noqa: E402
+from eligibility import HubSpot, env_token  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PY = sys.executable
@@ -142,6 +143,52 @@ def stamp_built(svc, sheet_id: str, tab: str, row_numbers: list[int], cname: str
                  for n in row_numbers]}).execute(num_retries=rq.SHEETS_RETRIES)
 
 
+def fill_hubspot_ids(rows: list[dict]) -> tuple[int, list[str]]:
+    """Resolve each row's `hs_object_id` from its email. Returns (filled, unmatched).
+
+    **The review tab does not carry `hs_object_id`.** It was dropped when the columns
+    were trimmed to the eight a reviewer asked for, which is the right call for a human
+    reading copy — and it silently removed the key the enrolment write-back needs.
+    create_campaign reported "46 enrolled lead(s) have no hs_object_id, so their enrolment
+    cannot be recorded in HubSpot. They will look un-enrolled to the next eligibility
+    run." Every consequence of that is invisible until much later: no
+    outbound_last_campaign_id, so the contacts are missing from the Enrolled list and the
+    dashboard; no outbound_sender, so sender continuity is lost and a later campaign could
+    mail them as somebody else; and the next eligibility run would consider them never
+    contacted.
+
+    Resolving from email rather than adding the column back, because **email is the join
+    key throughout** (see "Architecture & sources of truth" in CLAUDE.md) -- it is what
+    the lead lists, HubSpot and Smartlead all carry. That keeps the reviewer's tab as
+    narrow as they asked for while restoring the write-back.
+
+    Read-only.
+    """
+    hs = HubSpot(env_token())
+    want = [(r.get("email") or "").strip() for r in rows]
+    found: dict[str, str] = {}
+    for i in range(0, len(want), 100):
+        chunk = [e for e in want[i:i + 100] if e]
+        if not chunk:
+            continue
+        d = hs._call("POST", "/crm/v3/objects/contacts/batch/read",
+                     {"idProperty": "email", "properties": ["email"],
+                      "inputs": [{"id": e} for e in chunk]})
+        for res in d.get("results") or []:
+            em = ((res.get("properties") or {}).get("email") or "").lower()
+            if em:
+                found[em] = res["id"]
+    filled, missing = 0, []
+    for r in rows:
+        em = (r.get("email") or "").strip().lower()
+        if em in found:
+            r["hs_object_id"] = found[em]
+            filled += 1
+        else:
+            missing.append(em or "(blank)")
+    return filled, missing
+
+
 def to_campaign_csv(rows: list[dict], path: pathlib.Path) -> None:
     """Write the approved rows in the shape create_campaign.py expects.
 
@@ -158,7 +205,24 @@ def to_campaign_csv(rows: list[dict], path: pathlib.Path) -> None:
         w = csv.DictWriter(fh, fieldnames=cols)
         w.writeheader()
         for r in rows:
-            w.writerow({c: r.get(c, "") for c in cols} | {"validation": "PASS"})
+            # **The sheet's column is `Seller`; create_campaign requires `sender`.**
+            # r.get("sender") returned "" for every row, so the CSV carried an empty
+            # sender column and create_campaign refused all three campaigns on its
+            # guarantee 5 -- "no way to check that the copy's signature matches the
+            # mailbox it will send from". Correct refusal, wrong input.
+            #
+            # The rename happened when the review columns were trimmed to the eight the
+            # reviewer asked for, and it stayed latent because build_approved had never
+            # completed a build: every earlier run found 0 approved rows, so this line
+            # was reached for the first time on 2026-09-17 with 186 rows waiting.
+            # Reading the constant from export_review rather than repeating the string
+            # means a future rename breaks the import instead of emptying a column.
+            w.writerow({c: r.get(c, "") for c in cols}
+                       | {"sender": (r.get(er.SELLER_COLUMN) or r.get("sender") or "").strip(),
+                          # Not read by create_campaign -- it assigns mailboxes itself
+                          # from --mailboxes. Left blank rather than guessed per row.
+                          "mailbox": "",
+                          "validation": "PASS"})
 
 
 def main(argv=None) -> int:
@@ -231,6 +295,14 @@ def main(argv=None) -> int:
             cname, n = f"{tab}-b{n}", n + 1
         requester = tab.split("-")[0]
         work = ROOT / "reviews" / f"approved-{cname}.csv"
+        filled, missing = fill_hubspot_ids(rows)
+        if missing:
+            # Reported, never silent. A contact the engine cannot identify in HubSpot
+            # still gets mailed (email is all Smartlead needs) but its enrolment cannot
+            # be written back, so it will look un-enrolled later.
+            print(f"    WARNING: {len(missing)} of {len(rows)} row(s) have no HubSpot "
+                  f"contact for their address, so their enrolment cannot be recorded: "
+                  f"{', '.join(missing[:5])}" + (" ..." if len(missing) > 5 else ""))
         to_campaign_csv(rows, work)
         print(f"  {tab}: {len(rows)} of {total} row(s) approved, sender {sender}, "
               f"{len(boxes.split(','))} mailbox(es)")
