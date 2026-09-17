@@ -148,6 +148,53 @@ SPLIT_WORDS = ("split", "all", "all three", "round robin", "round-robin", "rotat
                "spread", "everyone")
 
 
+def review_sheet_url() -> str:
+    """A clickable link to the generation review Sheet.
+
+    The accepted reply used to say "Review tab X in the generation review sheet" with NO
+    URL, leaving a rep to go and find it. Built from the id in config/review-surfaces.md
+    so there is one source of truth for which sheet that is.
+    """
+    import export_review as er
+    sid = er.load_config()["GENERATION_REVIEW_SHEET_ID"]
+    return f"https://docs.google.com/spreadsheets/d/{sid}/edit"
+
+
+def least_loaded_sender() -> tuple[str, str]:
+    """(sender, note). The sender carrying the fewest contacts, from HubSpot.
+
+    **This is how "round robin" is honoured while keeping ONE campaign per request.**
+    Smartlead rotates leads across a campaign's mailboxes and has no per-lead mailbox
+    field -- `email_account_id` on a lead row is rejected outright -- so a single campaign
+    holding two senders' copy would send Brooke's email from Carl's mailbox. That is the
+    failure create_campaign guarantee 5 exists to prevent, so mixing senders inside one
+    campaign is not available at any price.
+
+    Rotating at the REQUEST level gives the same outcome a rep actually wants: one
+    campaign to launch, and the load spread across senders over successive requests
+    rather than within one.
+
+    Stateless on purpose. The counts come from `outbound_sender` in HubSpot, so the
+    balance self-corrects without anything remembering whose turn it is -- and there is no
+    local database to hold a turn counter in (CLAUDE.md, "Architecture & sources of
+    truth"). Today that reads carl 155 / brooke 46 / zach 46, so the next request goes to
+    brooke.
+    """
+    from eligibility import HubSpot, env_token
+    hs = HubSpot(env_token())
+    names, _ = known_senders()
+    counts = {}
+    for n in names:
+        counts[n] = hs._call("POST", "/crm/v3/objects/contacts/search",
+                             {"filterGroups": [{"filters": [
+                                 {"propertyName": "outbound_sender",
+                                  "operator": "EQ", "value": n}]}],
+                              "properties": ["email"], "limit": 1}).get("total") or 0
+    pick = min(names, key=lambda n: (counts[n], names.index(n)))
+    spread = ", ".join(f"{n} {counts[n]}" for n in names)
+    return pick, f"rotated to {pick} — current spread is {spread}"
+
+
 def parse_sender(raw: str) -> tuple[str, str, bool]:
     """(sender, note, explicit). sender is one from known_senders(), or "" for a split.
 
@@ -774,6 +821,11 @@ def main(argv=None) -> int:
                          "is posted and nothing is generated.")
     ap.add_argument("--mailbox", default="carl.newmark@vibeposhvip.com",
                     help="sending mailbox for generated copy; one sender per campaign")
+    ap.add_argument("--split-by-sender", action="store_true",
+                    help="one campaign PER SENDER instead of one per request. For a "
+                         "deliberate multi-sender round run by hand; the scheduled "
+                         "intake never uses it, because a rep's single request should "
+                         "not become three campaigns to launch.")
     ap.add_argument("--limit", type=int, default=20, help="messages to scan")
     ap.add_argument("--self-test", action="store_true",
                     help="prove parsing and the capacity rule with no API calls")
@@ -893,25 +945,37 @@ def main(argv=None) -> int:
         #
         # SPLIT -> the multi-sender path, one campaign per sender.
         _names, _boxes = known_senders()
-        if sender:
+        if not sender:
+            # **ONE CAMPAIGN PER REQUEST, decided 2026-09-17.** Previously a split
+            # produced one campaign PER SENDER, which meant a rep's single request became
+            # three campaigns, each needing its own unsubscribe toggles and its own launch
+            # in the Smartlead UI. The owner asked for one campaign per request instead.
+            #
+            # Mixing senders inside one campaign is not an option -- see
+            # least_loaded_sender -- so the rotation moves up a level: this request goes
+            # entirely to the sender carrying the fewest contacts, and the next one goes
+            # to whoever is lowest then.
+            #
+            # This routes through the SINGLE-SENDER path, which runs eligibility WITH
+            # --sender, so gate 10 reports a contact already assigned to someone else as
+            # "belongs to carl" rather than moving them. Continuity is preserved by
+            # exclusion instead of by splitting the campaign.
+            sender, rotate_note = least_loaded_sender()
+            sender_note = (sender_note + "; " + rotate_note) if sender_note else rotate_note
+            print(f"    sender: {rotate_note} -> one campaign")
+        else:
             print(f"    sender: {sender} (named) -> one campaign")
+        if a.split_by_sender:
+            # Opt-in only, for a deliberate multi-sender round run by hand -- the way the
+            # 186-contact round on 2026-09-16 was done. NEVER reached from a Slack
+            # request, because a rep's one request should produce one campaign.
+            print(f"    --split-by-sender: one campaign per sender across "
+                  f"{', '.join(_names)}")
+            res = run_split_pipeline(list_id, brief, a.apply, angle=angle,
+                                     requester=requester, split_explicit=True)
+        else:
             res = run_pipeline(list_id, brief, _boxes[sender], a.apply,
                                angle=angle, requester=requester)
-        else:
-            # The floor is decided AFTER eligibility, so a dry run cannot know the
-            # eligible count yet. Say which way it could go rather than asserting the
-            # split -- a dry run claiming "one campaign each" when the real run will
-            # collapse to one is the kind of small lie that makes a preview useless.
-            if split_explicit:
-                print(f"    sender: split across {', '.join(_names)} (explicitly "
-                      f"requested) -> one campaign each")
-            else:
-                print(f"    sender: split across {', '.join(_names)} by default -> one "
-                      f"campaign each, UNLESS fewer than {SPLIT_FLOOR} are eligible, in "
-                      f"which case it collapses to one campaign")
-            res = run_split_pipeline(list_id, brief, a.apply, angle=angle,
-                                     requester=requester,
-                                     split_explicit=split_explicit)
         if res.get("eligible") == 0:
             # Guarantee 5: say WHY, per reason. "Nothing happened" is the worst possible
             # answer to a request, and the reasons are usually actionable -- already in a
@@ -938,6 +1002,22 @@ def main(argv=None) -> int:
         flight += size                            # so a second request this run sees it
         handled += 1
         tabs_desc = res.get("tab") or ", ".join((res.get("tabs") or {}).values()) or "(none)"
+        # One line of eligibility, not a breakdown. The rep needs to know how many made
+        # it and roughly why the rest did not; the full per-reason list is already in the
+        # annotated CSV and on the zero-eligible path, where it actually changes what
+        # they do. Everything the old message carried -- where review happens, that the
+        # campaign is built from approved rows, that nothing sends until a human launches
+        # -- is true, unchanging, and was being repeated to the same people on every
+        # request. That is what made it noise.
+        _e, _l = res.get("eligible"), res.get("leads") or 0
+        if _e is None:
+            elig_line = f"{_l} contact(s)"
+        elif _e == _l:
+            elig_line = f"all {_l} contact(s) eligible"
+        else:
+            top = sorted((res.get("exclusions") or {}).items(), key=lambda x: -x[1])
+            why = f", {top[0][0]}" if top else ""
+            elig_line = (f"{_e} of {_l} eligible ({_l - _e} skipped{why})")
         print(f"    pipeline: {res['steps']}, review tab(s) {tabs_desc}")
         # The approval sentence here was stale and actively misleading: it read "Reply
         # here with approval and I will build the campaign", which was true when
@@ -947,17 +1027,10 @@ def main(argv=None) -> int:
         # requesting rep. A rep who replied "approved" in this thread would have been
         # doing nothing at all, and waiting on a campaign that never got built.
         print("    " + sl.reply(channel, ts,
-              f"{TAG_ACCEPTED} HubSpot list {list_id}, {size} contacts — copy drafted"
-              + (f" with your angle: _{angle}_" if angle else " (no angle given)") + ".\n"
-              + (f"Review tab *{res['tab']}* in the generation review sheet.\n"
-                 if res.get("tab") else
-                 "Review tabs, one per sender:\n"
-                 + "".join(f"  • *{t}* — {res['per_sender'].get(sn, 0)} contact(s)\n"
-                           for sn, t in (res.get("tabs") or {}).items()))
-              + f"Outbound review happens in that tab, not in this thread — the campaign "
-              f"is built from the rows marked Approved there.\n"
-              f"**Nothing sends until a human launches it in Smartlead.**"
-              + (f"\n_Note on split:_ {res['collapsed']}" if res.get("collapsed") else "")))
+              f"{TAG_ACCEPTED} *{elig_line}* — drafts ready.\n"
+              f"{review_sheet_url()}\n"
+              f"Tab: *{tabs_desc}*\n"
+              f"Review the copy there and mark the rows you approve."))
 
     print(f"\n{handled} accepted, {queued} queued, {rejected} rejected")
     if not a.apply:
