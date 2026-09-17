@@ -316,7 +316,19 @@ def main(argv=None) -> int:
                "--csv", str(work), "--audience", tab, "--usecase", "approved-review",
                "--mailboxes", boxes, "--requester", requester,
                "--campaign-name", cname,
-               "--approved-by", f"{requester} (Approved column, {tab})"]
+               # **Do not name a person we did not verify.** This read
+               # f"{requester} (Approved column, {tab})", where requester is
+               # tab.split("-")[0] -- the name in the TAB, i.e. whoever REQUESTED the
+               # list. It therefore asserted that person approved the copy however
+               # anybody else had actually marked Y, which is a fabricated audit trail
+               # for the one control golden rule 1 rests on.
+               #
+               # Google's Sheets API exposes no per-cell editor, so the approver is
+               # genuinely unknown here. The honest record is that the rows were marked
+               # in a named tab, and nothing more. To attribute a person, the sheet needs
+               # an "Approved by" column, or the Drive Activity API has to be read for
+               # the file's editors -- both real changes, neither faked by a string.
+               "--approved-by", f"marked Approved in {tab} (approver not recorded)"]
         p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT, timeout=900)
         out = (p.stdout or "") + (p.stderr or "")
         if p.returncode != 0:
