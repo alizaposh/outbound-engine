@@ -89,7 +89,7 @@ PY = sys.executable
 SLOTS = {
     "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
                    "sync_bounces", "close_sequences", "resume_sequences", "sync_sends",
-                   "sync_meetings"],
+                   "sync_meetings", "slack_intake"],
     # `build_approved` is MORNING ONLY, by decision on 2026-09-14. It was briefly in all
     # three slots so an approval reached a campaign within hours; that was reverted
     # because it produces one campaign PER BATCH, and a reviewer approving a list over a
@@ -119,7 +119,7 @@ SLOTS = {
     # `Smartlead.get` retries 429s with backoff as of the same date, so throttling shows
     # up as a slow job rather than a lost one, and the retry count is printed. If that
     # count starts climbing, narrow the per-lead fetch before adding more runs.
-    "midday":    ["reply_check", "sync_sends"],
+    "midday":    ["reply_check", "sync_sends", "slack_intake"],
     # `sync_sends` added to the AFTERNOON slot 2026-09-17, and the reason is a real
     # complaint rather than tidiness. It ran morning-only, so the three campaigns
     # launched after the 10:07 heartbeat sent 40 emails that appeared NOWHERE in HubSpot
@@ -136,13 +136,26 @@ SLOTS = {
     # lead (253 Smartlead calls at 247 leads, so roughly one per lead) and that scales
     # with every campaign still ACTIVE. Two runs a day is the compromise: revisit if reps
     # ask for same-hour visibility, and optimise the per-lead fetch first if so.
-    "afternoon": ["reply_check", "sync_sends"],
+    "afternoon": ["reply_check", "sync_sends", "slack_intake"],
     # Mondays only, via its own routine. Separate from the daily slots because it is a
     # REPORT, not a job that keeps state correct -- running it daily would append six
     # near-identical history rows a week and bury the weekly signal it exists to show.
     "weekly":    ["campaign_report"],
 }
+# `slack_intake` was in NO slot until 2026-09-17, which means the Slack request channel
+# was never being read by anything on a schedule. Every request processed before that date
+# only ran because a human invoked the script by hand -- so the documented workflow, "a
+# rep posts a HubSpot list and the engine takes it from there", was not automated at all.
+# It surfaced the way this class of gap always does: a real rep submitted a real list and
+# nothing happened, with no error anywhere because nothing had been asked to run.
+#
+# All three slots. Guarantee 3 in slack_intake makes that safe -- a request with a bot
+# reply has been handled and cannot be processed twice -- so the only effect of running
+# more often is that a rep waits hours rather than until tomorrow. It goes LAST in each
+# slot because it is the long job: it shells eligibility, callbacks, generation and
+# export, and a slow intake must not delay the jobs that keep state correct.
 JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sync",
+              "slack_intake": "Slack requests",
               "sync_bounces": "Bounce sync",
               "close_sequences": "Sequence close-out",
               "sync_sends": "Activity logging",
@@ -184,6 +197,7 @@ SUMMARY_PATTERNS = [
     re.compile(r"^no contact has a resume date.*$", re.M),
     re.compile(r"^\d+ promoted, \d+ already current.*$", re.M),    # sync_meetings
     re.compile(r"^no engine-enrolled contact has booked.*$", re.M),
+    re.compile(r"^\d+ accepted, \d+ queued, \d+ rejected.*$", re.M),   # slack_intake
     re.compile(r"^history: .*$", re.M),                          # campaign_report
     re.compile(r"^\d+ campaign\(s\) built.*$", re.M),            # build_approved
 ]

@@ -119,12 +119,29 @@ def known_senders() -> tuple[tuple[str, ...], dict[str, str]]:
 
 
 _SENDER_CACHE = None
+# Below this many ELIGIBLE contacts, a defaulted split collapses to one campaign.
+#
+# 60 because that is roughly what ONE sender carries comfortably: 4 mailboxes at the
+# per-mailbox daily cap, so a list this size never strains a single identity and
+# spreading it buys no reputation protection at all. What it does buy is extra work --
+# every campaign needs its own unsubscribe toggles and its own launch in the Smartlead UI,
+# both of which have no API.
+#
+# Applied ONLY when the sender field was blank. A rep who explicitly chose "split across
+# all three" gets exactly that, however small the list: overriding a stated choice is a
+# different thing from picking a sensible default, and only the second is ours to make.
+SPLIT_FLOOR = 60
+
 SPLIT_WORDS = ("split", "all", "all three", "round robin", "round-robin", "rotate",
                "spread", "everyone")
 
 
-def parse_sender(raw: str) -> tuple[str, str]:
-    """(sender, note). sender is one from known_senders(), or "" meaning split across all.
+def parse_sender(raw: str) -> tuple[str, str, bool]:
+    """(sender, note, explicit). sender is one from known_senders(), or "" for a split.
+
+    `explicit` is True only when the rep actually named a mode. It is what separates
+    "they asked to split" from "nobody said, so we split", and those must not be treated
+    alike -- see SPLIT_FLOOR.
 
     **Defaults to SPLIT when the field is absent or unreadable**, and says so in the
     note. The alternative default is a named sender, which would quietly load one
@@ -135,16 +152,16 @@ def parse_sender(raw: str) -> tuple[str, str]:
     pretty = ", ".join(n.title() for n in names)
     v = (raw or "").strip().lower()
     if not v:
-        return "", "no sender field given, so the round was split across every sender"
+        return "", "no sender field given, so the round was split across every sender", False
     for name in names:
         if name in v:
-            return name, ""
+            return name, "", True
     if any(w in v for w in SPLIT_WORDS):
-        return "", ""
+        return "", "", True
     # Names the valid options from config rather than a frozen three, so the message
     # stays true as the team grows.
     return "", (f"sender {raw.strip()!r} is not one of {pretty}, so the round was "
-                f"split across every sender")
+                f"split across every sender"), False
 
 
 # The angle reaches the generation prompt, so it is capped. A rep pasting three
@@ -418,7 +435,8 @@ def list_size(list_id: str) -> int:
 
 
 def run_split_pipeline(list_id: str, brief: str, apply_changes: bool,
-                       angle: str = "", requester: str = "") -> dict:
+                       angle: str = "", requester: str = "",
+                       split_explicit: bool = True) -> dict:
     """One submission, one campaign PER SENDER, for the split mode.
 
     **Eligibility runs ONCE over the whole list, then the eligible set is split.** The
@@ -473,8 +491,18 @@ def run_split_pipeline(list_id: str, brief: str, apply_changes: bool,
     if not out["eligible"]:
         return out
 
+    # The floor: a DEFAULTED split on a small list becomes one campaign. Rules 1 and 2
+    # still route pre-assigned and sender-owned contacts, so continuity is untouched;
+    # only the round-robin of the remainder collapses.
+    rotate = split_explicit or out["eligible"] >= SPLIT_FLOOR
+    if not rotate:
+        out["collapsed"] = (f"{out['eligible']} eligible is under the {SPLIT_FLOOR} floor "
+                            f"and no sender was named, so this is one campaign rather "
+                            f"than one per sender")
+        print(f"    {out['collapsed']}")
     p = subprocess.run([PY, str(ROOT / "scripts/split_by_sender.py"),
-                        "--leads", str(elig), "--apply", "--out-dir", str(work)],
+                        "--leads", str(elig), "--apply", "--out-dir", str(work)]
+                       + ([] if rotate else ["--no-rotate"]),
                        capture_output=True, text=True, timeout=900, cwd=ROOT)
     out["steps"]["split"] = "ok" if p.returncode == 0 else "FAILED"
     out["split_output"] = ((p.stdout or "") + (p.stderr or ""))[-1500:]
@@ -781,15 +809,16 @@ def main(argv=None) -> int:
         if form:
             list_id, brief, angle = form["list_id"], form["notes"], form["angle"]
             requester = form.get("requester", "")
-            sender, sender_note = parse_sender(form.get("sender_raw", ""))
+            sender, sender_note, split_explicit = parse_sender(
+                form.get("sender_raw", ""))
         else:
             list_id, brief = parse_request(text)
             requester = ""   # loose free-text path has no form field
             angle = ""
             # Free text carries no Sender field, so it splits. Same default as a form
             # submission that omits it, and for the same reason.
-            sender, sender_note = "", ("free-text request, so the round was split "
-                                       "across all three senders")
+            sender, sender_note, split_explicit = "", (
+                "free-text request, so the round was split across every sender"), False
         who = m.get("user", "?")
         if not list_id:
             print(f"  {ts} <@{who}>: no HubSpot list found; rejecting")
@@ -843,10 +872,20 @@ def main(argv=None) -> int:
             res = run_pipeline(list_id, brief, _boxes[sender], a.apply,
                                angle=angle, requester=requester)
         else:
-            print(f"    sender: split across {', '.join(_names)}"
-                  f" -> one campaign each")
+            # The floor is decided AFTER eligibility, so a dry run cannot know the
+            # eligible count yet. Say which way it could go rather than asserting the
+            # split -- a dry run claiming "one campaign each" when the real run will
+            # collapse to one is the kind of small lie that makes a preview useless.
+            if split_explicit:
+                print(f"    sender: split across {', '.join(_names)} (explicitly "
+                      f"requested) -> one campaign each")
+            else:
+                print(f"    sender: split across {', '.join(_names)} by default -> one "
+                      f"campaign each, UNLESS fewer than {SPLIT_FLOOR} are eligible, in "
+                      f"which case it collapses to one campaign")
             res = run_split_pipeline(list_id, brief, a.apply, angle=angle,
-                                     requester=requester)
+                                     requester=requester,
+                                     split_explicit=split_explicit)
         if res.get("eligible") == 0:
             # Guarantee 5: say WHY, per reason. "Nothing happened" is the worst possible
             # answer to a request, and the reasons are usually actionable -- already in a
@@ -893,7 +932,8 @@ def main(argv=None) -> int:
               f"is built from the rows marked Approved there.\n"
               f"**Nothing sends until a human launches it in Smartlead.**"
               + (f"\n\n_Note on size:_ {note}" if note else "")
-              + (f"\n_Note on sender:_ {sender_note}" if sender_note else "")))
+              + (f"\n_Note on sender:_ {sender_note}" if sender_note else "")
+              + (f"\n_Note on split:_ {res['collapsed']}" if res.get("collapsed") else "")))
 
     print(f"\n{handled} accepted, {queued} queued, {rejected} rejected")
     if not a.apply:

@@ -185,11 +185,25 @@ def ids_from_csv(hs: HubSpot, path: pathlib.Path) -> tuple[list[str], list[str]]
     return ids, missing
 
 
-def assign(contacts: list[dict], senders: list[str],
-           owner_map: dict[str, str]) -> tuple[dict[str, list[dict]], dict[str, int]]:
-    """Apply the three rules. Returns (sender -> rows, reason -> count)."""
+def assign(contacts: list[dict], senders: list[str], owner_map: dict[str, str],
+           rotate: bool = True) -> tuple[dict[str, list[dict]], dict[str, int]]:
+    """Apply the three rules. Returns (sender -> rows, reason -> count).
+
+    `rotate=False` makes rule 3 send every unassigned contact to ONE sender instead of
+    spreading them. Rules 1 and 2 are untouched either way -- a contact with an existing
+    outbound_sender, or owned by a sender, still goes to that person.
+
+    **Why the option exists.** A real request arrived for TWO contacts, a reengagement of
+    one churned account, with the sender field left blank so it defaulted to split. Split
+    would have produced two campaigns for two contacts, each needing its own unsubscribe
+    toggles and its own launch in the Smartlead UI, for no benefit whatever: load
+    spreading protects domain reputation, and two emails do not threaten a domain. The
+    cost of a campaign is a fixed human cost, so below a floor the right number of
+    campaigns is one.
+    """
     buckets: dict[str, list[dict]] = {s: [] for s in senders}
     why = {"kept (outbound_sender)": 0, "owner is a sender": 0, "least-loaded": 0}
+    _single: str | None = None
     # Guarantee 2: a fixed order in, a fixed split out.
     for c in sorted(contacts, key=lambda x: (x.get("email") or "").lower()):
         existing = (c.get("outbound_sender") or "").strip().lower()
@@ -203,7 +217,14 @@ def assign(contacts: list[dict], senders: list[str],
             why["owner is a sender"] += 1
             continue
         # Rule 3. min() over a fixed list is a deterministic tie-break.
-        target = min(senders, key=lambda s: (len(buckets[s]), senders.index(s)))
+        if rotate:
+            target = min(senders, key=lambda s: (len(buckets[s]), senders.index(s)))
+        else:
+            # One sender for the whole remainder. Chosen ONCE, from the state before any
+            # of the remainder is placed, so the choice cannot drift mid-list.
+            if _single is None:
+                _single = min(senders, key=lambda s: (len(buckets[s]), senders.index(s)))
+            target = _single
         buckets[target].append(c)
         why["least-loaded"] += 1
     return buckets, why
@@ -223,6 +244,10 @@ def main(argv=None) -> int:
     ap.add_argument("--leads", help="csv with an hs_object_id or email column; use this "
                                     "to split an ELIGIBLE list from eligibility.py")
     ap.add_argument("--apply", action="store_true", help="write the CSVs")
+    ap.add_argument("--no-rotate", action="store_true",
+                    help="send every unassigned contact to ONE sender instead of "
+                         "spreading them. For a list too small to be worth a campaign "
+                         "per sender; rules 1 and 2 still apply.")
     ap.add_argument("--out-dir", default=str(ROOT / "data"),
                     help="where the per-sender CSVs go")
     ap.add_argument("--self-test", action="store_true",
@@ -268,7 +293,9 @@ def main(argv=None) -> int:
         for c in no_email[:10]:
             print(f"    id {c['hs_object_id']}")
 
-    buckets, why = assign(contacts, SENDERS, owner_map)
+    buckets, why = assign(contacts, SENDERS, owner_map, rotate=not a.no_rotate)
+    if a.no_rotate:
+        print("  --no-rotate: unassigned contacts all go to one sender")
 
     # Guarantee 3. Asserted, not assumed.
     seen: dict[str, str] = {}
