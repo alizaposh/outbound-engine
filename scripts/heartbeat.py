@@ -89,7 +89,7 @@ PY = sys.executable
 SLOTS = {
     "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
                    "sync_bounces", "close_sequences", "resume_sequences", "sync_sends",
-                   "sync_meetings", "slack_intake"],
+                   "sync_meetings", "check_enrolment", "slack_intake"],
     # `build_approved` is MORNING ONLY, by decision on 2026-09-14. It was briefly in all
     # three slots so an approval reached a campaign within hours; that was reverted
     # because it produces one campaign PER BATCH, and a reviewer approving a list over a
@@ -156,6 +156,7 @@ SLOTS = {
 # export, and a slow intake must not delay the jobs that keep state correct.
 JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sync",
               "slack_intake": "Slack requests",
+              "check_enrolment": "Double-enrolment check",
               "sync_bounces": "Bounce sync",
               "close_sequences": "Sequence close-out",
               "sync_sends": "Activity logging",
@@ -171,6 +172,10 @@ JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sy
 # burst, as real messages to real prospects. The cap turns that mistake into a slow and
 # visible one instead of an irreversible one. Rows over the cap are left untouched and
 # reported, never silently dropped.
+# Read-only jobs that take no --apply. Passing it would be an argparse error, and the
+# heartbeat adds --apply to every job it runs, so they have to be named here.
+NO_APPLY = {"check_enrolment"}
+
 JOB_ARGS = {"send_replies": ["--limit", "25"],
             # Writes the history row AND posts its own detailed summary. That means two
             # Slack messages on a Monday: the report itself, and the heartbeat's health
@@ -192,12 +197,19 @@ SUMMARY_PATTERNS = [
     re.compile(r"^\d+ closed, \d+ already current.*$", re.M),   # close_sequences
     re.compile(r"^no finished sequences.*$", re.M),
     re.compile(r"^\d+ engagement\(s\) (?:written|would be written).*$", re.M),
-    re.compile(r"^\d+ sent, \d+ already sent, \d+ failed.*$", re.M),   # send_replies
+    # Both the applied and the dry-run wording. send_replies says "WOULD be sent" on a
+    # dry run so the Slack line cannot claim a send that did not happen; without the
+    # second alternative here that honest wording would fall out of the summary and be
+    # posted as a raw stdout tail instead.
+    re.compile(r"^\d+ (?:sent|WOULD be sent[^,]*), \d+ already sent, \d+ failed.*$",
+               re.M),   # send_replies
     re.compile(r"^\d+ resumed, \d+ blocked.*$", re.M),            # resume_sequences
     re.compile(r"^no contact has a resume date.*$", re.M),
     re.compile(r"^\d+ promoted, \d+ already current.*$", re.M),    # sync_meetings
     re.compile(r"^no engine-enrolled contact has booked.*$", re.M),
     re.compile(r"^\d+ accepted, \d+ queued, \d+ rejected.*$", re.M),   # slack_intake
+    re.compile(r"^NO CONTACT IS IN MORE THAN ONE LIVE CAMPAIGN\.$", re.M),
+    re.compile(r"^!! \d+ CONTACT\(S\) IN MORE THAN ONE LIVE CAMPAIGN:$", re.M),
     re.compile(r"^history: .*$", re.M),                          # campaign_report
     re.compile(r"^\d+ campaign\(s\) built.*$", re.M),            # build_approved
 ]
@@ -206,7 +218,8 @@ SUMMARY_PATTERNS = [
 def run_job(name: str, apply_changes: bool) -> dict:
     """Run one job in its own process. Never raises: a crash is a reported result."""
     cmd = ([PY, str(ROOT / "scripts" / f"{name}.py")]
-           + (["--apply"] if apply_changes else []) + JOB_ARGS.get(name, []))
+           + (["--apply"] if apply_changes and name not in NO_APPLY else [])
+           + JOB_ARGS.get(name, []))
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=ROOT)
         out = (p.stdout or "") + (p.stderr or "")

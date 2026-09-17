@@ -281,7 +281,18 @@ def main(argv=None) -> int:
     # also the one case where a reviewer's Approve will never be honoured. Summed into one
     # "skipped" they were indistinguishable, and the healthy count is the one that grows,
     # so the two that need a person were always going to end up buried behind it.
-    print(f"\n{sent} sent, {already_sent} already sent, {failed} failed"
+    # "WOULD send" on a dry run, for the same reason reply_check says "WOULD be
+    # queued": the heartbeat posts this line into Slack every weekday, the routines were
+    # once saved WITHOUT --apply, and a dry run reporting "1 sent" while nothing left the
+    # building is precisely how that went unnoticed for a day. The counter is incremented
+    # in dry run deliberately -- a capped or skipped row must still be reported -- so the
+    # honesty has to live in the wording.
+    # No comma inside the parenthetical: the heartbeat's summary pattern stops at the
+    # first comma, so "(dry run, nothing left the building)" broke the match and the
+    # line fell through to a raw stdout tail. The wording is mine to simplify; the
+    # pattern is shared.
+    verb = "sent" if a.apply else "WOULD be sent (dry run)"
+    print(f"\n{sent} {verb}, {already_sent} already sent, {failed} failed"
           + (f", ** {needs_fix} NEED FIXING **" if needs_fix else "")
           + (f", {refused} refused (consent changed)" if refused else "")
           + (f", {capped} over the cap" if capped else ""))
