@@ -87,7 +87,44 @@ FORM_LABELS = {
     # the submitter is genuinely not recoverable from Slack. Add a "Your name" field to
     # the form and this starts working; until then the tab falls back to the list id.
     "requester": ("requested by", "your name", "name", "rep", "requester", "submitted by"),
+    # Which identity signs the copy. Aliases included so rewording the Workflow Builder
+    # form does not silently drop the field and fall back to the default.
+    "sender": ("sender", "who should this come from", "from", "sending as",
+               "who sends this", "sender split"),
 }
+
+# The only identities with warmed mailboxes (config/senders.md). A rep who is not one of
+# these -- Caroline, Gabriela, Rob -- is a HubSpot owner with no sending identity, which
+# is why the form names senders explicitly instead of offering "send it all from me".
+KNOWN_SENDERS = ("carl", "brooke", "zach")
+# One mailbox per sender is enough here: create_campaign is given every mailbox belonging
+# to the sender at build time (build_approved resolves them from config/senders.md), so
+# this only has to identify WHOSE copy is being written.
+SENDER_MAILBOX = {"carl": "carl.newmark@vibeposhvip.com",
+                  "brooke": "brooke.carrobis@vibeposhvip.com",
+                  "zach": "zach.hickman@vibeposhvip.com"}
+SPLIT_WORDS = ("split", "all", "all three", "round robin", "round-robin", "rotate",
+               "spread", "everyone")
+
+
+def parse_sender(raw: str) -> tuple[str, str]:
+    """(sender, note). sender is one of KNOWN_SENDERS, or "" meaning split across all.
+
+    **Defaults to SPLIT when the field is absent or unreadable**, and says so in the
+    note. The alternative default is a named sender, which would quietly load one
+    identity with a whole round -- the failure the three-way split exists to avoid. A
+    reply that states which mode ran lets a rep correct the next submission.
+    """
+    v = (raw or "").strip().lower()
+    if not v:
+        return "", "no Sender field given, so the round was split across all three"
+    for name in KNOWN_SENDERS:
+        if name in v:
+            return name, ""
+    if any(w in v for w in SPLIT_WORDS):
+        return "", ""
+    return "", (f"Sender {raw.strip()!r} is not one of Carl, Brooke or Zach, so the "
+                f"round was split across all three")
 # The angle reaches the generation prompt, so it is capped. A rep pasting three
 # paragraphs would crowd out the rulebook, and a topic hint does not need paragraphs.
 ANGLE_MAX = 400
@@ -195,7 +232,11 @@ def parse_form(text: str) -> dict | None:
         angle = ""
     return {"list_id": list_id, "angle": angle[:ANGLE_MAX],
             "notes": " ".join(fields.get("notes", [])).strip(),
-            "requester": " ".join(fields.get("requester", [])).strip(), "form": True}
+            "requester": " ".join(fields.get("requester", [])).strip(),
+            # Raw on purpose: parse_sender decides what it means and, when it cannot,
+            # produces the note that tells the rep which mode actually ran.
+            "sender_raw": " ".join(fields.get("sender", [])).strip(),
+            "form": True}
 
 
 def parse_request(text: str) -> tuple[str | None, str]:
@@ -352,6 +393,149 @@ def list_size(list_id: str) -> int:
     with urllib.request.urlopen(req, timeout=30) as r:
         d = json.loads(r.read())
     return int((d.get("list") or {}).get("size") or 0)
+
+
+def run_split_pipeline(list_id: str, brief: str, apply_changes: bool,
+                       angle: str = "", requester: str = "") -> dict:
+    """One submission, one campaign PER SENDER, for the split mode.
+
+    **Eligibility runs ONCE over the whole list, then the eligible set is split.** The
+    other order -- split first, then filter each part -- balances the wrong quantity,
+    because exclusions do not land evenly: on list 1902 a 94/55/55 split became 93/44/40
+    once the gates ran. (It also turned out not to matter much there, Carl owning half
+    the list, but the order is still the correct one.)
+
+    Eligibility runs WITHOUT `--sender`, deliberately. Gate 10 soft-excludes contacts
+    belonging to a different sender, which is exactly right for named-sender mode and
+    exactly wrong here: in split mode a contact already assigned to Carl is not excluded,
+    it is routed to Carl. `split_by_sender` rule 1 does that routing.
+
+    **This duplicates rather than refactors `run_pipeline`.** The single-sender path is
+    in production and proven -- it is what built the three campaigns on 2026-09-17 --
+    and threading a mode through it would put that at risk to save some lines. The shared
+    part is the list fetch, which is extracted.
+    """
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
+    work = ROOT / "reviews"
+    work.mkdir(exist_ok=True)
+    leads = work / f"intake-{list_id}-{stamp}-leads.csv"
+    annotated = work / f"intake-{list_id}-{stamp}-annotated.csv"
+    elig = work / f"intake-{list_id}-{stamp}-eligible.csv"
+    n_leads = fetch_list_leads(list_id, leads)
+
+    who = re.sub(r"[^A-Za-z0-9]", "", (requester or "").split()[0]) if requester else ""
+    base = f"{who.title()}-{dt.date.today().isoformat()}" if who else \
+           f"List{list_id}-{dt.date.today().isoformat()}"
+
+    out = {"mode": "split", "leads": n_leads, "steps": {}, "tabs": {},
+           "eligible": None, "exclusions": {}, "per_sender": {}}
+    if not apply_changes:
+        out["steps"] = {"eligibility": "would run", "split": "would run",
+                        "per-sender generation": "would run"}
+        return out
+
+    p = subprocess.run([PY, str(ROOT / "scripts/eligibility.py"), "--leads", str(leads),
+                        "--out", str(annotated), "--eligible-out", str(elig)],
+                       capture_output=True, text=True, timeout=1800, cwd=ROOT)
+    out["steps"]["eligibility"] = "ok" if p.returncode == 0 else "FAILED"
+    out["eligibility_output"] = ((p.stdout or "") + (p.stderr or ""))[-1500:]
+    if p.returncode != 0:
+        return out
+    import csv as _csv
+    rows = list(_csv.DictReader(annotated.open(encoding="utf-8-sig")))
+    out["eligible"] = sum(1 for r in rows if (r.get("decision") or "").upper() == "ELIGIBLE")
+    for r in rows:
+        if (r.get("decision") or "").upper() != "ELIGIBLE":
+            key = (r.get("reason") or "excluded").strip()
+            out["exclusions"][key] = out["exclusions"].get(key, 0) + 1
+    if not out["eligible"]:
+        return out
+
+    p = subprocess.run([PY, str(ROOT / "scripts/split_by_sender.py"),
+                        "--leads", str(elig), "--apply", "--out-dir", str(work)],
+                       capture_output=True, text=True, timeout=900, cwd=ROOT)
+    out["steps"]["split"] = "ok" if p.returncode == 0 else "FAILED"
+    out["split_output"] = ((p.stdout or "") + (p.stderr or ""))[-1500:]
+    if p.returncode != 0:
+        return out
+
+    for sender in KNOWN_SENDERS:
+        part = work / f"split-{elig.stem}-{sender}.csv"
+        if not part.exists():
+            continue
+        n_part = sum(1 for _ in part.open(encoding="utf-8-sig")) - 1
+        if n_part <= 0:
+            continue
+        mailbox = SENDER_MAILBOX[sender]
+        enriched = work / f"intake-{list_id}-{stamp}-{sender}-enriched.csv"
+        cb = work / f"intake-{list_id}-{stamp}-{sender}-callbacks-review.csv"
+        gen = work / f"intake-{list_id}-{stamp}-{sender}-generated.csv"
+        tab = f"{base}-{sender.title()}"
+        ok = True
+        for name, cmd in (
+            ("callbacks", [PY, str(ROOT / "scripts/enrich_callbacks.py"),
+                           "--eligible", str(part), "--out", str(enriched),
+                           "--review-out", str(cb)]),
+            ("generation", [PY, str(ROOT / "scripts/run_generation.py"),
+                            "--contacts", str(enriched), "--mailbox", mailbox,
+                            "--out", str(gen), "--quiet"]
+                           + (["--angle", angle] if angle else [])),
+            ("export", [PY, str(ROOT / "scripts/export_review.py"), "--csv", str(gen),
+                        "--mailbox", mailbox, "--tab", tab]),
+        ):
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, cwd=ROOT)
+            out["steps"][f"{sender}:{name}"] = "ok" if r.returncode == 0 else "FAILED"
+            out[f"{sender}:{name}_output"] = ((r.stdout or "") + (r.stderr or ""))[-1200:]
+            if r.returncode != 0:
+                ok = False
+                break
+        out["per_sender"][sender] = n_part
+        if ok:
+            out["tabs"][sender] = tab
+    return out
+
+
+def fetch_list_leads(list_id: str, path: pathlib.Path) -> int:
+    """HubSpot list -> a two-column leads csv. Returns the member count.
+
+    Shared by both pipelines. The membership endpoint returns record IDS ONLY and
+    eligibility.py requires an `email` column -- without it every lead comes back
+    "ERROR: no email" and the request fails silently at the first step.
+    """
+    from eligibility import env_token
+    tok = env_token()
+    ids, after = [], None
+    while True:
+        u = (f"https://api.hubapi.com/crm/v3/lists/{list_id}/memberships?limit=100"
+             + (f"&after={after}" if after else ""))
+        req = urllib.request.Request(u, headers={"Authorization": f"Bearer {tok}"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.loads(r.read())
+        ids += [m["recordId"] for m in d.get("results", [])]
+        after = (d.get("paging") or {}).get("next", {}).get("after")
+        if not after:
+            break
+    pairs = []
+    for i in range(0, len(ids), 100):
+        body = {"inputs": [{"id": x} for x in ids[i:i + 100]],
+                "properties": ["email"]}
+        req = urllib.request.Request(
+            "https://api.hubapi.com/crm/v3/objects/contacts/batch/read",
+            method="POST", data=json.dumps(body).encode(),
+            headers={"Authorization": f"Bearer {tok}",
+                     "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            got = json.loads(r.read())
+        for res in got.get("results", []):
+            em = (res.get("properties") or {}).get("email") or ""
+            if em.strip():
+                pairs.append((res["id"], em.strip()))
+    import csv as _csv
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        w = _csv.writer(fh)
+        w.writerow(["hs_object_id", "email"])
+        w.writerows(pairs)
+    return len(ids)
 
 
 def run_pipeline(list_id: str, brief: str, mailbox: str, apply_changes: bool,
@@ -575,10 +759,15 @@ def main(argv=None) -> int:
         if form:
             list_id, brief, angle = form["list_id"], form["notes"], form["angle"]
             requester = form.get("requester", "")
+            sender, sender_note = parse_sender(form.get("sender_raw", ""))
         else:
             list_id, brief = parse_request(text)
             requester = ""   # loose free-text path has no form field
             angle = ""
+            # Free text carries no Sender field, so it splits. Same default as a form
+            # submission that omits it, and for the same reason.
+            sender, sender_note = "", ("free-text request, so the round was split "
+                                       "across all three senders")
         who = m.get("user", "?")
         if not list_id:
             print(f"  {ts} <@{who}>: no HubSpot list found; rejecting")
@@ -619,8 +808,22 @@ def main(argv=None) -> int:
             # Said once, at submission, when it can still change what the rep does.
             # Advisory only: an unusual size is never a reason to refuse a request.
             print(f"    size note: {note}")
-        res = run_pipeline(list_id, brief, a.mailbox, a.apply, angle=angle,
-                           requester=requester)
+        # NAMED SENDER -> the existing single-sender path, unchanged. It runs eligibility
+        # WITH --sender, so gate 10 soft-excludes contacts already assigned to one of the
+        # other two. That is what keeps a rep's "all from Brooke" request to ONE campaign
+        # while never switching a persona on a prospect mid-relationship: a contact Carl
+        # has already mailed is reported as "belongs to carl" rather than quietly moved.
+        #
+        # SPLIT -> the multi-sender path, one campaign per sender.
+        if sender:
+            print(f"    sender: {sender} (named) -> one campaign")
+            res = run_pipeline(list_id, brief, SENDER_MAILBOX[sender], a.apply,
+                               angle=angle, requester=requester)
+        else:
+            print(f"    sender: split across {', '.join(KNOWN_SENDERS)}"
+                  f" -> one campaign each")
+            res = run_split_pipeline(list_id, brief, a.apply, angle=angle,
+                                     requester=requester)
         if res.get("eligible") == 0:
             # Guarantee 5: say WHY, per reason. "Nothing happened" is the worst possible
             # answer to a request, and the reasons are usually actionable -- already in a
@@ -646,7 +849,8 @@ def main(argv=None) -> int:
             continue
         flight += size                            # so a second request this run sees it
         handled += 1
-        print(f"    pipeline: {res['steps']}, review tab {res['tab']}")
+        tabs_desc = res.get("tab") or ", ".join((res.get("tabs") or {}).values()) or "(none)"
+        print(f"    pipeline: {res['steps']}, review tab(s) {tabs_desc}")
         # The approval sentence here was stale and actively misleading: it read "Reply
         # here with approval and I will build the campaign", which was true when
         # approval lived in a Slack thread. Approval is now the `Approved` column in the
@@ -657,11 +861,16 @@ def main(argv=None) -> int:
         print("    " + sl.reply(channel, ts,
               f"{TAG_ACCEPTED} HubSpot list {list_id}, {size} contacts — copy drafted"
               + (f" with your angle: _{angle}_" if angle else " (no angle given)") + ".\n"
-              f"Review tab *{res['tab']}* in the generation review sheet.\n"
-              f"Outbound review happens in that tab, not in this thread — the campaign "
+              + (f"Review tab *{res['tab']}* in the generation review sheet.\n"
+                 if res.get("tab") else
+                 "Review tabs, one per sender:\n"
+                 + "".join(f"  • *{t}* — {res['per_sender'].get(sn, 0)} contact(s)\n"
+                           for sn, t in (res.get("tabs") or {}).items()))
+              + f"Outbound review happens in that tab, not in this thread — the campaign "
               f"is built from the rows marked Approved there.\n"
               f"**Nothing sends until a human launches it in Smartlead.**"
-              + (f"\n\n_Note on size:_ {note}" if note else "")))
+              + (f"\n\n_Note on size:_ {note}" if note else "")
+              + (f"\n_Note on sender:_ {sender_note}" if sender_note else "")))
 
     print(f"\n{handled} accepted, {queued} queued, {rejected} rejected")
     if not a.apply:
