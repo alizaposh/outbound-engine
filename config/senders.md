@@ -37,6 +37,36 @@ reproducing the string.
 mailbox added, removed, or renamed there must be changed here too. An unmapped mailbox
 aborts the batch (see Rules), which is the intended way to find out.
 
+## Adding a sender as the team grows
+
+**This table is the source of truth, and as of 2026-09-17 the code derives from it.**
+`slack_intake.known_senders()` and `split_by_sender.senders_and_mailboxes()` both read
+these rows; neither holds a list of names. They used to, and that fails in the worst
+available way for a growing team: the new name goes into the Slack dropdown, the parser
+does not recognise it, and the rep's explicit "all from me" request **silently falls back
+to a split** with a reply that reads like a success.
+
+Four steps, in order:
+
+1. **Connect and warm the mailbox in Smartlead.** Until warmup is ACTIVE it should not
+   carry a campaign. `GET /email-accounts` reports `warmup_details.status`.
+2. **Add the row here.** First name only in the right column, matching that mailbox's
+   Smartlead `from_name` exactly (the rule above). This is the step that makes the engine
+   aware of them — verified by temporarily adding a fourth sender: the parser accepted the
+   new name immediately and the "not one of..." message updated itself.
+3. **Add the name to the Slack form dropdown** ("Who should this come from"). The only
+   manual duplication left, because the form lives in Slack Workflow Builder and no API
+   writes it.
+4. **Check they have a HubSpot owner record with a matching FIRST NAME.**
+   `split_by_sender.owner_to_sender()` resolves owner ids by matching first names at
+   runtime — the same pattern `excluded_owners` uses in `pre-send-defaults.md`, and for
+   the same reason. Without a match the sender can still SEND, but rule 2 cannot apply, so
+   their own HubSpot-owned contacts will be routed to a colleague. The script prints
+   `no HubSpot owner matches <name>` when this is the case; it is a warning, not an error.
+
+**Also add them to `config/meeting-routing.md`** with their booking link, or replies from
+their prospects fall back to the fallback sender's calendar.
+
 ## Email-1 intro line
 
 The self-introduction email 1 opens with, one per sender identity. **Supplied to the

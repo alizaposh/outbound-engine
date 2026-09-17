@@ -64,18 +64,54 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 ORIGINAL_ROWS: dict[str, dict] = {}
 ORIGINAL_FIELDS: list[str] = []
 
-# HubSpot owner id -> sender first name, lower case. Read from /crm/v3/owners; kept here
-# rather than looked up so the mapping is reviewable and a renamed owner cannot silently
-# change who signs an email.
-OWNER_TO_SENDER = {
-    "89417221": "carl",
-    "89417194": "brooke",
-    "87936331": "zach",
-}
-SENDERS = ["carl", "brooke", "zach"]      # also the tie-break order for rule 3
-MAILBOX = {"carl": "carl.newmark@vibeposhvip.com",
-           "brooke": "brooke.carrobis@vibeposhvip.com",
-           "zach": "zach.hickman@vibeposhvip.com"}
+def senders_and_mailboxes() -> tuple[list[str], dict[str, str]]:
+    """(sender names lower-cased, sender -> one mailbox), read from config/senders.md.
+
+    **Derived, never hardcoded.** These were literal lists until 2026-09-17, when the
+    owner said they would add the rest of the sales team's mailboxes as outbound grows.
+    A hardcoded list fails in the worst available way for that: a rep picks the new name
+    in the Slack dropdown, `parse_sender` does not recognise it, and their explicit
+    request SILENTLY falls back to a three-way split. Nothing errors and the reply reads
+    like a success.
+
+    Adding a mailbox to Smartlead and to config/senders.md is now the whole change on the
+    engine side; the Slack dropdown is the only other place a name has to appear.
+
+    One mailbox per sender is enough here -- this only identifies WHOSE copy is written.
+    create_campaign receives every mailbox belonging to the sender at build time, which
+    build_approved resolves from the same file.
+    """
+    import assemble
+    m = assemble.load_sender_map()                       # mailbox -> "Carl"
+    by_sender: dict[str, str] = {}
+    for box, who in sorted(m.items()):
+        by_sender.setdefault(who.strip().lower(), box)
+    return sorted(by_sender), by_sender
+
+
+def owner_to_sender(hs: "HubSpot", senders: list[str]) -> tuple[dict[str, str], list[str]]:
+    """(HubSpot owner id -> sender, senders with no matching owner).
+
+    Resolved at RUNTIME by matching each sender's first name against the Owners API,
+    rather than kept as a literal id map. Same reasoning as `excluded_owners` in
+    config/pre-send-defaults.md, which says to "resolve by name at runtime so an owner
+    change can't go unnoticed" -- and the same failure if it is not: a stale id silently
+    stops routing that rep's contacts to them, and the split looks fine.
+
+    A sender with no matching owner is RETURNED, not swallowed. They can still be a
+    sender; they just cannot receive contacts by rule 2, and a caller that does not say
+    so would leave somebody wondering why their own accounts went to a colleague.
+    """
+    d = hs._call("GET", "/crm/v3/owners?limit=500")
+    out, seen = {}, set()
+    for o in d.get("results") or []:
+        first = (o.get("firstName") or "").strip().lower()
+        if first in senders:
+            out[str(o.get("id"))] = first
+            seen.add(first)
+    return out, [s for s in senders if s not in seen]
+
+
 READ = ["email", "firstname", "lastname", "outbound_sender", "hubspot_owner_id"]
 
 
@@ -149,9 +185,10 @@ def ids_from_csv(hs: HubSpot, path: pathlib.Path) -> tuple[list[str], list[str]]
     return ids, missing
 
 
-def assign(contacts: list[dict]) -> tuple[dict[str, list[dict]], dict[str, int]]:
+def assign(contacts: list[dict], senders: list[str],
+           owner_map: dict[str, str]) -> tuple[dict[str, list[dict]], dict[str, int]]:
     """Apply the three rules. Returns (sender -> rows, reason -> count)."""
-    buckets: dict[str, list[dict]] = {s: [] for s in SENDERS}
+    buckets: dict[str, list[dict]] = {s: [] for s in senders}
     why = {"kept (outbound_sender)": 0, "owner is a sender": 0, "least-loaded": 0}
     # Guarantee 2: a fixed order in, a fixed split out.
     for c in sorted(contacts, key=lambda x: (x.get("email") or "").lower()):
@@ -160,13 +197,13 @@ def assign(contacts: list[dict]) -> tuple[dict[str, list[dict]], dict[str, int]]
             buckets[existing].append(c)
             why["kept (outbound_sender)"] += 1
             continue
-        owner = OWNER_TO_SENDER.get(str(c.get("hubspot_owner_id") or "").strip())
+        owner = owner_map.get(str(c.get("hubspot_owner_id") or "").strip())
         if owner:
             buckets[owner].append(c)
             why["owner is a sender"] += 1
             continue
         # Rule 3. min() over a fixed list is a deterministic tie-break.
-        target = min(SENDERS, key=lambda s: (len(buckets[s]), SENDERS.index(s)))
+        target = min(senders, key=lambda s: (len(buckets[s]), senders.index(s)))
         buckets[target].append(c)
         why["least-loaded"] += 1
     return buckets, why
@@ -199,8 +236,16 @@ def main(argv=None) -> int:
         ap.error("--list and --leads are alternatives; pass one")
 
     hs = HubSpot(env_token())
+    SENDERS, MAILBOX = senders_and_mailboxes()
+    owner_map, no_owner = owner_to_sender(hs, SENDERS)
     print("APPLY: CSVs will be written" if a.apply
           else "DRY RUN: no files written. Re-run with --apply.")
+    print(f"senders from config/senders.md: {', '.join(SENDERS)}")
+    if no_owner:
+        # Reported, not swallowed: these senders can still SEND, they just cannot
+        # receive contacts by rule 2, so their own accounts would route elsewhere.
+        print(f"  note: no HubSpot owner matches {', '.join(no_owner)}, so rule 2 "
+              f"(owner keeps their contacts) cannot apply to them")
     if a.leads:
         ids, missing = ids_from_csv(hs, pathlib.Path(a.leads))
         label = f"csv {pathlib.Path(a.leads).name}"
@@ -223,7 +268,7 @@ def main(argv=None) -> int:
         for c in no_email[:10]:
             print(f"    id {c['hs_object_id']}")
 
-    buckets, why = assign(contacts)
+    buckets, why = assign(contacts, SENDERS, owner_map)
 
     # Guarantee 3. Asserted, not assumed.
     seen: dict[str, str] = {}
@@ -289,6 +334,12 @@ def main(argv=None) -> int:
 
 def _self_test() -> int:
     fails = []
+    # Fixed locally so the pure cases stay pure -- no senders.md read, no Owners call.
+    SENDERS = ["carl", "brooke", "zach"]
+    OWNERS = {"89417221": "carl", "89417194": "brooke", "87936331": "zach"}
+
+    def assign_(rows):
+        return assign(rows, SENDERS, OWNERS)
 
     def check(label, got, want):
         if got != want:
@@ -299,20 +350,20 @@ def _self_test() -> int:
                 "hubspot_owner_id": owner, "hs_object_id": email}
 
     # Rule 1 beats rule 2: a contact Brooke OWNS but Carl already mailed stays with Carl.
-    b, _ = assign([C("a@x.com", sender="carl", owner="89417194")])
+    b, _ = assign_([C("a@x.com", sender="carl", owner="89417194")])
     check("rule 1 beats rule 2", [c["email"] for c in b["carl"]], ["a@x.com"])
     check("rule 1 leaves brooke empty", b["brooke"], [])
 
     # Rule 2: owner mapping.
-    b, _ = assign([C("a@x.com", owner="87936331")])
+    b, _ = assign_([C("a@x.com", owner="87936331")])
     check("owner zach -> zach", [c["email"] for c in b["zach"]], ["a@x.com"])
 
     # An owner who is NOT a sender falls through to rule 3.
-    b, w = assign([C("a@x.com", owner="99999999")])
+    b, w = assign_([C("a@x.com", owner="99999999")])
     check("unknown owner -> least-loaded", w["least-loaded"], 1)
 
     # Rule 3 from empty is a round robin.
-    b, _ = assign([C(f"{i}@x.com") for i in range(6)])
+    b, _ = assign_([C(f"{i}@x.com") for i in range(6)])
     check("round robin from empty", [len(b[s]) for s in SENDERS], [2, 2, 2])
 
     # Rule 3 CORRECTS a skew rather than preserving it -- the whole reason it is
@@ -320,18 +371,18 @@ def _self_test() -> int:
     # emptiest, so brooke and zach fill first.
     rows = [C(f"c{i}@x.com", sender="carl") for i in range(3)] + \
            [C(f"f{i}@x.com") for i in range(3)]
-    b, _ = assign(rows)
+    b, _ = assign_(rows)
     check("least-loaded corrects skew", [len(b[s]) for s in SENDERS], [3, 2, 1])
 
     # Guarantee 2: stability. Input order must not change the split.
-    r1, _ = assign(rows)
-    r2, _ = assign(list(reversed(rows)))
+    r1, _ = assign_(rows)
+    r2, _ = assign_(list(reversed(rows)))
     check("stable under input order",
           {s: sorted(c["email"] for c in r1[s]) for s in SENDERS},
           {s: sorted(c["email"] for c in r2[s]) for s in SENDERS})
 
     # Guarantee 3 holds by construction: every contact appends exactly once.
-    b, _ = assign([C(f"{i}@x.com") for i in range(30)])
+    b, _ = assign_([C(f"{i}@x.com") for i in range(30)])
     check("no duplication", sum(len(b[s]) for s in SENDERS), 30)
 
     print(f"{len(fails)} FAILED" if fails else "all pure cases passed")

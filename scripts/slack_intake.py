@@ -93,38 +93,60 @@ FORM_LABELS = {
                "who sends this", "sender split"),
 }
 
-# The only identities with warmed mailboxes (config/senders.md). A rep who is not one of
-# these -- Caroline, Gabriela, Rob -- is a HubSpot owner with no sending identity, which
-# is why the form names senders explicitly instead of offering "send it all from me".
-KNOWN_SENDERS = ("carl", "brooke", "zach")
-# One mailbox per sender is enough here: create_campaign is given every mailbox belonging
-# to the sender at build time (build_approved resolves them from config/senders.md), so
-# this only has to identify WHOSE copy is being written.
-SENDER_MAILBOX = {"carl": "carl.newmark@vibeposhvip.com",
-                  "brooke": "brooke.carrobis@vibeposhvip.com",
-                  "zach": "zach.hickman@vibeposhvip.com"}
+def known_senders() -> tuple[tuple[str, ...], dict[str, str]]:
+    """(sender names, sender -> one mailbox) from config/senders.md. Cached per process.
+
+    **Derived, never hardcoded.** This was a literal tuple until 2026-09-17, when the
+    owner said the rest of the sales team's mailboxes would be added as outbound grows.
+    A literal fails silently for exactly that: the new name goes in the Slack dropdown,
+    `parse_sender` does not recognise it, and the rep's explicit "all from me" request
+    falls back to a three-way split with a reply that reads like a success. Adding the
+    mailbox to Smartlead and to config/senders.md is now the whole engine-side change.
+
+    Only these identities can send: a rep who is a HubSpot owner but has no warmed
+    mailbox -- Caroline, Gabriela, Rob today -- has no way to be the From address, which
+    is why the form lists senders explicitly rather than offering "send it all from me".
+    """
+    global _SENDER_CACHE
+    if _SENDER_CACHE is None:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import assemble
+        by_sender: dict[str, str] = {}
+        for box, who in sorted(assemble.load_sender_map().items()):
+            by_sender.setdefault(who.strip().lower(), box)
+        _SENDER_CACHE = (tuple(sorted(by_sender)), by_sender)
+    return _SENDER_CACHE
+
+
+_SENDER_CACHE = None
 SPLIT_WORDS = ("split", "all", "all three", "round robin", "round-robin", "rotate",
                "spread", "everyone")
 
 
 def parse_sender(raw: str) -> tuple[str, str]:
-    """(sender, note). sender is one of KNOWN_SENDERS, or "" meaning split across all.
+    """(sender, note). sender is one from known_senders(), or "" meaning split across all.
 
     **Defaults to SPLIT when the field is absent or unreadable**, and says so in the
     note. The alternative default is a named sender, which would quietly load one
     identity with a whole round -- the failure the three-way split exists to avoid. A
     reply that states which mode ran lets a rep correct the next submission.
     """
+    names, _ = known_senders()
+    pretty = ", ".join(n.title() for n in names)
     v = (raw or "").strip().lower()
     if not v:
-        return "", "no Sender field given, so the round was split across all three"
-    for name in KNOWN_SENDERS:
+        return "", "no sender field given, so the round was split across every sender"
+    for name in names:
         if name in v:
             return name, ""
     if any(w in v for w in SPLIT_WORDS):
         return "", ""
-    return "", (f"Sender {raw.strip()!r} is not one of Carl, Brooke or Zach, so the "
-                f"round was split across all three")
+    # Names the valid options from config rather than a frozen three, so the message
+    # stays true as the team grows.
+    return "", (f"sender {raw.strip()!r} is not one of {pretty}, so the round was "
+                f"split across every sender")
+
+
 # The angle reaches the generation prompt, so it is capped. A rep pasting three
 # paragraphs would crowd out the rulebook, and a topic hint does not need paragraphs.
 ANGLE_MAX = 400
@@ -459,14 +481,14 @@ def run_split_pipeline(list_id: str, brief: str, apply_changes: bool,
     if p.returncode != 0:
         return out
 
-    for sender in KNOWN_SENDERS:
+    for sender in known_senders()[0]:
         part = work / f"split-{elig.stem}-{sender}.csv"
         if not part.exists():
             continue
         n_part = sum(1 for _ in part.open(encoding="utf-8-sig")) - 1
         if n_part <= 0:
             continue
-        mailbox = SENDER_MAILBOX[sender]
+        mailbox = known_senders()[1][sender]
         enriched = work / f"intake-{list_id}-{stamp}-{sender}-enriched.csv"
         cb = work / f"intake-{list_id}-{stamp}-{sender}-callbacks-review.csv"
         gen = work / f"intake-{list_id}-{stamp}-{sender}-generated.csv"
@@ -815,12 +837,13 @@ def main(argv=None) -> int:
         # has already mailed is reported as "belongs to carl" rather than quietly moved.
         #
         # SPLIT -> the multi-sender path, one campaign per sender.
+        _names, _boxes = known_senders()
         if sender:
             print(f"    sender: {sender} (named) -> one campaign")
-            res = run_pipeline(list_id, brief, SENDER_MAILBOX[sender], a.apply,
+            res = run_pipeline(list_id, brief, _boxes[sender], a.apply,
                                angle=angle, requester=requester)
         else:
-            print(f"    sender: split across {', '.join(KNOWN_SENDERS)}"
+            print(f"    sender: split across {', '.join(_names)}"
                   f" -> one campaign each")
             res = run_split_pipeline(list_id, brief, a.apply, angle=angle,
                                      requester=requester)
