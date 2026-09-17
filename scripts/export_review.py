@@ -8,9 +8,8 @@ Sheet ID, tab, and the column contract come from config/review-surfaces.md.
 
 Three things this refuses to do:
 
-  1. WRITE THE HUMAN'S COLUMNS. "Ranking (X/5)" and "Feedback" are left empty on every
-     row, exactly as decision/notes are on the reply queue. A row must never arrive
-     pre-scored.
+  1. WRITE THE HUMAN'S COLUMN. `Approved` is left empty on every row, exactly as
+     decision/notes are on the reply queue. A row must never arrive pre-approved.
   2. TOUCH THE HEADER ROW. The tab's header is read and treated as authoritative, and
      rows are mapped to it BY NAME. Reviewers edit these sheets, so a positional copy
      against a fixed contract would silently shift every value past the edit.
@@ -46,9 +45,9 @@ SHEET_COLUMNS_REFERENCE = [
     "estimated_gmv_usd", "vertical", "validation", "generation_error", "attempts",
     "repairs_applied", "sequence_findings", "bedrock_message_id",
     "message_1_subject", "message_1_body", "message_2_subject", "message_2_body",
-    "message_3_subject", "message_3_body", "Ranking (X/5)", "Feedback",
+    "message_3_subject", "message_3_body",
 ]
-HUMAN_COLUMNS = ("Approved", "Ranking (X/5)", "Feedback")
+HUMAN_COLUMNS = ("Approved",)
 
 # The Approved dropdown. A dropdown rather than a free-text field so the value is always
 # one the engine recognises: a typo ("Yes " with a space, "yep", "APPROVE") in a
@@ -77,9 +76,12 @@ DEAD_COLUMNS = ("message_2_subject", "message_3_subject")
 # is the file to open when something needs explaining. The Sheet is the review surface,
 # not the archive.
 #
-# Ranking and Feedback are kept even though they were not in the requested list: they are
-# the reviewer's own columns and the entire reason the sheet exists -- feedback becomes
-# rules in config/. Without them a rep can read the copy and has nowhere to respond.
+# **Ranking (X/5) and Feedback were REMOVED on 2026-09-17**, by decision of the person
+# doing the reviewing. They were kept through the earlier column trim on the argument that
+# a reviewer needs somewhere to respond -- and after three real rounds neither was ever
+# filled in. Feedback arrived as edits to the copy itself and as messages, which is
+# richer than a cell and is what actually became rules in config/. Two empty columns on
+# every row imply an expectation nobody had.
 NEW_TAB_COLUMNS = [
     "Seller", "first_name", "last_name", "email",
     "message_1_subject", "message_1_body", "message_2_body", "message_3_body",
@@ -87,7 +89,7 @@ NEW_TAB_COLUMNS = [
     # builds a DRAFTED campaign from the rows marked Y. Before it existed the approval
     # lived in a Slack message and the campaign got built because someone remembered to
     # run a command -- a step that can be forgotten is not a gate.
-    "Approved", "Ranking (X/5)", "Feedback",
+    "Approved",
     # Stamped by build_approved.py with the campaign a row was built into. EMPTY means
     # "approved but not yet built", which is what makes per-row dedup possible: a tab
     # can be approved in batches and each batch gets its own campaign, instead of the
@@ -290,7 +292,7 @@ def main(argv=None) -> int:
 
     payload = [to_sheet_row(r, seller, header) for r in rows]
     print(f"\n{len(payload)} rows mapped to {len(header)} columns "
-          f"(Ranking and Feedback left empty for the reviewer)")
+          f"(Approved left empty for the reviewer)")
     if a.dry_run:
         print("\nDRY RUN: nothing written. First row would be:")
         for col, val in zip(header, payload[0]):
