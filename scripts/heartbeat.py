@@ -101,7 +101,23 @@ SLOTS = {
     # until the next morning, and that is the right trade: the prospect is not waiting on
     # hours, and the reviewer is spared duplicate UI work.
     "midday":    ["reply_check"],
-    "afternoon": ["reply_check"],
+    # `sync_sends` added to the AFTERNOON slot 2026-09-17, and the reason is a real
+    # complaint rather than tidiness. It ran morning-only, so the three campaigns
+    # launched after the 10:07 heartbeat sent 40 emails that appeared NOWHERE in HubSpot
+    # for the rest of the day -- and this job is **the only way a rep sees our sends at
+    # all**, both vendor paths being unavailable (see CLAUDE.md on the corrected activity
+    # -logging caveat). A rep opening a contact we emailed that morning saw an untouched
+    # record, which is worse than a missing feature: it reads as "we never contacted
+    # them" and invites a duplicate touch.
+    #
+    # Afternoon rather than all three slots. Sends run 09:00-17:00 ET, so the ~16:35 run
+    # catches nearly a full day before anyone looks in the evening, and the lag drops
+    # from up to 24 hours to a few. Midday would trim it further and is a one-word
+    # change; it is left off because the cost is not free -- the job fetches a thread per
+    # lead (253 Smartlead calls at 247 leads, so roughly one per lead) and that scales
+    # with every campaign still ACTIVE. Two runs a day is the compromise: revisit if reps
+    # ask for same-hour visibility, and optimise the per-lead fetch first if so.
+    "afternoon": ["reply_check", "sync_sends"],
     # Mondays only, via its own routine. Separate from the daily slots because it is a
     # REPORT, not a job that keeps state correct -- running it daily would append six
     # near-identical history rows a week and bury the weekly signal it exists to show.

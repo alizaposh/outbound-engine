@@ -206,7 +206,16 @@ def resume_date(intent: str, reply_at: str, named: str | None,
     """
     if intent != "out_of_office":                                   # rule 1
         return None
-    cfg = cfg or load_defaults()
+    # `defaults()`, not `load_defaults()`. It read the latter until 2026-09-17 and that
+    # name does not exist in this module, so the FIRST out_of_office reply ever received
+    # in production crashed the whole reply check with a NameError -- taking the other
+    # replies in the same run down with it.
+    #
+    # Every self-test case passes `cfg` explicitly, so the `cfg or ...` fallback was
+    # never once executed by a test. recycle_date, six lines of logic away, has always
+    # called defaults() correctly. A passing self-test on a function with an untested
+    # default argument is worth exactly nothing.
+    cfg = cfg or defaults()
     try:
         anchor = dt.date.fromisoformat((reply_at or "")[:10])
     except ValueError:
@@ -1174,6 +1183,25 @@ def main(argv=None) -> int:
                 else:
                     print("      queue: would append a row for human review")
                 queued += 1
+            else:
+                # **A reply handled with no human step still has to be RECORDED.**
+                # Otherwise nothing dedupes it: the queue sheet is the processed-id
+                # store, and a reply that is never queued never lands there, so it is
+                # re-read, re-classified and re-acted on every single run. Observed on
+                # 2026-09-17 -- one automated_reply reported "1 reply(s) processed" on
+                # three consecutive runs, each one paying for a fresh Bedrock call to
+                # re-decide a settled question.
+                #
+                # It matters most for out_of_office: that writes outbound_resume_after,
+                # resume_sequences clears it and restarts the lead, and reprocessing then
+                # re-writes a date already in the past -- restarting the same prospect
+                # again on the next run, and the next.
+                if a.apply:
+                    store.mark_processed(newest["id"], email=email, intent=intent,
+                                         note=res.get("reason", "")[:120])
+                    print("      recorded: handled, no human step needed")
+                else:
+                    print("      recorded: would mark handled (no human step needed)")
 
     # "queued" vs "WOULD be queued" matters: the heartbeat prints this line into Slack
     # every weekday, and the routines run WITHOUT --apply until they are graduated. A dry

@@ -180,7 +180,8 @@ class ProcessedIdStore:
     def is_processed(self, message_id: str) -> bool:
         raise NotImplementedError
 
-    def mark_processed(self, message_id: str) -> None:
+    def mark_processed(self, message_id: str, email: str = "", intent: str = "",
+                       note: str = "") -> None:
         raise NotImplementedError
 
 
@@ -190,33 +191,90 @@ class SheetProcessedIds(ProcessedIdStore):
     Reads column N (smartlead_message_id). Durable, needs no schema decision, and
     cannot drift from the sheet a human is looking at.
 
-    SCOPE LIMIT, deliberately narrow: this answers "is it already IN THE QUEUE", not
-    "was it handled at all". A reply auto-sent under the allowlist, or dropped as
-    out_of_office / automated_reply, is never queued and so is invisible here. Harmless
-    while the allowlist is empty; the fix when it isn't is a Handled tab on this sheet,
-    swapped in below. mark_processed is a no-op because a successful append IS the record.
+    Reads the queued ids from the review tab AND the machine-handled ids from a second
+    "Handled" tab, because a reply can be dealt with without ever needing a human.
+
+    **The Handled tab was added 2026-09-17, and the note it replaces was wrong in a
+    specific way worth keeping.** It read: "a reply dropped as out_of_office /
+    automated_reply is never queued and so is invisible here. Harmless while the
+    allowlist is empty." The allowlist has nothing to do with those two -- they are
+    dropped whatever it contains -- so they were reprocessed on EVERY run, for good.
+    Observed live: an automated_reply from afromoone@gmail.com came back as
+    "1 reply(s) processed" on three consecutive runs.
+
+    What that cost, in order of seriousness:
+      * a Bedrock classification per machine reply PER RUN, forever, growing with every
+        campaign. Three heartbeats a day against a year of accumulated auto-responders
+        is a bill for re-deciding settled questions.
+      * "N reply(s) processed" counted the same reply indefinitely, so the number could
+        not be read as activity.
+      * the real risk: `out_of_office` writes `outbound_resume_after`, and
+        `resume_sequences` clears it and restarts the lead. Once the resume date passes,
+        reprocessing the same auto-reply re-writes a date that is now in the past, so the
+        lead is resumed again on the next run, and the next -- a restart loop on a
+        prospect who sent one away message.
     """
 
-    def __init__(self, service, sheet_id: str, tab: str):
+    def __init__(self, service, sheet_id: str, tab: str, handled_tab: str = ""):
         self.service, self.sheet_id, self.tab = service, sheet_id, tab
+        self.handled_tab = handled_tab or HANDLED_TAB
         self._cache: set[str] | None = None
+
+    def _column(self, tab: str, col: str) -> set[str]:
+        try:
+            r = self.service.spreadsheets().values().get(
+                spreadsheetId=self.sheet_id,
+                range=f"{tab}!{col}2:{col}").execute(num_retries=SHEETS_RETRIES)
+        except Exception:
+            return set()          # tab not created yet; created on first write
+        return {v[0].strip() for v in r.get("values", []) if v and v[0].strip()}
 
     def _ids(self) -> set[str]:
         if self._cache is None:
             col = chr(ord("A") + MSG_ID_COL)        # N
-            r = self.service.spreadsheets().values().get(
-                spreadsheetId=self.sheet_id,
-                range=f"{self.tab}!{col}2:{col}").execute(num_retries=SHEETS_RETRIES)
-            self._cache = {v[0].strip() for v in r.get("values", [])
-                           if v and v[0].strip()}
+            self._cache = (self._column(self.tab, col)
+                           | self._column(self.handled_tab, "A"))
         return self._cache
 
     def is_processed(self, message_id: str) -> bool:
         return message_id.strip() in self._ids()
 
-    def mark_processed(self, message_id: str) -> None:
+    def mark_processed(self, message_id: str, email: str = "", intent: str = "",
+                       note: str = "") -> None:
+        """Record a reply that was handled WITHOUT being queued.
+
+        Appended to the Handled tab so the record is somewhere a human can open, which is
+        the same constraint the review tab satisfies (CLAUDE.md: no local database). The
+        tab is created on first write rather than assumed.
+        """
+        mid = message_id.strip()
         if self._cache is not None:
-            self._cache.add(message_id.strip())     # keep an in-run batch consistent
+            self._cache.add(mid)                    # keep an in-run batch consistent
+        if not mid:
+            return
+        self._ensure_handled_tab()
+        self.service.spreadsheets().values().append(
+            spreadsheetId=self.sheet_id, range=f"{self.handled_tab}!A1",
+            valueInputOption="RAW", insertDataOption="INSERT_ROWS",
+            body={"values": [[mid, email, intent,
+                              dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                              note]]}).execute(num_retries=SHEETS_RETRIES)
+
+    def _ensure_handled_tab(self) -> None:
+        meta = self.service.spreadsheets().get(
+            spreadsheetId=self.sheet_id).execute(num_retries=SHEETS_RETRIES)
+        if any(sh["properties"]["title"] == self.handled_tab
+               for sh in meta.get("sheets", [])):
+            return
+        self.service.spreadsheets().batchUpdate(
+            spreadsheetId=self.sheet_id,
+            body={"requests": [{"addSheet": {"properties": {"title": self.handled_tab}}}]}
+        ).execute(num_retries=SHEETS_RETRIES)
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.sheet_id, range=f"{self.handled_tab}!A1",
+            valueInputOption="RAW",
+            body={"values": [["smartlead_message_id", "email", "intent",
+                              "handled_at", "note"]]}).execute(num_retries=SHEETS_RETRIES)
 
 
 class MemoryProcessedIds(ProcessedIdStore):
@@ -228,7 +286,8 @@ class MemoryProcessedIds(ProcessedIdStore):
     def is_processed(self, message_id: str) -> bool:
         return message_id.strip() in self._seen
 
-    def mark_processed(self, message_id: str) -> None:
+    def mark_processed(self, message_id: str, email: str = "", intent: str = "",
+                       note: str = "") -> None:
         self._seen.add(message_id.strip())
 
 
@@ -236,6 +295,12 @@ def get_processed_id_store(service, sheet_id: str, tab: str) -> ProcessedIdStore
     """THE SEAM. Swap this body to move the handled-reply record elsewhere (a Handled
     tab, a HubSpot property) -- no local DB, so it stays somewhere a human can open."""
     return SheetProcessedIds(service, sheet_id, tab)
+
+
+# Replies handled with no human step -- machine auto-responders, and anything auto-sent
+# if the allowlist is ever non-empty. Separate from the review tab so the queue a human
+# reads stays a list of decisions they actually have to make.
+HANDLED_TAB = "Handled (no review)"
 
 
 # ---- the append function ------------------------------------------------------
