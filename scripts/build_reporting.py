@@ -102,8 +102,26 @@ def specs(cfg: dict) -> list[tuple[str, str, dict]]:
     return [
         ("Enrolled", "every contact the engine has ever sent to; the denominator",
          branch([enrolled])),
-        ("In sequence", "currently receiving emails 1-3",
+        ("In sequence", "assigned to a campaign; see the caveat on Emailed below",
          branch([enrolled, is_any("outbound_status", ["in_sequence"])])),
+        # **The honest send metric.** Enrolled and In sequence are both written by
+        # create_campaign at campaign CREATION -- before launch, before any send -- so
+        # they mean "assigned to a campaign", not "we emailed them". On 2026-09-17 that
+        # read 247 enrolled and 220 in_sequence against 61 real sends, because three
+        # campaigns sat DRAFTED for two hours before a human launched them.
+        #
+        # The gap is not a bug on its own: writing the campaign id at enrolment is what
+        # lets a HubSpot record trace to its campaign at all. It becomes a LIE only when a
+        # campaign is built and never launched, since the unsubscribe toggles have no API
+        # and that manual step can simply be forgotten -- and those contacts would then
+        # read "In sequence" permanently while receiving nothing.
+        #
+        # outbound_last_logged_send is written by sync_sends ONLY after it observes a real
+        # send in Smartlead, so this list cannot claim a send that did not happen. Use it,
+        # not Enrolled, whenever the question is "how many people did we actually email".
+        ("Emailed (confirmed send)",
+         "a real send observed in Smartlead; the honest volume number",
+         branch([enrolled, has("outbound_last_logged_send")])),
         ("Replied (human)", "a real person answered; excludes auto-responders",
          branch([enrolled, is_any("outbound_reply_intent",
                                   positive + negative + neutral)])),

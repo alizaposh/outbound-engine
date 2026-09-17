@@ -3,7 +3,7 @@
 **What this gives you:** every engine metric as a number you can click to get the exact
 contacts behind it.
 
-`scripts/build_reporting.py` has already created the fifteen lists. This file is the
+`scripts/build_reporting.py` has already created the sixteen lists. This file is the
 part that cannot be automated: **assembling the dashboard itself.** The tiles go on by
 hand, once. Budget five minutes.
 
@@ -27,7 +27,7 @@ open it. HubSpot's docs agree — report creation is documented as UI-only, the
 for a create/manage reports API is still open with no committed support.
 
 What `reporting.full.write` *did* buy is not nothing: it is what lets
-`build_reporting.py` create the fifteen lists. In HubSpot a list is simultaneously the
+`build_reporting.py` create the sixteen lists. In HubSpot a list is simultaneously the
 number and the click-through set behind it, so **the reporting layer is already built by
 API.** Only the visual arrangement of tiles is manual.
 
@@ -41,7 +41,8 @@ refresh them. All are prefixed `Outbound — ` so they sort together in the list
 | List | ID | What it means |
 |---|---|---|
 | Outbound — Enrolled | 1944 | Every contact the engine has ever sent to. **The denominator.** |
-| Outbound — In sequence | 1945 | Currently receiving emails 1–3 |
+| Outbound — In sequence | 1945 | Assigned to a campaign — see the caveat below |
+| Outbound — Emailed (confirmed send) | 1979 | **A real send observed in Smartlead. The honest volume number** |
 | Outbound — Replied (human) | 1946 | A real person answered. Excludes auto-responders |
 | Outbound — Meetings booked | 1947 | Booked *after* we enrolled them. **The outcome metric** |
 | Outbound — Positive replies | 1948 | `interested`, `question` |
@@ -104,6 +105,37 @@ restore 1941, re-create it; the filter was `outbound_reply_intent IS_ANY_OF
 better list.
 
 ---
+
+## "Enrolled" means assigned to a campaign, NOT emailed
+
+Both `Enrolled` and `In sequence` are written by `create_campaign.py` at campaign
+**creation**. A campaign is created DRAFTED and cannot send until a human sets the
+unsubscribe options in the Smartlead UI and launches it, so **those two tiles move before
+a single email goes out.** Observed 2026-09-17, in the two hours between the three
+campaigns being built and launched:
+
+```
+Enrolled          247      <- assigned to a campaign
+In sequence       220
+Emailed (confirmed) 61     <- actually sent to
+gap               186      = the three campaigns still sitting DRAFTED
+```
+
+**The gap is not a bug, and writing the id at enrolment is not a mistake** — it is the
+only link from a HubSpot record to the campaign that mailed it, and nothing native
+captures it. The number is also self-correcting: `sync_sends` runs in the morning
+heartbeat and the confirmed-send count catches up within a day.
+
+**It becomes a lie in one specific case: a campaign built and never launched.** The
+unsubscribe toggles have no API, so that manual step can simply be forgotten, and those
+contacts would read `In sequence` indefinitely while receiving nothing. Nothing in the
+engine would flag it.
+
+So: **when the question is "how many people have we actually emailed", read
+`Emailed (confirmed send)` (list 1979), never `Enrolled`.** It is written only after
+`sync_sends` observes a real send in Smartlead, so it cannot claim a send that did not
+happen. Enrolled is the right denominator for rates — everyone assigned to the
+campaign — and the wrong answer to "did we send it".
 
 ## Read this before you add a single tile
 
@@ -182,10 +214,18 @@ target, and it is reusable everywhere else in HubSpot (workflows, sequences, exp
 
 ## Where each number comes from
 
+**Nothing in HubSpot reporting reads Smartlead directly.** Every tile is a DYNAMIC list
+over `outbound_*` contact properties, and each of those properties is written by exactly
+one script at one moment. The chain is: a script observes something in Smartlead or
+HubSpot → writes an `outbound_*` property → HubSpot re-evaluates list membership (about a
+minute later) → the tile changes. There is no other path, which is why a tile can only
+ever be as truthful as the property behind it.
+
 | Tile | Written by | When |
 |---|---|---|
-| Enrolled | `create_campaign.py` | on campaign creation |
-| In sequence | `create_campaign.py` | on campaign creation |
+| Enrolled | `create_campaign.py` | **on campaign creation — NOT on send** |
+| In sequence | `create_campaign.py` | **on campaign creation — NOT on send** |
+| **Emailed (confirmed send)** | **`sync_sends.py`** | **after a real send is observed in Smartlead** |
 | Replied, Positive/Negative/Deferred, Auto-responders | `reply_check.py` | every heartbeat |
 | **Meetings booked** | **`sync_meetings.py`** | **morning heartbeat** |
 | No response | `close_sequences.py` | morning heartbeat |
