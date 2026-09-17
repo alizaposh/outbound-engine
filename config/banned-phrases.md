@@ -79,6 +79,23 @@ Softeners, §9. These exist to apologise for the ask, and the spec bans the whol
 - `sorry to bother`
 - `apologies for the interruption`
 
+Corporate filler in REPLY drafts. Added 2026-09-17 from the first reply the outbound
+owner edited by hand (`dterrellglass@gmail.com`, a happy customer who wrote in to say so).
+Both phrases came from the classifier's draft and both were cut. Recorded as rules rather
+than fixed on the row, because the next draft would otherwise reach for them again -- and
+as of the same date reply drafts ARE checked against this file, which they previously
+were not.
+
+- `we appreciate your business`
+  Transactional, and it makes a warm note from a customer sound like a receipt. The
+  original draft read "Great to hear you're using Posh—we appreciate your business."
+- `special initiatives`
+  A vague noun standing in for the specific thing. The draft offered to keep this
+  customer in mind "for any special initiatives on our end", which commits to nothing;
+  the edit named a real thing instead. **The lesson generalises past this phrase: when a
+  prospect asks for something concrete, answer with the concrete thing or say no.** A
+  placeholder noun reads as a brush-off precisely because it is one.
+
 Breakup theatrics, §8. Email 3 is one line and closes the loop; it does not perform.
 
 - `before i close your file`

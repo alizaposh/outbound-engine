@@ -1162,7 +1162,11 @@ def main(argv=None) -> int:
                 _lits, _res = banned_lists()
                 findings = validate.check_banned(
                     "", fixed, literals=_lits, regexes=_res)
-                hard = [f for f in findings if getattr(f, "level", "") == "FAIL"]
+                # `severity`, not `level`. Written as getattr(f, "level", "") first,
+                # which silently returned "" for every finding and made this whole check
+                # a no-op -- the failure mode a defaulted getattr always risks: it turns
+                # a wrong field name into a clean pass instead of an error.
+                hard = [f for f in findings if f.severity == validate.FAIL]
                 if hard:
                     # Reported on the row, never silently stripped: a banned phrase in a
                     # draft is a signal about the draft, and a reviewer has to see it.
