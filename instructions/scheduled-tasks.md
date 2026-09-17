@@ -76,8 +76,9 @@ the sidebar (or under **More**) → **New routine** → choose **Local**. A loca
 on this machine with access to this repo; a remote one runs in the cloud from a fresh
 clone and would not have `.env` (see `BACKLOG.md`).
 
-Create **four** routines. The first three are identical except for the slot and time;
-the weekly one runs a different job and has its own prompt.
+Create **five** routines. The first three are identical except for the slot and time;
+the weekly one runs a different job, and the intake one runs a single script rather than
+the heartbeat.
 
 | Name | Schedule | Instructions |
 |---|---|---|
@@ -85,6 +86,45 @@ the weekly one runs a different job and has its own prompt.
 | `outbound-midday` | **Weekdays**, 1:05 PM | prompt below with `midday` |
 | `outbound-afternoon` | **Weekdays**, 4:25 PM | prompt below with `afternoon` |
 | `outbound-weekly` | **Mondays**, 10:15 AM | prompt below with `weekly` |
+| `outbound-intake` | **Weekdays**, hourly 9 AM–6 PM | the intake prompt below |
+
+### `outbound-intake`: why it is separate from the heartbeat
+
+Requested 2026-09-17: a rep should not wait until the next heartbeat slot for their
+drafts. **True on-submit triggering is out of scope by decision, not by oversight** —
+CLAUDE.md v1 says "polling, no webhooks" and "no servers, queues, or webhook
+infrastructure", and a Slack Workflow Builder form cannot reach this laptop without one.
+Hourly polling is the closest honest equivalent: worst case an hour instead of a
+morning.
+
+**It runs `slack_intake.py` directly rather than a heartbeat slot, and that is the
+point.** The heartbeat posts to Slack on EVERY run by design (guarantee 4), so an hourly
+heartbeat would put nine health messages a day into the channel and train everyone to
+ignore it. `slack_intake` posts only into the thread of a request it actually found, so
+an hour with no submissions is silent.
+
+The trade is that a broken intake routine reports nothing — which is exactly the failure
+mode the heartbeat exists to catch. **That is covered**: `slack_intake` also runs inside
+all three heartbeat slots, so a dead hourly routine shows up as requests being picked up
+at 9:45 / 1:05 / 4:25 and never in between. The hourly task is a fast path, never the
+only path.
+
+A no-op run is cheap: ~1.6s and a handful of API calls, because the capacity check walks
+campaigns rather than leads.
+
+```
+Run the outbound Slack intake for me.
+
+Working folder: this repo.
+Command: ./.venv/bin/python scripts/slack_intake.py --apply
+
+Report the last line of output. If it exits non-zero, say so and paste the error.
+Do not run any other script.
+```
+
+**`--apply` is not optional here either.** Without it the script reads the channel,
+decides what it would do, and posts nothing — so a rep's request sits unacknowledged
+while the log claims a healthy run. Same trap as the morning routine in 2026-09-10.
 
 **Weekdays** is a built-in preset (Daily, skipping Sat/Sun) with a time picker — no cron
 needed. Set **working folder** to this repo; Desktop will ask you to trust it. Leave the

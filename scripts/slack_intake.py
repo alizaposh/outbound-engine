@@ -63,7 +63,19 @@ SL_BASE = "https://server.smartlead.ai/api/v1"
 TAG_ACCEPTED = "[engine:accepted]"
 TAG_QUEUED = "[engine:queued]"
 TAG_REJECTED = "[engine:rejected]"
-ALL_TAGS = (TAG_ACCEPTED, TAG_QUEUED, TAG_REJECTED)
+# Posted the moment a request is picked up, BEFORE generation runs. Added 2026-09-17
+# because a rep submitting a list heard nothing at all until the whole pipeline finished
+# -- eligibility, callbacks, generation and export -- which is minutes of work reached
+# only at the next heartbeat slot. From their side that is indistinguishable from the
+# form being broken, and the honest fix is to say "seen" before saying "done".
+#
+# **Deliberately NON-TERMINAL.** engine_status returns the latest tag and only ACCEPTED
+# and REJECTED stop a request being reconsidered, so a run that dies mid-generation
+# leaves `working` behind and the next slot picks the request up again. Making it
+# terminal would have been the dangerous choice: a crash would silently strand the
+# request forever, marked as though it were in hand.
+TAG_WORKING = "[engine:working]"
+ALL_TAGS = (TAG_ACCEPTED, TAG_QUEUED, TAG_REJECTED, TAG_WORKING)
 
 # A HubSpot list, however a rep pastes it: a full URL, "list 1764", or a bare id.
 LIST_PATTERNS = (
@@ -859,6 +871,20 @@ def main(argv=None) -> int:
             # Said once, at submission, when it can still change what the rep does.
             # Advisory only: an unusual size is never a reason to refuse a request.
             print(f"    size note: {note}")
+        # The receipt, before the work. Not repeated if a previous run already said it,
+        # for the same reason the queued message is not repeated daily.
+        if status != TAG_WORKING:
+            print("    " + sl.reply(channel, ts,
+                  f"{TAG_WORKING} Got it — HubSpot list {list_id}, {size} contacts"
+                  + (f", angle: _{angle}_" if angle else "")
+                  + ".\nChecking eligibility and drafting copy now. I will reply here "
+                  + "with the review link"
+                  + (" (one per sender)" if not sender else "")
+                  + " when it is ready."
+                  + (f"\n\n_Note on size:_ {note}" if note else "")
+                  + (f"\n_Note on sender:_ {sender_note}" if sender_note else "")))
+        else:
+            print("    already acknowledged on an earlier run; not repeating")
         # NAMED SENDER -> the existing single-sender path, unchanged. It runs eligibility
         # WITH --sender, so gate 10 soft-excludes contacts already assigned to one of the
         # other two. That is what keeps a rep's "all from Brooke" request to ONE campaign
@@ -931,8 +957,6 @@ def main(argv=None) -> int:
               + f"Outbound review happens in that tab, not in this thread — the campaign "
               f"is built from the rows marked Approved there.\n"
               f"**Nothing sends until a human launches it in Smartlead.**"
-              + (f"\n\n_Note on size:_ {note}" if note else "")
-              + (f"\n_Note on sender:_ {sender_note}" if sender_note else "")
               + (f"\n_Note on split:_ {res['collapsed']}" if res.get("collapsed") else "")))
 
     print(f"\n{handled} accepted, {queued} queued, {rejected} rejected")
