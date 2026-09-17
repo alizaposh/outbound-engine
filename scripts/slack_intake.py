@@ -158,6 +158,58 @@ def in_business_hours(now: dt.datetime | None = None) -> bool:
     return n.weekday() in BUSINESS_DAYS and n.hour in BUSINESS_HOURS
 
 
+# Eligibility reason -> a sentence a rep can act on.
+#
+# **The raw reasons are written for whoever is debugging a run, not for Slack.** "1
+# skipped, lifecycle customer" was posted to a rep who then had to ask what it meant --
+# and he could not tell from it whether the contact was a paying customer, a data
+# problem, or something he should go and fix. The strings stay as they are in the
+# annotated CSV, where a debugger wants the property name; only the Slack boundary is
+# translated.
+#
+# Keys are matched as a PREFIX, because several reasons carry a value: "owned by Rob
+# Dong", "lifecycle customer", "recycling until 2026-11-04". Longest key wins, so a
+# specific mapping beats a general one.
+REASON_PLAIN = {
+    "lifecycle customer": "already a Posh customer",
+    "lifecycle": "not at a stage we cold-email (HubSpot lifecycle stage)",
+    "in HubSpot sequence": "already in a HubSpot sequence",
+    "in sequence": "already mid-sequence with the engine",
+    "belongs to": "already assigned to another sender's outreach",
+    "owned by": "owned by someone whose contacts we do not cold-email",
+    "has CSM": "has a customer success manager, so they are a customer",
+    "existing customer (has_group)": "already a Posh customer",
+    "opted out (hs_email_optout)": "opted out of all email in HubSpot",
+    "opted out (outbound_suppressed)": "opted out of our outreach",
+    "opted out": "opted out of email",
+    "bounced": "their address bounced previously",
+    "replied recently": "replied to us recently, so a human has it",
+    "replied (date unknown)": "has replied to us before",
+    "replied": "has replied to us before",
+    "recycling until": "declined recently; eligible again later",
+    "lead status": "their HubSpot lead status is one we skip",
+    "no email in input row": "no email address on the record",
+}
+
+
+def plain_reason(reason: str) -> str:
+    """A rep-readable version of an eligibility reason, or the reason unchanged.
+
+    Returning the original when nothing matches is deliberate: an unmapped reason should
+    look odd in Slack rather than be swallowed or mislabelled, which is how a new
+    exclusion gate would otherwise go unnoticed here.
+    """
+    # Both sides lowered. The keys are written as the reasons appear -- "in HubSpot
+    # sequence", "has CSM" -- and comparing a lowered reason against a mixed-case key
+    # silently matched nothing for exactly those two, which is the quiet half-failure a
+    # prefix map invites.
+    r = (reason or "").strip().lower()
+    for key in sorted(REASON_PLAIN, key=len, reverse=True):
+        if r.startswith(key.lower()):
+            return REASON_PLAIN[key]
+    return reason.strip()
+
+
 def review_sheet_url() -> str:
     """A clickable link to the generation review Sheet.
 
@@ -1002,7 +1054,7 @@ def main(argv=None) -> int:
             # Guarantee 5: say WHY, per reason. "Nothing happened" is the worst possible
             # answer to a request, and the reasons are usually actionable -- already in a
             # sequence, already a customer, opted out.
-            lines = "\n".join(f"• {n} — {r}" for r, n in
+            lines = "\n".join(f"• {n} — {plain_reason(r)}" for r, n in
                                sorted(res["exclusions"].items(), key=lambda x: -x[1]))
             print(f"    0 of {res['leads']} eligible; reporting the reasons")
             print("    " + sl.reply(channel, ts,
@@ -1038,7 +1090,7 @@ def main(argv=None) -> int:
             elig_line = f"all {_l} contact(s) eligible"
         else:
             top = sorted((res.get("exclusions") or {}).items(), key=lambda x: -x[1])
-            why = f", {top[0][0]}" if top else ""
+            why = f" — {plain_reason(top[0][0])}" if top else ""
             elig_line = (f"{_e} of {_l} eligible ({_l - _e} skipped{why})")
         print(f"    pipeline: {res['steps']}, review tab(s) {tabs_desc}")
         # The approval sentence here was stale and actively misleading: it read "Reply
