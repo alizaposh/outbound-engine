@@ -202,9 +202,18 @@ def verify_campaign(sl, cid, cfg, repair: bool = False) -> int:
         ("stop_lead_settings", c.get("stop_lead_settings"), want_stop),
     ]
     sched = c.get("scheduler_cron_value") or {}
+    want_cap = int(cfg.get("max_new_leads_per_day", 15))
     checks += [
         ("schedule timezone", sched.get("tz"), cfg.get("timezone", "America/New_York")),
         ("schedule days", sched.get("days"), cfg.get("days", [1, 2, 3, 4, 5])),
+        # **The throughput setting, and it was not checked here until 2026-09-17.**
+        # Everything else in this list protects deliverability or consent; this one
+        # decides how fast a campaign actually runs, and its absence showed: the
+        # per-mailbox cap was raised 15 -> 30 and the three live campaigns kept sending
+        # exactly 15 a day, because max_leads_per_day was still 15 and nothing compared
+        # it to config. A verifier that omits the setting people most want to change is
+        # the one they will most often find stale.
+        ("max_leads_per_day", c.get("max_leads_per_day"), want_cap),
     ]
     bad = []
     for label, got, want in checks:
@@ -216,14 +225,28 @@ def verify_campaign(sl, cid, cfg, repair: bool = False) -> int:
 
     if bad and repair:
         print(f"\nre-applying {', '.join(bad)} from config...")
-        sl.call("POST", f"/campaigns/{cid}/settings", {
-            "track_settings": want_track,
-            "stop_lead_settings": want_stop,
-            "send_as_plain_text": cfg.get("send_as_plain_text", False)})
+        if {"track_settings", "stop_lead_settings"} & set(bad):
+            sl.call("POST", f"/campaigns/{cid}/settings", {
+                "track_settings": want_track,
+                "stop_lead_settings": want_stop,
+                "send_as_plain_text": cfg.get("send_as_plain_text", False)})
+        # The schedule is a SEPARATE endpoint, and it replaces the whole object -- so
+        # every field is resent from config rather than just the drifted one, or the
+        # others would be reset to Smartlead's defaults as a side effect of the repair.
+        if {"schedule timezone", "schedule days", "max_leads_per_day"} & set(bad):
+            sl.call("POST", f"/campaigns/{cid}/schedule", {
+                "timezone": cfg.get("timezone"),
+                "days_of_the_week": cfg.get("days_of_the_week"),
+                "start_hour": cfg.get("start_hour"), "end_hour": cfg.get("end_hour"),
+                "min_time_btw_emails": int(cfg.get("min_time_btw_emails", 10)),
+                "max_new_leads_per_day": want_cap, "schedule_start_time": None})
         c = sl.call("GET", f"/campaigns/{cid}")
         print(f"  track_settings now {c.get('track_settings')!r}, "
-              f"stop_lead_settings now {c.get('stop_lead_settings')!r}")
-        bad = [b for b in bad if b not in ("track_settings", "stop_lead_settings")]
+              f"stop_lead_settings now {c.get('stop_lead_settings')!r}, "
+              f"max_leads_per_day now {c.get('max_leads_per_day')!r}")
+        bad = [b for b in bad if b not in ("track_settings", "stop_lead_settings",
+                                           "schedule timezone", "schedule days",
+                                           "max_leads_per_day")]
 
     print("\nCANNOT be checked from the API -- confirm by eye in the UI every time:")
     # HubSpot activity logging was listed here as a mandatory gate until 2026-09-14.

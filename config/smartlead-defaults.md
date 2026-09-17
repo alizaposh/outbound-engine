@@ -45,7 +45,7 @@ days_of_the_week: [1, 2, 3, 4, 5]   # weekdays only, Monday = 1
 start_hour: "09:00"
 end_hour: "17:00"
 min_time_btw_emails: 10             # minutes, spreads sends inside the window
-max_new_leads_per_day: 15           # CAMPAIGN-WIDE new leads per day, NOT per mailbox.
+max_new_leads_per_day: 30           # CAMPAIGN-WIDE new leads per day, NOT per mailbox.
                                     # The comment here said "per mailbox, matching the
                                     # Smartlead account setting" until 2026-09-16 and was
                                     # wrong on both halves. Two different settings exist
@@ -62,14 +62,28 @@ max_new_leads_per_day: 15           # CAMPAIGN-WIDE new leads per day, NOT per m
                                     #     it as message_per_day and rejects that name on
                                     #     write. Use scripts/set_send_limits.py.
                                     #
-                                    # **UNVERIFIED WHETHER THIS VALUE APPLIES.** We POST
-                                    # max_new_leads_per_day to /campaigns/{id}/schedule,
-                                    # but the campaigns read back max_leads_per_day = 50
-                                    # (3955179) and 30 (3921033) — neither is 15, and
-                                    # they differ from each other. Either the field name
-                                    # is ignored or these were set by hand in the UI.
-                                    # Check the three campaigns built 2026-09-17 against
-                                    # this value before trusting it.
+                                    # **VERIFIED 2026-09-17: the value DOES apply.** An
+                                    # earlier note here said otherwise, because campaigns
+                                    # 3955179 and 3921033 read back 50 and 30. Those two
+                                    # predate the setting or were changed in the UI; all
+                                    # three campaigns built on 2026-09-17 read back
+                                    # exactly 15, the config value at the time.
+                                    #
+                                    # RAISED 15 -> 30 the same day. It was the ACTUAL
+                                    # bottleneck, not the per-mailbox cap: the three live
+                                    # campaigns each sent exactly 15/15/16 on their first
+                                    # day, pinned by this number, and raising
+                                    # message_per_day to 30 on its own would have changed
+                                    # nothing. 30 matches the mailbox cap, so one
+                                    # sender's 4 boxes can absorb 30 new leads a day plus
+                                    # the follow-ups they generate: peak ~90 sends/day
+                                    # against 120 of capacity.
+                                    #
+                                    # An existing campaign does NOT pick this up. Run
+                                    # `create_campaign.py --verify <id> --repair`, which
+                                    # checks max_leads_per_day as of the same date --
+                                    # it did not before, which is why three live
+                                    # campaigns sat at the old value unnoticed.
 log_sends_enabled: true             # scripts/sync_sends.py writes engine sends and
                                     # replies to the HubSpot contact timeline. TRUE
                                     # because both vendor paths are unavailable: Smartlead
