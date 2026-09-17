@@ -40,6 +40,7 @@ import datetime as dt
 import json
 import pathlib
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -126,19 +127,51 @@ class Smartlead:
     def __init__(self, key: str):
         self.key = key
         self.calls = 0
+        self.retries = 0
 
-    def get(self, path: str):
+    def get(self, path: str, tries: int = 4):
+        """One read, retried on a rate limit or a transient server error.
+
+        **Added 2026-09-17, before this job went from one run a day to three.** It costs
+        roughly one Smartlead call PER LEAD -- 253 at 247 leads -- so the call volume
+        scales with every campaign still ACTIVE, and a 429 previously raised straight out
+        of here and failed the whole job. That is the wrong failure for this particular
+        job: it is the only thing writing our sends to a HubSpot timeline, so a run lost
+        to a rate limit is a day where reps see contacts as untouched.
+
+        Backoff is exponential and deliberately patient rather than tight: nothing here
+        is time-critical to the minute, and the point is to finish rather than to finish
+        fast. Only 429 and 5xx are retried -- a 404 is a real answer and repeating it
+        just wastes the budget.
+        """
         sep = "&" if "?" in path else "?"
-        req = urllib.request.Request(f"{SL_BASE}{path}{sep}api_key={self.key}",
-                                     headers={"User-Agent": "outbound-engine/1.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                self.calls += 1
-                raw = r.read()
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as e:
-            raise RuntimeError(
-                f"GET {path} -> {e.code}: {(e.read() or b'').decode()[:200]}") from None
+        for attempt in range(tries):
+            req = urllib.request.Request(f"{SL_BASE}{path}{sep}api_key={self.key}",
+                                         headers={"User-Agent": "outbound-engine/1.0"})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    self.calls += 1
+                    raw = r.read()
+                    return json.loads(raw) if raw else {}
+            except urllib.error.HTTPError as e:
+                transient = e.code == 429 or 500 <= e.code < 600
+                if not transient or attempt == tries - 1:
+                    raise RuntimeError(
+                        f"GET {path} -> {e.code}: "
+                        f"{(e.read() or b'').decode()[:200]}") from None
+                wait = 2 ** attempt
+                self.retries += 1
+                print(f"    Smartlead {e.code} on {path[:52]}; retrying in {wait}s "
+                      f"({attempt + 1}/{tries - 1})")
+                time.sleep(wait)
+            except (urllib.error.URLError, TimeoutError) as e:
+                if attempt == tries - 1:
+                    raise RuntimeError(f"GET {path} -> {type(e).__name__}: {e}") from None
+                wait = 2 ** attempt
+                self.retries += 1
+                print(f"    Smartlead {type(e).__name__} on {path[:46]}; retrying in "
+                      f"{wait}s ({attempt + 1}/{tries - 1})")
+                time.sleep(wait)
 
     def campaigns(self) -> list[dict]:
         return self.get("/campaigns") or []
@@ -253,7 +286,11 @@ def main(argv=None) -> int:
 
     print(f"\n{logged} engagement(s) {'written' if a.apply else 'would be written'}, "
           f"{current} contact(s) already current, {unmatched} unmatched")
-    print(f"{sl.calls} Smartlead calls")
+    # Retries reported, not swallowed. Running three times a day means throttling shows
+    # up as a slow job rather than a failed one, and a silently climbing retry count is
+    # the signal that the per-lead fetch needs narrowing before the fleet grows again.
+    print(f"{sl.calls} Smartlead calls"
+          + (f", {sl.retries} retried after a 429/5xx" if sl.retries else ""))
     if not a.apply:
         print("DRY RUN: nothing was written.")
     return 0

@@ -100,7 +100,26 @@ SLOTS = {
     # what a human actually wants to manage. The cost is that an afternoon approval waits
     # until the next morning, and that is the right trade: the prospect is not waiting on
     # hours, and the reviewer is spared duplicate UI work.
-    "midday":    ["reply_check"],
+    # `sync_sends` runs in ALL THREE slots as of 2026-09-17, by decision, and the reason
+    # is not reporting -- it is preventing a double touch. This job writes the send onto
+    # the contact's timeline and moves native `notes_last_contacted`, which is what a rep
+    # actually looks at before reaching out. Left at one run a day, a rep could open a
+    # contact the engine emailed that morning, see an untouched record, and email them
+    # themselves. The engine cannot detect that collision afterwards, and the prospect
+    # gets two cold approaches from one company.
+    #
+    # Worth knowing what this does NOT depend on: `outbound_last_campaign_id` and
+    # `outbound_status=in_sequence` are written at campaign CREATION, so the Outbound —
+    # Enrolled list is already real-time and is the stronger check. Timeline activity is
+    # what a rep sees WITHOUT knowing to look at a list, which is exactly why it has to
+    # be current.
+    #
+    # The cost is real and worth restating: roughly one Smartlead call per lead (253 at
+    # 247 leads), so three runs a day is ~760 calls and grows with every ACTIVE campaign.
+    # `Smartlead.get` retries 429s with backoff as of the same date, so throttling shows
+    # up as a slow job rather than a lost one, and the retry count is printed. If that
+    # count starts climbing, narrow the per-lead fetch before adding more runs.
+    "midday":    ["reply_check", "sync_sends"],
     # `sync_sends` added to the AFTERNOON slot 2026-09-17, and the reason is a real
     # complaint rather than tidiness. It ran morning-only, so the three campaigns
     # launched after the 10:07 heartbeat sent 40 emails that appeared NOWHERE in HubSpot
