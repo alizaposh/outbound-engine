@@ -87,11 +87,42 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
 - Reply retrieval via the Smartlead API on a schedule (**polling, no webhooks**).
 - Reply classification + drafted responses, with autonomous follow-up that is
   **review-gated** (a quality check runs before anything goes out).
-- HubSpot updates on a reply, to the engine's **own** fields only: the classified
-  intent goes to `outbound_reply_intent`, and the reply also moves `outbound_status`
-  (`replied`, `meeting_booked`, or `opted_out`). v1 writes **no native HubSpot sales
-  fields** (Lead Status, Lifecycle Stage) — that mapping is deferred to v2. See
-  `config/hubspot-properties.md`.
+- HubSpot updates on a reply, to the engine's **own** fields: the classified intent goes
+  to `outbound_reply_intent`, and the reply also moves `outbound_status` (`replied`,
+  `meeting_booked`, or `opted_out`). See `config/hubspot-properties.md`.
+- **CRM ENRICHMENT FROM REPLIES, added 2026-09-22, and it crosses the old "no native
+  fields" line deliberately.** This bullet used to end "v1 writes no native HubSpot sales
+  fields (Lead Status, Lifecycle Stage) — deferred to v2". The owner asked for the
+  opposite, for a concrete reason: a rep prospecting one of these contacts in six months
+  should find what the prospect actually told us on the record, rather than having to go
+  and find the email thread.
+
+  Two writes, both from the prospect's OWN WORDS and never from an inference:
+  - **`current_competitor`** when they name what they use. "We have a contract with RA"
+    sets `Resident Advisor`. Safe to automate because the property is an ENUMERATION
+    with a fixed option list, so an unrecognised platform cannot be written at all —
+    `match_platform` returns nothing and the run says so for a human to handle. Word
+    boundaries matter here: "RA" must not fire on "cont**ra**ct" or "g**r**e**a**t".
+  - **`lifecyclestage` -> Disqualified** on a structural non-fit, e.g. "we aren't an
+    event space, we don't have ticketed events".
+
+  **Three conditions guard the lifecycle write, and the third is the important one.**
+  The intent must be `not_qualified`, the model must supply a reason, AND the prospect
+  must NOT have named a platform. A named incumbent is an OBJECTION under
+  `instructions/reply-handling.md`, not a structural non-fit — tested on a real reply,
+  "we built our own ticketing platform" came back `not_qualified` and would have retired
+  a company that runs ticketed events on a competitor, which is precisely who this
+  engine exists to talk to.
+
+  **Never from a machine reply.** An auto-responder mentioning a platform is not a
+  prospect telling us anything.
+- **Beware the lifecycle LABELS in this portal; they are not HubSpot's defaults.**
+  `customer` is labelled **"Outreached"** and `1439306394` is **"Disqualified"**. 35,931
+  contacts sit at `customer`, and the eligibility gate excludes every one of them —
+  which is why reading a value's name from
+  `GET /crm/v3/properties/contacts/lifecyclestage` matters before explaining it to
+  anyone. Reported to a rep as "already a Posh customer" on 2026-09-17; it meant nothing
+  of the kind.
 - Everything runs **locally**: Claude Code + Claude desktop scheduled tasks. No
   servers, queues, or webhook infrastructure. The schedule is three weekday slots
   running `scripts/heartbeat.py`, which posts to Slack on every run so a missed slot is

@@ -394,9 +394,14 @@ class HubSpotWriter:
                         # outbound_sender decides WHOSE booking link goes in the draft.
                         # Written once at enrolment, so a reply months later still
                         # resolves to the person who actually wrote to them.
+                        # current_competitor and lifecyclestage are read so the
+                        # enrichment can say what it CHANGED, and skip a write when the
+                        # value already matches. Without them every reply naming a
+                        # platform would rewrite the same value and report it as news.
                         "properties": ["email", "outbound_status",
-                                       "outbound_recycle_after",
-                                       "outbound_sender"], "limit": 1})
+                                       "outbound_recycle_after", "outbound_sender",
+                                       "current_competitor", "lifecyclestage"],
+                        "limit": 1})
         res = d.get("results") or []
         if not res:
             return None, {}
@@ -411,6 +416,59 @@ class HubSpotWriter:
         return f"wrote {props}"
 
 
+# ---- CRM enrichment from a reply ------------------------------------------------
+
+# A prospect's own words -> the exact `current_competitor` option in HubSpot. The
+# property is an ENUMERATION with a fixed option list, which is what makes this safe to
+# automate: a value that is not an exact option is rejected by HubSpot, so the worst a
+# wrong guess can do is fail loudly rather than write a fiction into the CRM.
+#
+# Keys are matched against the prospect's text lower-cased, longest key first. The
+# options themselves are fetched from HubSpot at runtime and checked against this map on
+# startup, so adding an option there without adding an alias here is visible rather than
+# silent.
+PLATFORM_ALIASES = {
+    "resident advisor": "Resident Advisor", "ra": "Resident Advisor",
+    "eventbrite": "Eventbrite", "event brite": "Eventbrite", "eb": "Eventbrite",
+    "dice": "DICE", "dice.fm": "DICE",
+    "shotgun": "Shotgun", "tixr": "Tixr", "luma": "Luma", "lu.ma": "Luma",
+    "partiful": "Partiful", "mindbody": "Mindbody", "instagram": "Instagram",
+    "seetickets": "Seetickets", "see tickets": "Seetickets",
+    "eventim": "Eventim", "markit": "markit", "eventlive": "EventLiveUS",
+    "posh": "Posh",
+}
+# The Disqualified lifecycle stage in THIS portal. Not a name -- an internal id, because
+# the labels here are non-standard: `customer` is labelled "Outreached", not "Customer".
+# Read them with GET /crm/v3/properties/contacts/lifecyclestage before trusting any of
+# them; assuming HubSpot's defaults is how "already a Posh customer" got said out loud
+# about a contact that merely had been emailed once.
+LIFECYCLE_DISQUALIFIED = "1439306394"
+
+
+def match_platform(said: str, allowed: set[str]) -> str:
+    """The prospect's words -> an exact HubSpot option, or "".
+
+    Word-boundary matched so "RA" does not fire on "great" or "contract", which is the
+    entire risk with a two-letter alias. Returns "" for anything unrecognised, and that
+    is the common case by design: an unmapped platform is left for a human rather than
+    approximated.
+    """
+    t = f" {(said or '').lower().strip()} "
+    if not t.strip():
+        return ""
+    for alias in sorted(PLATFORM_ALIASES, key=len, reverse=True):
+        if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", t):
+            got = PLATFORM_ALIASES[alias]
+            return got if got in allowed else ""
+    return ""
+
+
+def competitor_options(hs) -> set[str]:
+    """The exact values `current_competitor` accepts, from HubSpot."""
+    d = hs._call("GET", "/crm/v3/properties/contacts/current_competitor")
+    return {o.get("value") for o in (d.get("options") or []) if o.get("value")}
+
+
 # ---- classification ------------------------------------------------------------
 
 CLASSIFY_PROMPT = """You are the reply classifier for a cold outbound email engine.
@@ -418,7 +476,7 @@ CLASSIFY_PROMPT = """You are the reply classifier for a cold outbound email engi
 Read the WHOLE thread, then classify the prospect's most recent reply as exactly one
 intent. Return ONLY a JSON object:
 
-{"intent": "<one intent>", "reason": "<under 15 words>", "proposed_action": "<under 20 words>", "draft_response": "<a short reply a human will review, or empty>", "named_return_date": "<YYYY-MM-DD or empty>"}
+{"intent": "<one intent>", "reason": "<under 15 words>", "proposed_action": "<under 20 words>", "draft_response": "<a short reply a human will review, or empty>", "named_return_date": "<YYYY-MM-DD or empty>", "named_platform": "<the ticketing platform they say they use, VERBATIM as they wrote it, or empty>", "not_a_fit_reason": "<why they structurally cannot use us, in under 12 words, or empty>"}
 
 The ten intents:
 - interested: wants to engage, learn more, or meet. ALSO covers a request for materials,
@@ -539,6 +597,19 @@ this backwards matters, because only one of the two may be safely restarted toda
 The draft_response is for a HUMAN TO REVIEW AND SEND. Never write one for
 out_of_office or automated_reply. Keep it short, plain, one ask, no dashes, and never
 promise pricing or terms.
+
+ENRICHMENT, and both fields are for the CRM rather than for the draft:
+
+`named_platform`: fill ONLY when the prospect states what they currently use. Copy their
+words exactly -- "RA", "we're on Dice", "our own platform" -- and do not expand, guess or
+normalise; code maps it to a known platform afterwards and discards anything it cannot
+match. A platform WE mentioned in our own email does not count, only what THEY say.
+Empty is the correct answer whenever they did not name one, which is most of the time.
+
+`not_a_fit_reason`: fill ONLY for a structural impossibility -- they run no ticketed
+events, they have closed, they are a charity with no events. NOT for "not interested",
+"bad timing", "happy with our current tool" or any other decision they could reverse.
+The test is whether the fact would still be true in a year.
 
 **For `interested` and `question`, the draft MUST include this booking link, as a plain
 visible URL: {booking_link}** ({owner}'s calendar). **If that value is a bracketed
@@ -1075,6 +1146,7 @@ def main(argv=None) -> int:
 
     svc, who = rq.sheets_service()
     cfg = rq.load_surface_config()
+    comp_options = competitor_options(hs)
     store = rq.get_processed_id_store(svc, cfg["REPLY_REVIEW_SHEET_ID"],
                                      cfg["REPLY_REVIEW_TAB"])
     processed = queued = skipped = blocked = 0
@@ -1128,6 +1200,50 @@ def main(argv=None) -> int:
             if intent == "asked_to_stop":
                 props["outbound_suppressed"] = "true"
                 props["outbound_opt_out_date"] = now.date().isoformat()
+            # **CRM ENRICHMENT FROM THE REPLY.** The point is a rep opening this contact
+            # in six months and seeing what the prospect actually told us, rather than
+            # having to find the thread. Both writes come from the prospect's own words,
+            # never from an inference about them.
+            #
+            # Never from a machine reply: an auto-responder saying "your ticket has been
+            # logged" is not a prospect telling us their platform.
+            if intent not in ("out_of_office", "automated_reply"):
+                said = (res.get("named_platform") or "").strip()
+                if said:
+                    matched = match_platform(said, comp_options)
+                    was = (existing.get("current_competitor") or "").strip()
+                    if matched and matched != was:
+                        props["current_competitor"] = matched
+                        print(f"      enrich: current_competitor "
+                              f"{was or '(empty)'} -> {matched}  (they said {said!r})")
+                    elif not matched:
+                        # Reported, not written. An unrecognised platform is the common
+                        # case -- "our own system", a regional tool -- and approximating
+                        # it would put a wrong platform into the copy the NEXT campaign
+                        # writes, which is worse than knowing nothing.
+                        print(f"      enrich: they named {said!r}, which is not a known "
+                              f"platform; left unset for a human")
+                nf = (res.get("not_a_fit_reason") or "").strip()
+                # THREE conditions, and the third is the one that matters. The model
+                # supplies the reason, the classifier supplies the intent, and requiring
+                # them to agree means one being wrong is not enough to retire a contact.
+                #
+                # **The third: naming a platform disqualifies the DISQUALIFICATION.**
+                # instructions/reply-handling.md is explicit that a named incumbent --
+                # "we already use X" -- is an OBJECTION, a concern a reply could address,
+                # not a structural non-fit. Tested on a real reply: "we built our own
+                # ticketing platform, but thank you" came back not_qualified with the
+                # reason "Built and operate their own ticketing platform", which would
+                # have retired a perfectly viable prospect for using a competitor. A
+                # company that runs ticketed events on their own tool is exactly who
+                # this engine exists to talk to.
+                if nf and intent == "not_qualified" and not said:
+                    props["lifecyclestage"] = LIFECYCLE_DISQUALIFIED
+                    print(f"      enrich: lifecyclestage -> Disqualified  ({nf})")
+                elif nf and intent == "not_qualified" and said:
+                    print(f"      enrich: NOT disqualifying -- they named {said!r}, so "
+                          f"this is an incumbent objection rather than a structural "
+                          f"non-fit, whatever the reason says")
             recycle = recycle_date(intent, newest["at"], res.get("named_return_date"),
                                    existing.get("outbound_recycle_after"))
             if recycle:

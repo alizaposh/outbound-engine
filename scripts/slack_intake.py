@@ -171,7 +171,14 @@ def in_business_hours(now: dt.datetime | None = None) -> bool:
 # Dong", "lifecycle customer", "recycling until 2026-11-04". Longest key wins, so a
 # specific mapping beats a general one.
 REASON_PLAIN = {
-    "lifecycle customer": "already a Posh customer",
+    # **"customer" is labelled "Outreached" in this portal, NOT "Customer".** Reported
+    # to a rep as "already a Posh customer" on 2026-09-17, which was simply untrue: the
+    # value means somebody has already reached out. 35,931 contacts sit at it, so
+    # getting the sentence wrong misdescribes the largest exclusion the gate applies.
+    # Labels come from the portal, not from HubSpot's defaults -- read them with
+    # GET /crm/v3/properties/contacts/lifecyclestage before trusting a value's name.
+    "lifecycle customer": "already marked Outreached in HubSpot",
+    "lifecycle 1439306394": "marked Disqualified in HubSpot",
     "lifecycle": "not at a stage we cold-email (HubSpot lifecycle stage)",
     "in HubSpot sequence": "already in a HubSpot sequence",
     "in sequence": "already mid-sequence with the engine",
