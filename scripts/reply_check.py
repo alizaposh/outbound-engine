@@ -590,6 +590,24 @@ ONCE FORM SAYS MACHINE, PICK THE SUBTYPE ON WHO IS ABSENT -- the PERSON or nobod
   "This mailbox is not monitored. Please use the contact form."
   -> automated_reply. Again nobody is away -- the address itself is the wrong door.
 
+  "Thank you for contacting the Housing Industry Foundation! To learn more about our
+   programs or to find out how to apply for Emergency Housing Assistance, please visit
+   our website... our programs support families that reside in California, in either
+   the Santa Clara or San Mateo counties. For all others, we recommend calling 211."
+  -> automated_reply, and **this is the form most likely to be misread**. A real one
+     came in on 2026-09-22 and was classified not_qualified, because the text is full of
+     apparent qualification signal: a charity, a narrow geography, nothing about events.
+     Mining that was the error. The FORM is decisive and it is unmistakable -- "Thank you
+     for contacting [Organisation]!", a description of what the organisation does, a
+     redirect to a website or a hotline, and **not one word responding to what we
+     actually asked**. Nobody read our email. There is nothing to reply to, and drafting
+     a reply to a machine wastes a reviewer's attention.
+
+     Note what is deliberately given up: this organisation plainly is not a prospect,
+     and classifying by form means not recording that. That is the trade precedence
+     rule 2 already makes, and it is the right one -- a human can disqualify a contact
+     in one click, where a reply sent to a no-reply address is gone.
+
 The test in one line: **out_of_office means a person is temporarily absent and will be
 back; automated_reply means a machine answered and no one is absent at all.** Getting
 this backwards matters, because only one of the two may be safely restarted today.
@@ -905,6 +923,19 @@ CLASSIFY_CASES = [
      "interested", "P5: a buying-signal question beats a stated objection"),
     ("I don't work here any more and honestly we weren't interested anyway.",
      "wrong_contact", "P3: wrong_contact beats a decline"),
+    # A REAL misclassification, 2026-09-22. Came back not_qualified and was queued with
+    # a draft, so a human was asked to reply to a machine. Everything in the text points
+    # at a genuine non-fit -- a charity, a narrow geography, no events anywhere -- and
+    # mining it was the error. The form is decisive: a templated organisational
+    # auto-responder that answers nothing we asked.
+    ("Thank you for contacting the Housing Industry Foundation! To learn more about our "
+     "programs or to find out how to apply for Emergency Housing Assistance, please "
+     "visit our website at www.hifinfo.org. Please note, our programs support families "
+     "that reside in California, in either the Santa Clara or San Mateo counties. For "
+     "all others in need of assistance, we recommend calling 211.",
+     "automated_reply",
+     "P2: an ORG auto-responder is classified by form, however much apparent "
+     "qualification signal its text carries"),
 ]
 
 
