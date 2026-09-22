@@ -48,12 +48,44 @@ SL = "https://server.smartlead.ai/api/v1"
 LIVE = ("ACTIVE", "DRAFTED", "PAUSED")
 
 
+def _get_retrying(url: str, tries: int = 5):
+    """One read, retried on a rate limit or a transient network fault.
+
+    **Both of the jobs that failed on 2026-09-22 failed with HTTP 429**, because four
+    heartbeat slots fired within a minute of each other after a day the laptop was off
+    and Claude Desktop ran every missed routine at once. The calls are legitimate; they
+    simply arrived together. A job that dies on a burst it did not cause is reporting the
+    scheduler's behaviour as its own failure.
+
+    Catches OSError rather than URLError: http.client.RemoteDisconnected is a
+    ConnectionResetError and NOT a URLError, and it escaped a narrower clause in
+    sync_sends on 2026-09-18.
+    """
+    import http.client, json as _json, time as _time, urllib.error, urllib.request
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "outbound-engine/1.0"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                raw = r.read()
+                return _json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            if not (e.code == 429 or 500 <= e.code < 600) or attempt == tries - 1:
+                raise
+            wait = 2 ** attempt
+            print(f"    {e.code} from Smartlead; retrying in {wait}s "
+                  f"({attempt + 1}/{tries - 1})")
+            _time.sleep(wait)
+        except (OSError, http.client.HTTPException) as e:
+            if attempt == tries - 1:
+                raise
+            wait = 2 ** attempt
+            print(f"    {type(e).__name__}; retrying in {wait}s "
+                  f"({attempt + 1}/{tries - 1})")
+            _time.sleep(wait)
+
+
 def get(path: str, key: str):
-    req = urllib.request.Request(f"{SL}{path}{'&' if '?' in path else '?'}api_key={key}",
-                                 headers={"User-Agent": "outbound-engine/1.0"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        raw = r.read()
-        return json.loads(raw) if raw else {}
+    return _get_retrying(f"{SL}{path}{'&' if '?' in path else '?'}api_key={key}")
 
 
 def main(argv=None) -> int:

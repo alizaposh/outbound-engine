@@ -529,12 +529,25 @@ def engine_status(replies: list[dict], bot_user_id: str) -> str | None:
 def in_flight_leads(key: str) -> int:
     """Leads currently inside ACTIVE or DRAFTED campaigns."""
     def g(path):
-        req = urllib.request.Request(
-            f"{SL_BASE}{path}{'&' if '?' in path else '?'}api_key={key}",
-            headers={"User-Agent": "outbound-engine/1.0"})
-        with urllib.request.urlopen(req, timeout=45) as r:
-            raw = r.read()
-            return json.loads(raw) if raw else {}
+        # Retried: the capacity check walks every campaign, and on 2026-09-22 it died
+        # with a 429 when four heartbeat slots fired at once after a day off.
+        import time as _time
+        for attempt in range(5):
+            try:
+                req = urllib.request.Request(
+                    f"{SL_BASE}{path}{'&' if '?' in path else '?'}api_key={key}",
+                    headers={"User-Agent": "outbound-engine/1.0"})
+                with urllib.request.urlopen(req, timeout=45) as r:
+                    raw = r.read()
+                    return json.loads(raw) if raw else {}
+            except urllib.error.HTTPError as e:
+                if not (e.code == 429 or 500 <= e.code < 600) or attempt == 4:
+                    raise
+                _time.sleep(2 ** attempt)
+            except OSError:
+                if attempt == 4:
+                    raise
+                _time.sleep(2 ** attempt)
     total = 0
     for c in g("/campaigns") or []:
         if (c.get("status") or "").upper() not in ("ACTIVE", "DRAFTED", "PAUSED"):

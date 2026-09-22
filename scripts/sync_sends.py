@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import http.client
 import json
 import pathlib
 import sys
@@ -164,7 +165,13 @@ class Smartlead:
                 print(f"    Smartlead {e.code} on {path[:52]}; retrying in {wait}s "
                       f"({attempt + 1}/{tries - 1})")
                 time.sleep(wait)
-            except (urllib.error.URLError, TimeoutError) as e:
+            # **OSError, not URLError.** This read (URLError, TimeoutError) and
+            # http.client.RemoteDisconnected escaped it on 2026-09-18, failing the whole
+            # activity-logging job on a Friday-night blip. RemoteDisconnected is a
+            # ConnectionResetError -> OSError, and is NOT a URLError; urllib does not
+            # always wrap it. URLError is itself an OSError, so this is strictly wider
+            # and covers connection resets, refused connections and DNS failures too.
+            except (OSError, http.client.HTTPException) as e:
                 if attempt == tries - 1:
                     raise RuntimeError(f"GET {path} -> {type(e).__name__}: {e}") from None
                 wait = 2 ** attempt

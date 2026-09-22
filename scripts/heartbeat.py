@@ -386,6 +386,44 @@ def render(slot: str, results: list[dict], apply_changes: bool) -> tuple[str, li
     return text, [{"type": "section", "text": {"type": "mrkdwn", "text": text[:2900]}}]
 
 
+# One heartbeat at a time. Claude Desktop runs every MISSED routine on wake, so a day
+# with the laptop off is followed by all four slots firing within the same minute --
+# observed 2026-09-22 at 09:04/09:04/09:04/09:05 after a Monday off.
+#
+# That is not harmless. Each slot ran reply_check, all four classified the SAME four
+# replies before any had written its dedup marker to the sheet, and each queued them:
+# four real replies became twelve rows for a human to read. Two jobs also died on
+# Smartlead 429s from the combined burst.
+#
+# A lock is the right shape rather than making each job idempotent under concurrency:
+# the dedup marker is a Google Sheet, several jobs share it, and serialising the runs is
+# one file where making every job race-safe is a permanent tax on all of them.
+LOCK = ROOT / ".heartbeat.lock"
+# Long enough for a real slot (generation can run minutes) and short enough that a
+# crashed run does not wedge the schedule for a day.
+LOCK_STALE_SECONDS = 45 * 60
+
+
+def acquire_lock() -> bool:
+    """True if we got it. A stale lock from a crashed run is taken over, not obeyed."""
+    now = dt.datetime.now().timestamp()
+    if LOCK.exists():
+        age = now - LOCK.stat().st_mtime
+        if age < LOCK_STALE_SECONDS:
+            return False
+        print(f"note: taking over a lock {age/60:.0f} min old -- a previous run "
+              f"probably died. If this repeats, look for the run that is not finishing.")
+    LOCK.write_text(str(now))
+    return True
+
+
+def release_lock() -> None:
+    try:
+        LOCK.unlink()
+    except FileNotFoundError:
+        pass
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Scheduled outbound check with a Slack heartbeat.")
     ap.add_argument("--slot", choices=sorted(SLOTS), default="morning",
@@ -403,7 +441,16 @@ def main(argv=None) -> int:
     if a.check_slack:
         return check_slack()
 
-    results = [run_job(name, a.apply) for name in SLOTS[a.slot]]   # guarantee 2
+    if not acquire_lock():
+        # Not an error, and deliberately NOT posted to Slack: the run that holds the
+        # lock will post, so announcing the skip would double the channel traffic on
+        # exactly the mornings that are already noisy.
+        print(f"another heartbeat is running (lock held); skipping the {a.slot} slot.")
+        return 0
+    try:
+        results = [run_job(name, a.apply) for name in SLOTS[a.slot]]   # guarantee 2
+    finally:
+        release_lock()
     text, blocks = render(a.slot, results, a.apply)
     print(text)
 

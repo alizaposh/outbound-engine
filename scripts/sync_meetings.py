@@ -73,7 +73,7 @@ def as_date(value) -> str:
     return s[:10]
 
 
-def decide(props: dict, enrolled_on: str) -> tuple[str, dict, str]:
+def decide(props: dict, enrolled_on: str | None) -> tuple[str, dict, str]:
     """(outcome, properties, note). Pure, so the attribution rules are testable."""
     booked = as_date(props.get(BOOKED_PROP))
     status = (props.get("outbound_status") or "").strip()
@@ -87,6 +87,11 @@ def decide(props: dict, enrolled_on: str) -> tuple[str, dict, str]:
                 f"outbound_status is {status}; a booking does not override it")
     if status not in PROMOTABLE:
         return "leave alone", {}, f"outbound_status is {status!r}, not a promotable state"
+    if enrolled_on is None:
+        # The cutoff could not be read. Guarantee 2 cannot be applied, so no judgement
+        # is made -- see Smartlead.created_on for why this is a skip and not a promote.
+        return ("cutoff unknown", {},
+                "could not read the campaign's creation date; not judging this one")
     if enrolled_on and booked < enrolled_on:
         # Guarantee 2. The single most important rule here: this booking predates our
         # outreach, so it is somebody else's meeting.
@@ -102,8 +107,9 @@ class Smartlead:
         self.key = key
         self.calls = 0
         self._created: dict[str, str] = {}
+        self._failed: set[str] = set()
 
-    def created_on(self, cid: str) -> str:
+    def created_on(self, cid: str) -> str | None:
         """The campaign's creation date, cached. The enrolment cutoff for guarantee 2."""
         cid = str(cid or "").strip()
         if not cid:
@@ -118,12 +124,28 @@ class Smartlead:
                 self.calls += 1
                 d = json.loads(r.read() or b"{}")
             self._created[cid] = str(d.get("created_at") or "")[:10]
-        except Exception:
-            # A deleted campaign, or an unreachable API. Empty means "no cutoff known",
-            # and decide() then promotes without the date test -- deliberately, because
-            # refusing to record a real meeting because a campaign was tidied up would
-            # lose the outcome entirely. Reported so it is visible.
-            self._created[cid] = ""
+        except Exception as e:
+            # **A FAILED LOOKUP IS NOT "NO CUTOFF". That distinction was wrong and it
+            # cost a false metric.** This used to return "" on any exception, and
+            # decide() promotes when the cutoff is unknown -- reasoned as "refusing to
+            # record a real meeting because a campaign was tidied up would lose the
+            # outcome entirely". The failure direction was backwards.
+            #
+            # On 2026-09-22 four heartbeat slots fired at once after a day off and
+            # Smartlead returned 429s. This swallowed one, returned "", and promoted
+            # Stacey Hale to meeting_booked on the strength of a meeting booked
+            # 2026-06-02 -- three and a half months before the campaign existed. The
+            # engine's headline number went from 0 to 1 because of a rate limit.
+            #
+            # Inflating the one metric the engine is judged on is strictly worse than
+            # missing a real booking for a few hours: the miss self-corrects on the next
+            # run, the inflation does not, and nobody re-checks a number that moved in
+            # the direction they hoped. A failure now returns None, which decide()
+            # treats as "cannot judge -- skip and say so".
+            self._failed.add(cid)
+            print(f"    !! could not read campaign {cid} ({type(e).__name__}); its "
+                  f"contacts are SKIPPED rather than promoted without a cutoff")
+            return None
         return self._created[cid]
 
 
@@ -169,7 +191,7 @@ def main(argv=None) -> int:
         return 0
 
     counts = {"promote": 0, "already booked": 0, "leave alone": 0,
-              "predates enrolment": 0, "no booking": 0}
+              "predates enrolment": 0, "no booking": 0, "cutoff unknown": 0}
     print(f"\n{len(found)} enrolled contact(s) with a booking on record\n")
     for p in sorted(found, key=lambda x: x.get("email") or ""):
         enrolled = sl.created_on(p.get("outbound_last_campaign_id", ""))
@@ -177,14 +199,16 @@ def main(argv=None) -> int:
         counts[outcome] += 1
         label = {"promote": "BOOKED  ", "already booked": "CURRENT ",
                  "leave alone": "KEPT    ", "predates enrolment": "NOT OURS",
-                 "no booking": "SKIP    "}[outcome]
+                 "no booking": "SKIP    ", "cutoff unknown": "UNKNOWN "}[outcome]
         print(f"  {label} {str(p.get('email'))[:40]:42} {note}")
         if props:
             print(f"           {writer.write(p['hs_object_id'], props)}")
 
     print(f"\n{counts['promote']} promoted, {counts['already booked']} already current, "
           f"{counts['predates enrolment']} predate enrolment, "
-          f"{counts['leave alone']} left alone")
+          f"{counts['leave alone']} left alone"
+          + (f", ** {counts['cutoff unknown']} UNJUDGED (campaign unreadable) **"
+             if counts["cutoff unknown"] else ""))
     print(f"{hs.calls + writer.calls} HubSpot calls, {sl.calls} Smartlead calls")
     if not a.apply:
         print("DRY RUN: nothing was written.")
