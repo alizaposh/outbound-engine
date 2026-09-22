@@ -485,8 +485,18 @@ The ten intents:
 - objection: a concern a reply could address. THIS INCLUDES A NAMED INCUMBENT -- "we
   already use X", "we're happy with X" -- because a stated reason is a concern.
 - not_interested: a BARE decline that gives no reason. If they said WHY, it is objection.
+  "Thanks, we are good" / "no thanks" / "not for us" are THIS, not objection. Being
+  content is not a reason -- there is no concern in it for a reply to address. Drifted
+  to objection on 2026-09-22 after objection gained worked examples and not_interested
+  had none; the two share a door-open draft, so the tell is the TEXT, not the tone.
 - not_now: positive or neutral but explicitly later.
 - not_qualified: structural non-fit (out of business, does not run ticketed events).
+  **"We built our own platform" is NOT this.** They run ticketed events and are using
+  something else to do it, which is an incumbent and therefore an OBJECTION -- the most
+  workable one in this market. Classified not_qualified in a real run, which would both
+  retire the contact and draft "you're right that this isn't a fit" at a company that is
+  exactly the target. A team that built their own tool has already decided ticketing
+  matters to them.
 - wrong_contact: the sender has left, or is not the right person.
 - asked_to_stop: explicit removal or unsubscribe request.
 - out_of_office: an away or on-leave auto-responder.
@@ -643,7 +653,20 @@ them the link so they can book. You stay the correspondent; the meeting simply l
 an empty draft makes a human write from scratch, which is most of what the queue exists to
 save. What each one says (from instructions/reply-handling.md):
 
-  interested / question -> warm, one line, PLUS the booking link above.
+  interested / question -> warm, one line, PLUS the booking link above. **Offer the
+                           conversation; do not re-pitch.** They already said yes to
+                           hearing more, so a claim here can only lose. The owner's edit:
+                             "I'm happy to walk you through what Posh has to offer and
+                              what we can put together for you. You can grab some time
+                              with me here: <link>"
+                           The model had added "we help event organizers move away from
+                           clunky platforms and take control of their ticketing" --
+                           unasked-for positioning AND a swipe at competitors, in a
+                           reply to someone who had already said "Tell me more".
+
+  **US SPELLING, always.** The model wrote "organisations" in a real draft. Posh is a
+  New York company writing to US organizers: organize, personalize, recognize, center,
+  favorite. Never -ise, -isation or -re.
   objection             -> acknowledge it, leave the door open, and STOP. Do not argue
                            it, do not counter with a claim, DO NOT PROPOSE A CALL and do
                            not paste the booking link. They told you no and gave a
@@ -657,12 +680,47 @@ save. What each one says (from instructions/reply-handling.md):
                            pressure that produced it. The engine comes back on its own
                            via outbound_recycle_after -- this draft does not have to win
                            anything back today, and trying is how it lies.
+                           **WRITE ONE ANYWAY.** Four prohibitions and no example made
+                           the model return an EMPTY draft for every objection, so the
+                           owner hand-wrote all of them. Two shapes, and **which one
+                           depends on whether they named a CONTRACT**:
+
+                           (a) They named a contract or a renewal -> ask when it ends.
+                               "Thanks for letting us know. Would you be interested in
+                                reconnecting once your contract is up for renewal?"
+                               A question about WHEN is not a pitch and not a meeting,
+                               and the renewal date is the single most useful thing an
+                               incumbent objection can tell you.
+
+                           (b) Any other objection -> acknowledge and leave the door
+                               open, with NO question at all.
+                               "Gotcha. Thanks for letting me know. If your plans ever
+                                shift, and you need some more ticketing support, feel
+                                free to reach out!"
+
+                           **Do not ask about a contract nobody mentioned.** Adding (a)
+                           as the only example made the model put "once your contract is
+                           up for renewal" on a reply that said merely "we are good,
+                           thank you" -- inventing a contract out of an exemplar.
   not_now               -> acknowledge their timing, say you will come back then, name
                            the time they gave. No link, no pitch.
   not_interested        -> short and gracious. No re-pitch, no link, no "just one more
-                           thing".
+                           thing". Leave the door open in one clause, and name the thing
+                           THEY named if the thread gives you one. The owner's edit:
+                             "Thanks for letting me know. Feel free to reach out if
+                              anything changes. All the best with Arte Agave Series."
+                           "your events" was what the model wrote; their actual event
+                           series was sitting in the signature.
   asked_to_stop         -> one line confirming they are removed. Nothing else, ever.
-  not_qualified         -> short and friendly, no pitch.
+  not_qualified         -> short and friendly, no pitch. AGREE with them rather than
+                           hedging, and name their business. The owner's edit:
+                             "Thanks for clarifying, Isaac. We focus on venues and
+                              organizers with regular ticketed events, so you're right
+                              that this isn't the fit. Best of luck with Bellwoods!"
+                           The model wrote "it sounds like we're not the right fit",
+                           which hedges a judgement the prospect already made for us,
+                           and "organisations", which is both the wrong word for our
+                           audience and British spelling.
   wrong_contact         -> thank them, and ask nothing further ABOUT THE OLD COMPANY.
                            Do not ask them to forward it or for the replacement's
                            details; a human decides what to do with a referral.
@@ -923,6 +981,11 @@ CLASSIFY_CASES = [
      "interested", "P5: a buying-signal question beats a stated objection"),
     ("I don't work here any more and honestly we weren't interested anyway.",
      "wrong_contact", "P3: wrong_contact beats a decline"),
+    # The objection/not_interested boundary. Added after adding worked examples for
+    # objection pulled bare declines across with them: a reply carrying no reason has
+    # no concern for a draft to address, however politely it is phrased.
+    ("Thanks Carl, we are good, thank you.",
+     "not_interested", "a contented decline with NO reason is not_interested"),
     # A REAL misclassification, 2026-09-22. Came back not_qualified and was queued with
     # a draft, so a human was asked to reply to a machine. Everything in the text points
     # at a genuine non-fit -- a charity, a narrow geography, no events anywhere -- and
