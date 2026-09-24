@@ -50,7 +50,26 @@ assigned new contacts**. Both halves matter:
 
 | Departed | Since | Note |
 |---|---|---|
-| Brooke | 2026-09-24 | Left the company. Mailboxes being reassigned to Caroline via Smartlead support; until that lands they still carry her name, so her in-flight campaign finishes and starts nothing new. Not a meeting owner in `meeting-routing.md`, so no booking ever reaches her. |
+| Brooke | 2026-09-24 | Left the company. Not a meeting owner in `meeting-routing.md`, so no booking ever reached her. Her campaign `Aliza-2026-09-16-Brooke` was **PAUSED 2026-09-24** with 45 closing emails unsent — see below. |
+
+**Her four mailboxes now display "Caroline Reyda" over `brooke.carrobis@…` addresses**, a
+stopgap while new mailboxes are purchased. **They are NOT in use and should not be**, for
+two reasons:
+
+1. **A display name that disagrees with the address is a phishing pattern**, and spam
+   filters weight it. On cold mail from domains with ~500 lifetime sends, that is not a
+   cosmetic issue. It buys two days of calendar time on a 1,400-contact round (5.8 days
+   for email 1 instead of 3.9) and costs a deliverability signal on a third of it.
+2. **It made a live campaign incoherent.** 45 queued closing emails would have arrived as
+   "Caroline Reyda" in the From, signed "Brooke" in the body, to prospects who had had
+   two emails from Brooke. Worse than either name alone: it reads as a mistake or a
+   spoof. That is why the campaign is paused rather than left to finish — the closer is
+   a breakup line needing no reply, so not sending it is the smallest of the bad options.
+
+**Caroline still receives meetings from every round** — she is in the
+`meeting-routing.md` rotation — so nothing about this stopgap was needed to get her
+meetings. When real mailboxes arrive, add her with a matching address and name, remove
+this section, and the round-robin picks her up as a sender automatically.
 
 **When her mailboxes are reassigned**, update the table above to the new address and
 name, remove the row here, and reassign `outbound_sender` on her contacts — that
