@@ -45,7 +45,7 @@ days_of_the_week: [1, 2, 3, 4, 5]   # weekdays only, Monday = 1
 start_hour: "09:00"
 end_hour: "17:00"
 min_time_btw_emails: 10             # minutes, spreads sends inside the window
-max_new_leads_per_day: 30           # CAMPAIGN-WIDE new leads per day, NOT per mailbox.
+max_new_leads_per_day: 40           # CAMPAIGN-WIDE new leads per day, NOT per mailbox.
                                     # The comment here said "per mailbox, matching the
                                     # Smartlead account setting" until 2026-09-16 and was
                                     # wrong on both halves. Two different settings exist
@@ -78,6 +78,21 @@ max_new_leads_per_day: 30           # CAMPAIGN-WIDE new leads per day, NOT per m
                                     # sender's 4 boxes can absorb 30 new leads a day plus
                                     # the follow-ups they generate: peak ~90 sends/day
                                     # against 120 of capacity.
+                                    #
+                                    # RAISED 30 -> 40 on 2026-09-24. 30 was chosen when
+                                    # campaigns were 46-94 leads, where it emptied the
+                                    # queue in three days. At 657 leads per campaign it
+                                    # became the binding constraint and left a QUARTER
+                                    # of the mailboxes idle: 30 new leads x 3 emails =
+                                    # 90 sends/day against 120 of capacity.
+                                    #
+                                    # 40 is not a round number, it is the arithmetic:
+                                    # 4 mailboxes x 30/day = 120 sends, divided by 3
+                                    # emails per contact. It saturates the fleet exactly.
+                                    # Saturating is not reckless here -- 30/mailbox/day
+                                    # is itself the conservative cap, so this uses the
+                                    # budget already decided rather than exceeding it.
+                                    # Takes email 1 across 657 leads from 22 days to 16.
                                     #
                                     # An existing campaign does NOT pick this up. Run
                                     # `create_campaign.py --verify <id> --repair`, which
