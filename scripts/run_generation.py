@@ -538,6 +538,7 @@ def shape_openings(path: str = SHAPES_FILE) -> dict[str, list[str]]:
 OFFER_VARIANTS: list[str] = []
 CTA_VARIANTS: list[str] = []
 CLOSER_VARIANTS: list[str] = []
+OPEN3_VARIANTS: list[str] = []
 # The `attempt` callback opener. A LIST picked per contact, not a prompt example: as a
 # single worked example it was copied verbatim by all 30 attempt-tier contacts on the
 # first real rep list.
@@ -1332,10 +1333,12 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
     offer = pick_variant(c, OFFER_VARIANTS, "offer")
     cta = pick_variant(c, CTA_VARIANTS, "cta")
     closer = pick_variant(c, CLOSER_VARIANTS, "closer")
+    open3 = pick_variant(c, OPEN3_VARIANTS, "open3")
     ask2 = pick_variant(c, ASK2_VARIANTS, "ask2")
     why_now = pick_variant(c, WHY_NOW_VARIANTS, "whynow")
     specs = {pos: s.replace("%OFFER%", offer).replace("%CTA%", cta)
-                   .replace("%CLOSER%", closer).replace("%ASK2%", ask2)
+                   .replace("%CLOSER%", closer).replace("%OPEN3%", open3)
+                   .replace("%ASK2%", ask2)
                    .replace("%WHY_NOW%", why_now)
              for pos, s in specs.items()}
     # Remove exemplar lines this contact has no data for, BEFORE the model sees them.
@@ -1670,10 +1673,11 @@ def main(argv=None) -> int:
     shapes = load_shapes()
     openings = shape_openings()
     global OFFER_VARIANTS, CTA_VARIANTS
-    global CLOSER_VARIANTS, ATTEMPT_VARIANTS, SUBJECT_VARIANTS
+    global CLOSER_VARIANTS, ATTEMPT_VARIANTS, SUBJECT_VARIANTS, OPEN3_VARIANTS
     global ASK2_VARIANTS, WHY_NOW_VARIANTS
     OFFER_VARIANTS, CTA_VARIANTS = load_variants("Offer"), load_variants("CTA")
     CLOSER_VARIANTS = load_variants("Closer")
+    OPEN3_VARIANTS = load_variants("Email 3 opener")
     ATTEMPT_VARIANTS = load_variants("Attempt callback")
     SUBJECT_VARIANTS = load_variants("Subject")
     ASK2_VARIANTS = load_variants("Email 2 ask")
@@ -1695,6 +1699,10 @@ def main(argv=None) -> int:
             "no 'Attempt callback' variants parsed from config/message-shapes.md. The "
             "attempt tier would fall back to whatever the prompt suggests, which is how "
             "30 of 30 contacts came out with the same opening line.")
+    if not OPEN3_VARIANTS:
+        raise SystemExit(
+            "no 'Email 3 opener' variants parsed from config/message-shapes.md. All "
+            "three email-3 shapes would carry a literal %OPEN3% placeholder.")
     if not CLOSER_VARIANTS:
         raise SystemExit("no Closer variants parsed; email 3 would end on a bare "
                          "'closing the loop', which reads as a door shutting")

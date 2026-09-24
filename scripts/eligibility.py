@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import http.client
 import json
 import os
 import pathlib
@@ -214,6 +215,21 @@ class HubSpot:
                     time.sleep(2 ** attempt)      # 1s, 2s, 4s
                     continue
                 raise RuntimeError(f"{method} {path} -> {e.code}: {detail}") from None
+            except (OSError, http.client.HTTPException) as e:
+                # **A socket timeout is not an HTTPError and was not retried here.** On
+                # 2026-09-24 a read timed out partway through enriching 657 contacts;
+                # the exception escaped this loop, enrich_callbacks died, and the two
+                # steps after it failed on a missing file. An hour of work lost to one
+                # dropped packet.
+                #
+                # OSError rather than URLError: http.client.RemoteDisconnected is a
+                # ConnectionResetError and NOT a URLError, which caught sync_sends out
+                # on 2026-09-18. URLError is itself an OSError, so this is wider and
+                # covers both.
+                if attempt >= tries - 1:
+                    raise RuntimeError(
+                        f"{method} {path} -> {type(e).__name__}: {e}") from None
+                time.sleep(2 ** attempt)
         raise RuntimeError(f"{method} {path}: retries exhausted")
 
     def property_exists(self, name: str) -> bool:

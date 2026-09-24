@@ -199,18 +199,17 @@ sign-off is neither. It adds no information and asks for nothing, which is exact
 is allowed to stay. Do not "tidy" it away.
 
 ### Shape 3A: the endorsed close
-> Closing the loop here. If you've got time this week to look at the offer, let's get on
-> the phone.
+> %OPEN3% If you've got time this week to look at the offer, let's get on the phone.
 >
 > %CLOSER%
 
 ### Shape 3B: the plain question
-> Last note from me on this. Worth 15 minutes this week to look at the offer?
+> %OPEN3% Worth 15 minutes this week to look at the offer?
 >
 > %CLOSER%
 
 ### Shape 3C: shortest
-> I'll leave it here — still worth a look at the offer?
+> %OPEN3% Still worth a look at the offer?
 >
 > %CLOSER%
 
@@ -530,6 +529,36 @@ is the least visible one, because email 2 is a threaded reply nobody re-reads.
 - Open to talking it through this week?
 - Want me to map this to your setup?
 - Free later this week for a quick one?
+
+## Email 3 opener variants (code picks one)
+
+Email 3's first sentence. **Made a slot on 2026-09-24**, after a 657-contact run
+produced only **53 distinct email-3 bodies** — 12 contacts per identical email, with 28
+sharing the worst one. The cause was arithmetic: each shape had its opening sentence
+baked in, so the whole email was 3 shapes x 16 closers = 48 possible bodies, and the run
+hit that ceiling exactly.
+
+Emails 1 and 2 did not have this problem at the same scale (630 and 596 distinct of 657)
+because they interpolate real per-contact facts. Email 3 has almost none to work with —
+it is thirty words and deliberately says nothing new — so its variety has to come from
+the slots. With 12 openers it becomes 12 x 3 asks x 16 closers, and the same run would
+produce hundreds rather than 53.
+
+Each must work as a standalone first sentence in front of ANY of the three asks, so none
+of them may name the offer, ask a question, or add information.
+
+- Closing the loop here.
+- Last note from me on this.
+- I'll leave it here.
+- Wrapping this one up.
+- This is my last note on it.
+- Last one from me.
+- I'll stop here.
+- Closing this out on my end.
+- One final note.
+- I'll let this one rest.
+- Last check on this.
+- Signing off on this one.
 
 ## Closer variants (code picks one)
 
