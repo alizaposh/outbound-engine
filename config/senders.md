@@ -52,19 +52,23 @@ assigned new contacts**. Both halves matter:
 |---|---|---|
 | Brooke | 2026-09-24 | Left the company. Not a meeting owner in `meeting-routing.md`, so no booking ever reached her. Her campaign `Aliza-2026-09-16-Brooke` was **PAUSED 2026-09-24** with 45 closing emails unsent — see below. |
 
-**Her four mailboxes now display "Caroline Reyda" over `brooke.carrobis@…` addresses**, a
-stopgap while new mailboxes are purchased. **They are NOT in use and should not be**, for
-two reasons:
+**Her four mailboxes were briefly renamed to display "Caroline Reyda" over
+`brooke.carrobis@…` addresses**, as a stopgap while new mailboxes are purchased. **The
+rename was reverted on 2026-09-24 and should not be repeated**, for two reasons:
 
 1. **A display name that disagrees with the address is a phishing pattern**, and spam
-   filters weight it. On cold mail from domains with ~500 lifetime sends, that is not a
+   filters weight it. On cold mail from domains with ~500 lifetime sends that is not a
    cosmetic issue. It buys two days of calendar time on a 1,400-contact round (5.8 days
-   for email 1 instead of 3.9) and costs a deliverability signal on a third of it.
+   to email 1 instead of 3.9) and costs a deliverability signal on a third of it.
 2. **It made a live campaign incoherent.** 45 queued closing emails would have arrived as
    "Caroline Reyda" in the From, signed "Brooke" in the body, to prospects who had had
-   two emails from Brooke. Worse than either name alone: it reads as a mistake or a
-   spoof. That is why the campaign is paused rather than left to finish — the closer is
-   a breakup line needing no reply, so not sending it is the smallest of the bad options.
+   two emails from Brooke — worse than either name alone, because it reads as a mistake
+   or a spoof.
+
+With the names reverted, `Aliza-2026-09-16-Brooke` was resumed and finishes as Brooke,
+which is who those 46 prospects have been corresponding with. **Her mailboxes carry that
+campaign to its end and take nothing new** — which is exactly what the Departed row above
+does, since it governs ASSIGNMENT and not existing threads.
 
 **Caroline still receives meetings from every round** — she is in the
 `meeting-routing.md` rotation — so nothing about this stopgap was needed to get her

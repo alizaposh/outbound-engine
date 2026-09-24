@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import pathlib
 import sys
@@ -248,6 +249,11 @@ def main(argv=None) -> int:
     ap.add_argument("--leads", help="csv with an hs_object_id or email column; use this "
                                     "to split an ELIGIBLE list from eligibility.py")
     ap.add_argument("--apply", action="store_true", help="write the CSVs")
+    ap.add_argument("--batch", metavar="K/N",
+                    help="take only the Kth of N equal batches, e.g. 1/2 for the first "
+                         "half. Split on a hash of the email, so batch 1 is the SAME "
+                         "contacts however often you run it and the two halves never "
+                         "overlap. For staging a large list across weeks.")
     ap.add_argument("--no-rotate", action="store_true",
                     help="send every unassigned contact to ONE sender instead of "
                          "spreading them. For a list too small to be worth a campaign "
@@ -297,6 +303,24 @@ def main(argv=None) -> int:
         for c in no_email[:10]:
             print(f"    id {c['hs_object_id']}")
 
+    if a.batch:
+        try:
+            kk, nn = (int(x) for x in a.batch.split("/"))
+        except Exception:
+            ap.error("--batch must look like 1/2")
+        if not 1 <= kk <= nn:
+            ap.error(f"--batch {a.batch}: K must be between 1 and N")
+        # Hash of the email, NOT a slice of the sorted list. A slice looks equivalent
+        # and is not: it would put every a@ and b@ address in batch 1, so the first
+        # half of a staged rollout would be alphabetically clustered rather than a fair
+        # sample of the list -- and a fair sample is the whole point of sending half
+        # first and reading the results.
+        before = len(contacts)
+        contacts = [c for c in contacts
+                    if int(hashlib.sha256((c.get("email") or "").strip().lower()
+                                          .encode()).hexdigest(), 16) % nn == kk - 1]
+        print(f"  --batch {a.batch}: {len(contacts)} of {before} contact(s); the other "
+              f"batches are untouched and can be run later with the same command")
     buckets, why = assign(contacts, SENDERS, owner_map, rotate=not a.no_rotate)
     if a.no_rotate:
         print("  --no-rotate: unassigned contacts all go to one sender")
@@ -327,6 +351,8 @@ def main(argv=None) -> int:
             print(f"\n  {s}: 0 contacts, no file")
             continue
         stem = a.list or pathlib.Path(a.leads).stem
+        if a.batch:
+            stem = f"{stem}-b{a.batch.replace('/', 'of')}"
         path = out / f"split-{stem}-{s}.csv"
         if not a.apply:
             print(f"\n  would write {len(rows)} row(s) -> {path}")
@@ -357,6 +383,8 @@ def main(argv=None) -> int:
     for s in SENDERS:
         if buckets[s]:
             stem = a.list or pathlib.Path(a.leads).stem
+            if a.batch:
+                stem = f"{stem}-b{a.batch.replace('/', 'of')}"
             print(f"  --leads data/split-{stem}-{s}.csv  --mailbox {MAILBOX[s]}")
     if not a.apply:
         print("\nDRY RUN: nothing was written.")
