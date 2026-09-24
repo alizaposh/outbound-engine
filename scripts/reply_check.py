@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures as cf
 import datetime as dt
+import hashlib
 import json
 import os
 import pathlib
@@ -416,6 +417,31 @@ class HubSpotWriter:
         return f"wrote {props}"
 
 
+# "with me" / "with myself" immediately before or after the booking link. Deliberately
+# narrow -- only the phrase that CLAIMS the calendar is the writer's.
+WITH_ME = re.compile(r"\bwith me\b(?=[^.!?]{0,40}(?:here|:|https?://))", re.I)
+
+
+def name_the_calendar_owner(draft: str, owner: str, sender: str) -> tuple[str, bool]:
+    """Rewrite "with me" to "with <owner>" when the calendar is not the sender's.
+
+    **The prompt already says to do this and the model does not.** Told plainly that
+    meetings are round-robined and to name the owner when it is not them, it still wrote
+    "You can grab some time with me here: <Kate's link>" over Brooke's signature on two
+    consecutive tests. Third time this project has landed on the same place: an
+    instruction is not a guarantee, so the guarantee goes in code.
+
+    It matters more here than for a dash. The prospect replied to Brooke, is told they
+    are booking with Brooke, and lands on Kate's calendar -- on the single warmest reply
+    type we get. Getting caught doing that costs the meeting.
+    """
+    if not owner or not sender or owner.strip().lower() == sender.strip().lower():
+        return draft, False
+    clean = owner.replace(" (fallback)", "").strip()
+    fixed = WITH_ME.sub(f"with {clean}", draft)
+    return fixed, fixed != draft
+
+
 # ---- CRM enrichment from a reply ------------------------------------------------
 
 # A prospect's own words -> the exact `current_competitor` option in HubSpot. The
@@ -646,8 +672,16 @@ HubSpot record so the right calendar is not knowable, and a reviewer will paste 
 Never substitute a real link you have seen elsewhere in the thread. Do not invent a
 different link, do
 not write "I'll send over some times" and do not offer to find a slot by hand -- give
-them the link so they can book. You stay the correspondent; the meeting simply lands on
-{owner}'s calendar, and there is no mid-thread introduction.
+them the link so they can book.
+
+**WHOSE calendar it is matters, and you are told above.** Meetings are round-robined
+across the team, so {owner} is usually NOT the person writing:
+  - {owner} is the SENDER -> "You can grab some time with me here: {booking_link}"
+  - {owner} is SOMEONE ELSE -> name them. "You can grab some time with {owner} on our
+    team here: {booking_link}"
+Never write "with me" over somebody else's link. The prospect finds out whose calendar
+it is the moment they click; the only choice is whether we told them first, and an
+unexplained switch reads as a bait and switch on an otherwise warm reply.
 
 **EVERY intent except out_of_office and automated_reply GETS A DRAFT.** A queued row with
 an empty draft makes a human write from scratch, which is most of what the queue exists to
@@ -768,14 +802,20 @@ def booking_links() -> dict[str, str]:
     Parsed, never restated. Changing a link, or adding a sender, is a config edit in one
     place; hardcoding here would defeat that.
 
-    **One link per sender as of 2026-09-14.** It used to be a single owner: every meeting
-    routed to Zach because he was the SDR and the only person taking them. He was promoted
-    to AE, so each sender takes their own. A prospect corresponding with Carl should not
-    be handed Zach's calendar.
+    **A round robin across the whole team as of 2026-09-24**, and the column is headed
+    "Meeting owner" rather than "Sender" because those are no longer the same people.
+    History: a single owner (Zach, the only person taking meetings), then one link per
+    sender when he was promoted, now a pool because sending capacity and meeting
+    capacity are different constraints.
+
+    The header is matched on EITHER label. Renaming the column in the config broke this
+    parser the first time, and it failed loudly -- "refusing to draft a meeting reply
+    with no link" -- which is the right failure but an avoidable one.
     """
     text = MEETING_ROUTING.read_text(encoding="utf-8")
-    block = re.search(r"\|\s*Sender\s*\|\s*Booking link\s*\|(.*?)(?=\n\n|\n[^|])",
-                      text, re.S | re.I)
+    block = re.search(
+        r"\|\s*(?:Sender|Meeting owner)\s*\|\s*Booking link\s*\|(.*?)(?=\n\n|\n[^|])",
+        text, re.S | re.I)
     links: dict[str, str] = {}
     if block:
         for row in block.group(1).splitlines():
@@ -783,7 +823,11 @@ def booking_links() -> dict[str, str]:
                          row)
             if m and m.group(1).strip().lower() not in ("sender", "---"):
                 links[m.group(1).strip()] = m.group(2)
-    fb = re.search(r"\*\*Fallback sender:\s*`?([A-Za-z][\w .'-]*?)`?\*\*", text)
+    # "Fallback meeting owner" since 2026-09-24, "Fallback sender" before it. Both
+    # accepted: renaming the label in config silently emptied this once, and a missing
+    # fallback only shows up on the rare lead that needs one.
+    fb = re.search(r"\*\*Fallback (?:sender|meeting owner):\s*`?([A-Za-z][\w .'-]*?)`?\*\*",
+                   text)
     if fb:
         links["__fallback__"] = fb.group(1).strip()
     if not links:
@@ -794,8 +838,8 @@ def booking_links() -> dict[str, str]:
     return links
 
 
-def booking_link_for(sender: str, links: dict[str, str] | None = None
-                     ) -> tuple[str, str]:
+def booking_link_for(sender: str, links: dict[str, str] | None = None,
+                     contact_email: str = "") -> tuple[str, str]:
     """(sender name, their link), or ("", "") when the sender is UNKNOWABLE.
 
     **Two different situations, and conflating them cost the whole run once.**
@@ -821,22 +865,31 @@ def booking_link_for(sender: str, links: dict[str, str] | None = None
     fallback = links.get("__fallback__", "")
     links = {k: v for k, v in links.items() if k != "__fallback__"}
     who = (sender or "").strip()
-    if not who:
-        # Unknowable sender: no HubSpot contact, so outbound_sender cannot be read. Fall
-        # back rather than draft a reply the prospect cannot book from -- a warm lead who
-        # cannot book is worse than one booking with the fallback owner. The queue row
-        # says the fallback was used so a reviewer can substitute the real link.
-        for name, link in links.items():
-            if name.lower() == fallback.lower():
-                return f"{name} (fallback)", link
+    pool = sorted(links)                       # fixed order, so the hash is stable
+    if not pool:
         return "", ""
-    for name, link in links.items():
+    # **ROUND ROBIN, not sender-matched (2026-09-24).** Who writes and who takes the
+    # meeting are now separate questions -- see config/meeting-routing.md. The owner is
+    # chosen from the whole pool regardless of which identity sent the email.
+    #
+    # Keyed on the CONTACT, and deterministic, because this function runs again on every
+    # heartbeat: `random()` would show one prospect Kate's calendar on Monday and
+    # Caroline's on Tuesday, which reads as a company that cannot keep track of itself.
+    # Same reasoning as pick_variant in run_generation.
+    if contact_email:
+        idx = int(hashlib.sha256(contact_email.strip().lower().encode()).hexdigest(), 16)
+        name = pool[idx % len(pool)]
+        return name, links[name]
+    # No contact email -- a Smartlead-only lead. The sender's own calendar if they have
+    # one, otherwise the configured fallback. Not a hash of nothing, which would send
+    # every anonymous lead to the same person.
+    for name in pool:
         if name.lower() == who.lower():
-            return name, link
-    raise RuntimeError(
-        f"sender {who!r} has no row in {MEETING_ROUTING.name} (known: "
-        f"{', '.join(sorted(links))}). Add one rather than letting the draft go out with "
-        "somebody else's calendar.")
+            return name, links[name]
+    for name in pool:
+        if name.lower() == fallback.lower():
+            return f"{name} (fallback)", links[name]
+    return "", ""
 
 
 def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
@@ -892,7 +945,8 @@ def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
     return norm, (inbounds[-1] if inbounds else None)
 
 
-def classify(client, model: str, thread: list[dict], sender: str = "") -> dict:
+def classify(client, model: str, thread: list[dict], sender: str = "",
+             contact_email: str = "") -> dict:
     rendered = "\n\n".join(
         f"[{'PROSPECT' if m['inbound'] else 'US'} {m['at']}] {m['subject']}\n{m['body']}"
         for m in thread)
@@ -900,7 +954,11 @@ def classify(client, model: str, thread: list[dict], sender: str = "") -> dict:
     # reply-handling.md step 3 requires reading the full conversation before acting.
     # The SENDER'S link, not a single owner's. Raises on an unknown or missing sender
     # rather than handing the prospect somebody else's calendar -- see booking_link_for.
-    owner, link = booking_link_for(sender)
+    # contact_email drives the round robin -- see booking_link_for. Passing it is what
+    # makes the choice per PROSPECT and stable; without it every lead falls through to
+    # the sender-or-fallback branch, which is the old single-owner behaviour wearing the
+    # new code.
+    owner, link = booking_link_for(sender, contact_email=contact_email)
     if not link:
         # Only reachable if meeting-routing.md names no fallback sender, or names one
         # with no link row. Keep the honest placeholder for that case rather than
@@ -1281,7 +1339,8 @@ def main(argv=None) -> int:
             # a constant.
             cidhs, existing = hs.find_by_email(email) if email else (None, {})
             res = classify(client, model, messages,
-                           sender=existing.get("outbound_sender", ""))
+                           sender=existing.get("outbound_sender", ""),
+                           contact_email=email)
             intent = res["intent"]
             spec = INTENTS[intent]
             processed += 1
@@ -1365,6 +1424,16 @@ def main(argv=None) -> int:
             # paragraphs in copy that is one or two sentences long.
             draft = res.get("draft_response", "")
             if draft:
+                # The calendar may not be the sender's -- meetings round-robin across the
+                # team. Say whose it is rather than "with me".
+                _owner, _ = booking_link_for(existing.get("outbound_sender", ""),
+                                             contact_email=email)
+                draft, renamed = name_the_calendar_owner(
+                    draft, _owner, existing.get("outbound_sender", ""))
+                if renamed:
+                    print(f"      draft: calendar belongs to {_owner}, not the sender; "
+                          f'"with me" corrected')
+                res["draft_response"] = draft
                 fixed, dash_records = repair.normalize_dashes(draft)
                 if dash_records:
                     print(f"      draft: normalised {len(dash_records)} dash(es)")

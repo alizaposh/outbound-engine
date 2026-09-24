@@ -91,7 +91,7 @@ log_sends_enabled: true             # scripts/sync_sends.py writes engine sends 
                                     # only logs mail from a HubSpot seat. SET TO FALSE the
                                     # day Smartlead supports it, or every activity is
                                     # logged twice.
-max_leads_in_flight: 250            # INTAKE ceiling for scripts/slack_intake.py. Counts
+max_leads_in_flight: 1700            # INTAKE ceiling for scripts/slack_intake.py. Counts
                                     # leads inside ACTIVE/DRAFTED/PAUSED campaigns, not
                                     # sends per day: a lead occupies capacity for about
                                     # the length of the sequence (~7 days at [0,3,4]), so
@@ -143,6 +143,29 @@ max_leads_in_flight: 250            # INTAKE ceiling for scripts/slack_intake.py
                                     # reputation when this was raised. Revisit if any
                                     # mailbox drops, and do NOT treat 250 as headroom
                                     # for a single-sender campaign of that size.
+                                    #
+                                    # RAISED 250 -> 1700 on 2026-09-24 for a 1,400-lead
+                                    # round. 186 in flight + 1400 = 1586, so 1700 is the
+                                    # number plus a little headroom rather than a round
+                                    # figure chosen for looks.
+                                    #
+                                    # **1,400 was chosen over the 2,800 originally
+                                    # asked for, and the reason is the domains rather
+                                    # than the ceiling.** 4,200 sends is already 8x
+                                    # everything these four domains have ever sent
+                                    # (~511). 2,800 would have been 16x, in a month,
+                                    # with open tracking off -- so a reputation problem
+                                    # would surface as a reply rate quietly sagging
+                                    # rather than as an alert. The second 1,400 goes
+                                    # after this round's bounce data, not before.
+                                    #
+                                    # This is now well ABOVE a day's fleet capacity
+                                    # (360), which earlier notes treated as the
+                                    # comparison. That is fine and expected: a lead
+                                    # occupies in-flight capacity for its whole ~11-day
+                                    # sequence, so at steady state the ceiling should be
+                                    # roughly the sequence length times the daily rate.
+                                    # It is not a throughput number.
 seq_delay_days: [0, 3, 4]           # email 1 immediately, 2 after 3 days, 3 after 4 more
 stop_lead_settings: REPLY_TO_AN_EMAIL   # stop-on-reply; already the Smartlead default
 track_settings: [DONT_EMAIL_OPEN, DONT_LINK_CLICK]   # BOTH off. Open tracking off

@@ -5,27 +5,50 @@ hardcoding a name.** `instructions/reply-handling.md` drives interested replies 
 meeting; the person and link come from here, so changing the owner is a config edit in
 one place rather than a search across instruction files.
 
-## Booking links, one per sender (changed 2026-09-14)
+## Booking links: a ROUND ROBIN across the sales team (changed 2026-09-24)
 
-**A meeting belongs to whoever sent the email.** The sender shares their own link, and
-the booking lands on their calendar.
+**The meeting no longer belongs to whoever sent the email.** Sending identities and
+meeting owners are now separate lists, because they answer different questions: who can
+credibly write to a prospect (3 warmed identities) versus who has capacity to take the
+call (the whole team). Tying them together meant every meeting from a Brooke campaign
+landed on Brooke, whatever her calendar looked like.
 
-| Sender | Booking link |
+| Meeting owner | Booking link |
 |---|---|
 | Carl | `https://meetings.hubspot.com/carl-newmark` |
-| Brooke | `https://meetings.hubspot.com/brooke-carrobis` |
+| Lawrence | `https://meetings.hubspot.com/lawrence-hennessy` |
+| Caroline | `https://meetings.hubspot.com/creyda` |
+| Henry | `https://meetings.hubspot.com/henry377` |
 | Zach | `https://meetings.hubspot.com/zach-hickman` |
+| Kate | `https://meetings.hubspot.com/kate-burge` |
 
-**Fallback sender: `Zach`** (set 2026-09-14). Used only when the sender is *unknowable* —
-a Smartlead lead with no HubSpot contact, so `outbound_sender` cannot be read. Rather
-than draft a reply with no way to book, the prospect gets Zach's calendar and Zach takes
-the meeting.
+**Assignment is per contact and DETERMINISTIC** — a hash of their email address, not
+`random()`. Re-running the reply check must hand the same prospect the same calendar; a
+prospect who was shown Kate's link on Monday and Caroline's on Tuesday has watched the
+company look disorganised, and the reply queue is re-read on every heartbeat.
 
-**Why a fallback here and not a hard stop.** The earlier design refused to draft at all,
-on the grounds that handing over the wrong person's calendar is misleading. That is true
-and it is the smaller cost: **a warm lead who cannot book is worse than one booking with
-Zach**, who ran every meeting until 2026-09-14 anyway. The reviewer is told the fallback
-was used, so they can substitute the real sender's link if they know it.
+**The draft NAMES the owner when it is not the sender.** "You can grab a time with
+Caroline on our team here: <link>" rather than "with me". At one or two fallbacks a
+month an unexplained calendar switch was tolerable; as the normal path across 1,400
+contacts it is not. The prospect finds out at the point of booking either way — the only
+choice is whether we tell them first.
+
+**Brooke is a SENDER but not a meeting owner** (no link supplied 2026-09-24). That is
+allowed and the two lists are independent, but it is worth stating out loud so it is a
+decision rather than an oversight: Brooke writes to prospects and never receives their
+meetings. Add a row above if that is not intended.
+
+**Fallback meeting owner: `Zach`**. Used only when a lead has NO contact email to hash
+-- a Smartlead-only lead with no HubSpot record -- and the sender is not themselves a
+meeting owner. Without it such a lead gets a draft with no link at all, which is worse:
+a warm prospect who cannot book is a lost meeting, where one booking with Zach is a
+meeting. The reviewer is told the fallback was used.
+
+**HubSpot's own round-robin scheduling pages would be better than this** and were
+recommended first: one team link where HubSpot distributes by real availability, so a
+rep who is fully booked or on leave is skipped. This list distributes blindly — it does
+not know anyone's calendar. Replace the six rows with a single team link if one is
+created, and this whole mechanism collapses to one row.
 
 **The fallback NEVER applies to a named sender with no row here.** That is a config gap —
 somebody added a sender to `senders.md` and forgot this file — and it affects every
