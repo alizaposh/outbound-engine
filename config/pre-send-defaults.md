@@ -67,7 +67,7 @@ lead_status_exclude: [IN_PROGRESS, OPEN_DEAL]   # internals confirmed 2026-08-24
                                     # statement about current engagement, so it
                                     # was excluding contacts nobody is working.
 csm_property: customer_success_manager  # any non-empty value -> exclude
-lifecycle_allow: [lead, opportunity]    # internals confirmed 2026-08-24 (labels differ)
+lifecycle_allow: [lead, opportunity, 1442770269]    # internals confirmed 2026-08-24 (labels differ)
 sequence_property: hs_sequences_is_enrolled   # must be false
 create_missing_contacts: false          # 2026-08-24: the filter never writes to HubSpot.
                                         # Leads are assumed to exist there already; one
@@ -137,9 +137,24 @@ new_contact_lifecycle: lead
   Resolve the names to IDs once per run via the Owners API and compare against that ID
   set. **A name that does not resolve must be surfaced, never silently skipped** — a
   dropped name means that rep's contacts quietly become eligible.
-- **`lifecycle_allow: [lead, opportunity]`** is deliberately strict: subscriber, MQL,
-  SQL, and everything else are excluded today. Widen this list if that turns out to be
-  too tight.
+- **`lifecycle_allow`** now reads `[lead, opportunity, 1442770269]`. **1442770269 is
+  "Dormant"** — added 2026-09-24, on the evidence of a real list: 1,013 of the 2,800
+  "Priority Leads" sat at that stage and were being excluded, 36% of a list somebody had
+  curated deliberately.
+
+  A dormant lead is LAPSED, not disqualified, and re-engaging lapsed prospects is the
+  thing this engine exists to do. Excluding them meant the engine refused the exact
+  audience it was built for.
+
+  Nothing is lost by including them: a contact who declined recently still carries
+  `outbound_recycle_after` and is skipped until that date passes, whatever their
+  lifecycle stage says. The recycle gate does the work people imagine this one doing.
+
+  **Read the LABELS, not the values.** This portal's stages are non-standard — `customer`
+  is labelled "Outreached", and the numeric ids are real stages with real names
+  ("Dormant", "Deal Created", "Deal Won"). An unrecognised id in an exclusion report is
+  a prompt to look it up, not a reason to assume it belongs there. Use
+  `GET /crm/v3/properties/contacts/lifecyclestage`.
 - **`create_missing_contacts: false` (2026-08-24).** The filter is strictly read-only —
   it decides, it does not write. Leads are assumed to already exist in HubSpot, so a
   lead with no record is a **list/CRM disagreement**, not a normal path. Such a lead
