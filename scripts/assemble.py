@@ -78,6 +78,23 @@ def load_sender_identity(path: pathlib.Path = POSITIONING) -> SenderIdentity:
 
 
 MAILBOX_SECTION = "mailbox to sender"
+DEPARTED_SECTION = "departed senders — no new contacts, existing threads unchanged"
+
+
+def departed_senders(path: pathlib.Path = SENDERS) -> set[str]:
+    """Lower-cased names that must NOT be assigned new contacts.
+
+    Deliberately separate from load_sender_map, which still returns their mailboxes: a
+    prospect already mid-thread with someone is mid-thread with THEM, and the sign-off
+    on an email already sent cannot be reassigned after the fact. Only who gets
+    introduced to somebody new is affected.
+    """
+    out = set()
+    for a, _b in _tables_by_section(path).get(DEPARTED_SECTION, []):
+        n = (a or "").strip().lower()
+        if n and n not in ("departed", "---"):
+            out.add(n)
+    return out
 INTRO_SECTION = "email-1 intro line"
 
 

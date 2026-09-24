@@ -83,9 +83,13 @@ def senders_and_mailboxes() -> tuple[list[str], dict[str, str]]:
     """
     import assemble
     m = assemble.load_sender_map()                       # mailbox -> "Carl"
+    gone = assemble.departed_senders()
     by_sender: dict[str, str] = {}
     for box, who in sorted(m.items()):
-        by_sender.setdefault(who.strip().lower(), box)
+        n = who.strip().lower()
+        if n in gone:
+            continue          # keeps their threads, gets no new contacts
+        by_sender.setdefault(n, box)
     return sorted(by_sender), by_sender
 
 

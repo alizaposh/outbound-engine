@@ -37,6 +37,26 @@ reproducing the string.
 mailbox added, removed, or renamed there must be changed here too. An unmapped mailbox
 aborts the batch (see Rules), which is the intended way to find out.
 
+## Departed senders — no NEW contacts, existing threads unchanged
+
+Names listed here keep their rows in the table above and are **excluded from being
+assigned new contacts**. Both halves matter:
+
+- **Excluded from assignment**, because a departed rep must not be introduced to anyone
+  new. Left unlisted, the 1,400-lead round would have given Brooke ~466 contacts.
+- **Kept in the mailbox table**, because a prospect she already wrote to is mid-thread
+  with *her*. The sign-off on that thread, and any reply in it, is still hers — we
+  cannot retroactively make somebody else the author of an email already sent.
+
+| Departed | Since | Note |
+|---|---|---|
+| Brooke | 2026-09-24 | Left the company. Mailboxes being reassigned to Caroline via Smartlead support; until that lands they still carry her name, so her in-flight campaign finishes and starts nothing new. Not a meeting owner in `meeting-routing.md`, so no booking ever reaches her. |
+
+**When her mailboxes are reassigned**, update the table above to the new address and
+name, remove the row here, and reassign `outbound_sender` on her contacts — that
+property is write-once precisely so a prospect keeps hearing from one person, and the
+premise fails when that person has gone.
+
 ## Adding a sender as the team grows
 
 **This table is the source of truth, and as of 2026-09-17 the code derives from it.**

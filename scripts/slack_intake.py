@@ -123,9 +123,15 @@ def known_senders() -> tuple[tuple[str, ...], dict[str, str]]:
     if _SENDER_CACHE is None:
         sys.path.insert(0, str(ROOT / "scripts"))
         import assemble
+        # Departed senders keep their mailbox rows -- existing threads still sign with
+        # their name -- but must never be assigned somebody new.
+        gone = assemble.departed_senders()
         by_sender: dict[str, str] = {}
         for box, who in sorted(assemble.load_sender_map().items()):
-            by_sender.setdefault(who.strip().lower(), box)
+            n = who.strip().lower()
+            if n in gone:
+                continue
+            by_sender.setdefault(n, box)
         _SENDER_CACHE = (tuple(sorted(by_sender)), by_sender)
     return _SENDER_CACHE
 
