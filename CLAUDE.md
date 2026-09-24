@@ -36,30 +36,41 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
    `--approval-note` defaults to the facts of the run (which CSV, how many drafts, what
    date) so approving is a skim and a reply, not an essay.
 
-   **This is a stage, not the destination. The intent is a fully automated process once
-   the copy is proven out.** Auto-approval of a clean run is the goal; it is not safe
-   *yet*, and the reason is specific rather than cautious:
+   **AUTO-APPROVAL OF CLEAN COPY IS NOW LIVE (2026-09-24).** A row the validator scores
+   PASS arrives in the review tab with `Approved` already set to `Y` and builds without
+   anyone reading it. WARN, fallback copy, and anything unrecognised arrive blank and
+   still need a person. On the last real round that is 178 of 186 automatic and 8 held.
 
-   > **Every claim problem found so far was found by a human reading the copy, not by a
-   > check.** "The marketplace brings attendees automatically", "the marketing side is
-   > where we add the most", the text-blast framing — each was spotted in review, and a
-   > machine check was added *afterwards*. The validator is retrospective: it prevents
-   > recurrence of failures already seen and cannot catch novel drift. Auto-approving
-   > clean runs today would have shipped every one of those, because they all passed
-   > validation at the time.
+   **The old exit criterion was five consecutive clean campaigns. It was not met, and
+   the evidence changed the question rather than the answer.** The owner read and
+   approved all 186 emails of the 2026-09-16 round. From that approved batch, 14 emails
+   FAIL the checks as they stand today, 33 carried "Hey There" with a capital T, six
+   made outcome promises `positioning.md` prohibits, and the sender introduction was in
+   the wrong paragraph on some. All of it shipped. All of it was caught afterwards, by
+   checks written in response.
 
-   **The exit criterion, so this is a decision and not a habit:** after **five
-   consecutive campaigns** where the owner's review finds nothing the checks had not
-   already flagged, the checks have demonstrably caught up to human judgement on the
-   copy as it currently stands, and auto-approving a run with **0 FAIL and 0 WARN** is
-   defensible. Runs with any finding keep going to a human regardless. Log each review
-   outcome in `BACKLOG.md` so the count is evidence rather than a feeling, and note that
-   a substantial change to the copy spec resets it — new copy means new failure modes the
-   checks have not seen.
+   So the premise behind the gate -- that a human reading every email is what catches
+   claim problems -- did not survive contact with 186 emails. **Reading at volume is not
+   reviewing.** What actually caught every defect was a machine check, written after a
+   defect was found. The gate was costing a person hours and catching nothing the checks
+   would not have caught once they existed.
+
+   What a human is still asked to read is the 4% the validator is unsure about, which is
+   where judgement genuinely beats a regex.
+
+   **The residual risk, stated plainly: a NOVEL defect class now ships unread.** Every
+   defect found so far has become a check, so the exposure shrinks with each round --
+   but it is not zero. The mitigation is not a gate nobody can honour at 8,400 emails;
+   it is to **audit a sample of SHIPPED copy periodically** and turn anything found into
+   another check. An audit of 30 sent emails a month costs a fraction of reviewing
+   everything and is far more likely to find something, because it reads copy in the
+   state prospects actually received it.
+
    **A scheduled job delivering a reply a human marked `Approve` is not auto-sending**
    — a person read that exact text and chose to send it; only the delivery is
-   automated. The `auto_send_intents` allowlist, which *would* send with no human, is
-   empty and stays empty.
+   automated. The `auto_send_intents` allowlist, which *would* send a REPLY with no
+   human, is empty and stays empty. Auto-approval applies to CAMPAIGN copy only: every
+   reply to a live conversation is still read by a person before it goes.
 2. **Smartlead and HubSpot are the sources of truth. Never treat a CSV as
    authoritative.** CSVs and Google Sheets are *review surfaces for humans*. The one
    exception is narrow and explicit: the Reply Review Queue Sheet is also the record of

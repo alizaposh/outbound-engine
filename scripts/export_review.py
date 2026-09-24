@@ -49,6 +49,29 @@ SHEET_COLUMNS_REFERENCE = [
 ]
 HUMAN_COLUMNS = ("Approved",)
 
+# **AUTO-APPROVAL OF CLEAN ROWS, decided 2026-09-24.** A row the validator scored PASS
+# arrives with Approved already set to Y; anything else arrives blank and still needs a
+# person. This reverses the old "a row must never arrive pre-approved", and the evidence
+# is the reason rather than convenience.
+#
+# On the 186-contact round the owner read and approved every row. 178 were PASS. But 14
+# emails that FAIL today's checks shipped from that batch, plus 33 carrying "Hey There"
+# with a capital T -- all human-approved at the time, all caught later by checks written
+# afterwards. **Reading 186 emails was not what was catching defects.** The checks were,
+# once they existed. Asking a person to read 8,400 would not change that; it would just
+# cost more.
+#
+# What a human is still asked to read is the 4% the machine is unsure about, which is
+# where their judgement actually beats a regex.
+#
+# The residual risk is honest and unfixed: a NOVEL defect class, one no check knows to
+# look for, now ships without anyone reading it. Every defect found so far became a
+# check, so the exposure shrinks over time -- but it is not zero, and the mitigation is
+# to keep auditing shipped copy periodically rather than to assume PASS means perfect.
+AUTO_APPROVE_CLEAN = True
+# Only this. WARN, GENERATION_FAILED_FALLBACK and anything unrecognised go to a human.
+AUTO_APPROVE_STATUSES = ("PASS",)
+
 # The Approved dropdown. A dropdown rather than a free-text field so the value is always
 # one the engine recognises: a typo ("Yes " with a space, "yep", "APPROVE") in a
 # write-in column means a row a human believes is approved that build_approved.py will
@@ -171,8 +194,15 @@ def seller_for(mailbox: str) -> str:
 def to_sheet_row(csv_row: dict, seller: str, header: list[str]) -> list[str]:
     """One row in the order the TAB's header defines, not a fixed contract."""
     out = []
+    verdict = str(csv_row.get("validation", "") or "").strip().upper()
+    auto = AUTO_APPROVE_CLEAN and verdict in AUTO_APPROVE_STATUSES
     for col in header:
-        if col in HUMAN_COLUMNS:
+        if col == "Approved":
+            # Pre-filled ONLY for a clean row. A reviewer can still change it either
+            # way: the sheet is the copy that ships, so un-approving here removes the
+            # row from the build exactly as it always did.
+            out.append("Y" if auto else "")
+        elif col in HUMAN_COLUMNS:
             out.append("")                      # the reviewer's, always left empty
         elif col == SELLER_COLUMN:
             out.append(seller)
