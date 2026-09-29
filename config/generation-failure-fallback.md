@@ -59,13 +59,35 @@ deliberately a list. Drop a bullet or two if you want it inside the target.
 {
   "message_1": {
     "subject": "your ticketing setup",
-    "body": "Hey there,\n\nHope this finds you well! Reaching out to see if you're locked in on your current ticketing setup, or open to seeing what else is out there?\n\nWe've been putting together very competitive offers this year, all focused on helping organizers drive better reach, earlier conversions, and generating extra revenue with dedicated account support, financial incentives, marketing push and more.\n\nLet me know if you're open to connecting, would love to hear more about your plans this year and see what we can bring to the table!"
+    "body": "Hey %FIRST_NAME%,\n\nHope this finds you well! Reaching out to see if you're locked in on your current ticketing setup, or open to seeing what else is out there?\n\nWe've been putting together very competitive offers this year, all focused on helping organizers drive better reach, earlier conversions, and generating extra revenue with dedicated account support, financial incentives, marketing push and more.\n\nLet me know if you're open to connecting, would love to hear more about your plans this year and see what we can bring to the table!"
   },
   "message_2": {
-    "body": "Hey there,\n\nI know you may still be figuring out whether Posh is relevant for what you're building, so here's the simple version. Organizers usually come to us when they want to:\n\n- Sell more tickets\n- Reach more of the right people\n- Own their attendee community\n- Make check-in, payouts, promo, and event setup easier\n- Build a more repeatable event business\n\nIf any of those are priorities, it'd probably be worth pulling together a quick comparison. Happy to show you what other organizers are doing on Posh and where it may or may not fit, want me to?"
+    "body": "Hey %FIRST_NAME%,\n\nI know you may still be figuring out whether Posh is relevant for what you're building, so here's the simple version. Organizers usually come to us when they want to:\n\n- Sell more tickets\n- Reach more of the right people\n- Own their attendee community\n- Make check-in, payouts, promo, and event setup easier\n- Build a more repeatable event business\n\nIf any of those are priorities, it'd probably be worth pulling together a quick comparison. Happy to show you what other organizers are doing on Posh and where it may or may not fit, want me to?"
   },
   "message_3": {
-    "body": "Hey there,\n\nShould I close this out for now, or would it still be helpful to grab 15 minutes and see where Posh could support? Totally fine either way, just didn't want to lose the thread."
+    "body": "Hey %FIRST_NAME%,\n\nShould I close this out for now, or would it still be helpful to grab 15 minutes and see where Posh could support? Totally fine either way, just didn't want to lose the thread."
   }
 }
 ```
+
+## This copy now SHIPS WITHOUT REVIEW (2026-09-24)
+
+It used to land in the review sheet unapproved, so a human saw every fallback before it
+went out. `export_review.AUTO_APPROVE_STATUSES` now includes
+`GENERATION_FAILED_FALLBACK`, on the reasoning that this file is already human-written
+and human-reviewed -- re-approving it per contact was a gate with no reader.
+
+Two consequences to keep in mind when editing below:
+
+1. **A mistake here reaches prospects directly.** There is no longer a person between
+   this file and the send. Treat an edit like a production change.
+2. **Every fallback contact in a run receives an IDENTICAL email**, one body per sender.
+   That is tolerable at the 4.9% rate the 1,314-contact round produced and is not
+   tolerable at 30%, which is why `run_generation.py` warns above 10%. If the rate
+   climbs, fix generation -- do not rewrite this file to be more personal, because it
+   has no contact data to personalise with beyond the greeting.
+
+The greeting is templated: `%FIRST_NAME%` is replaced per contact, falling back to
+"there" when the name is missing. Keep that placeholder in any new copy -- all 64
+fallbacks in the first large round had a name on file and would otherwise have opened
+"Hey there," to someone whose name we knew.

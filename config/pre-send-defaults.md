@@ -67,7 +67,7 @@ lead_status_exclude: [IN_PROGRESS, OPEN_DEAL]   # internals confirmed 2026-08-24
                                     # statement about current engagement, so it
                                     # was excluding contacts nobody is working.
 csm_property: customer_success_manager  # any non-empty value -> exclude
-lifecycle_allow: [lead, opportunity, 1442770269]    # internals confirmed 2026-08-24 (labels differ)
+lifecycle_allow: [lead, opportunity, 1442770269, customer]  # internals confirmed 2026-08-24 (labels differ)
 sequence_property: hs_sequences_is_enrolled   # must be false
 create_missing_contacts: false          # 2026-08-24: the filter never writes to HubSpot.
                                         # Leads are assumed to exist there already; one
@@ -145,6 +145,24 @@ new_contact_lifecycle: lead
   A dormant lead is LAPSED, not disqualified, and re-engaging lapsed prospects is the
   thing this engine exists to do. Excluding them meant the engine refused the exact
   audience it was built for.
+
+  **`customer` ("Outreached") was added 2026-09-25**, and it is the consequential one.
+  The engine now SETS that stage when a send is confirmed, so leaving it out of the
+  allow-list would have made every contact the engine mails permanently ineligible for
+  the next round -- retiring the 481 Dormant contacts we had just fought to include, and
+  making the new re-engagement tasks unactionable (the task fires, the rep tries to
+  re-enrol, eligibility refuses).
+
+  The principle: **`lifecyclestage` DESCRIBES a contact, it does not gate them.** Gating
+  belongs to `outbound_status`, `outbound_recycle_after`, suppression and sequence
+  enrolment, all of which are precise about *why* and *until when*. A lifecycle stage is
+  none of those things.
+
+  **The side effect, stated plainly: this makes ~17,891 previously-Outreached contacts
+  eligible.** Most predate the engine and carry no `outbound_status`, so nothing else
+  excludes them. That pool has NOT been reviewed. It is safe in the sense that nothing
+  mails anyone automatically -- a human still submits a list -- but nobody should enrol
+  from it until somebody has looked at what is actually in there.
 
   Nothing is lost by including them: a contact who declined recently still carries
   `outbound_recycle_after` and is skipped until that date passes, whatever their

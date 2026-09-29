@@ -54,6 +54,7 @@ import argparse
 import concurrent.futures as cf
 import datetime as dt
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -64,6 +65,7 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import repair  # noqa: E402
+import lifecycle
 import review_queue as rq  # noqa: E402
 import validate  # noqa: E402
 from enrich_callbacks import strip_quoted  # noqa: E402
@@ -125,7 +127,8 @@ def defaults() -> dict:
     if _DEFAULTS is None:
         cfg = load_config(REPLY_CONFIG)
         for key in ("recycle_not_now_days", "recycle_not_interested_days",
-                    "resume_ooo_default_days"):
+                    "resume_ooo_default_days", "recycle_task_lead_days",
+                    "recycle_objection_days"):
             if not isinstance(cfg.get(key), int) or cfg[key] < 0:
                 raise RuntimeError(
                     f"{REPLY_CONFIG.name}: {key} must be a non-negative integer, "
@@ -141,7 +144,8 @@ def defaults() -> dict:
 
 
 def recycle_date(intent: str, reply_at: str, named: str | None,
-                 existing: str | None, cfg: dict | None = None) -> str | None:
+                 existing: str | None, cfg: dict | None = None,
+                 platform: str | None = None) -> str | None:
     """The earliest day this contact may re-enter a campaign, or None.
 
     Four rules from instructions/reply-handling.md, each of which this got wrong first
@@ -156,8 +160,17 @@ def recycle_date(intent: str, reply_at: str, named: str | None,
          invitation to negotiate timing.
       4. An existing later date always wins. Declines accumulate patience, they do not
          reset it, so this can only ever move the date outward.
+
+    A FIFTH case was added 2026-09-28: an `objection` that NAMES an incumbent
+    ("we have a contract with RA") gets `recycle_objection_days`. Objections used to
+    set no date at all, which left the contact held only by the 30-day status=replied
+    window -- re-mailable a month after they told us they were committed elsewhere.
+    Requires `platform`, because a bare objection with no incumbent ("too expensive")
+    is a copy problem rather than a contract and does not earn six months of silence.
     """
-    if intent not in ("not_now", "not_interested"):
+    if intent == "objection" and (platform or "").strip():
+        pass                                       # handled below
+    elif intent not in ("not_now", "not_interested"):
         return None
     cfg = cfg or defaults()
     base = (reply_at or "")[:10]
@@ -173,6 +186,13 @@ def recycle_date(intent: str, reply_at: str, named: str | None,
         if named:
             try:
                 candidate = dt.date.fromisoformat(named[:10])  # rule 2, may be earlier
+            except ValueError:
+                pass
+    elif intent == "objection":
+        candidate = anchor + dt.timedelta(days=cfg["recycle_objection_days"])
+        if named:                                  # a date they gave still wins
+            try:
+                candidate = dt.date.fromisoformat(named[:10])
             except ValueError:
                 pass
     else:
@@ -399,14 +419,86 @@ class HubSpotWriter:
                         # enrichment can say what it CHANGED, and skip a write when the
                         # value already matches. Without them every reply naming a
                         # platform would rewrite the same value and report it as news.
+                        # hubspot_owner_id is read ONLY to check whether one is
+                        # already set. A contact with a real owner has a real
+                        # relationship with that person; the meeting round robin must
+                        # never displace it. See assign_meeting_owner().
+                        # company / prospect_org / firstname name the prospect in a
+                        # re-engagement task's subject. Without them the subject reads
+                        # "Re-engage — said to come back 2027-06-01", which is useless
+                        # in a task queue -- and it fails SILENTLY, because .get()
+                        # on an unread property returns "" exactly like a blank one.
                         "properties": ["email", "outbound_status",
                                        "outbound_recycle_after", "outbound_sender",
-                                       "current_competitor", "lifecyclestage"],
+                                       "current_competitor", "lifecyclestage",
+                                       "hubspot_owner_id", "company", "prospect_org",
+                                       "firstname"],
                         "limit": 1})
         res = d.get("results") or []
         if not res:
             return None, {}
         return res[0]["id"], (res[0].get("properties") or {})
+
+    # --- re-engagement tasks -------------------------------------------------------
+    # A stable marker in the BODY, not the subject. The subject carries the prospect's
+    # org so a rep can read their task queue, which makes it useless for matching; a
+    # human may also rename a task. The body marker is ours and nobody edits it.
+    TASK_MARKER = "[outbound-engine:recycle]"
+    # task -> contact, from /crm/v4/associations/tasks/contacts/labels
+    TASK_TO_CONTACT = 204
+
+    def open_recycle_task(self, contact_id: str) -> str:
+        """Id of an existing UNFINISHED engine recycle task on this contact, or "".
+
+        Idempotency matters more here than anywhere else in the reply path: the queue is
+        re-read on every heartbeat, three times a day. Without this a single `not_now`
+        would grow a new task every run until someone noticed a prospect with forty
+        identical reminders -- the same shape as the duplicate-queue-row bug from the
+        22 Sep catch-up storm, which is what taught us to check.
+        """
+        try:
+            assoc = self._call(
+                "GET", f"/crm/v4/objects/contacts/{contact_id}/associations/tasks")
+        except Exception:
+            # Cannot prove absence -> assume PRESENT and skip. Creating a duplicate is
+            # the worse error: a missing task is visible in the recycle list, a pile of
+            # duplicates is noise a rep has to clean up by hand.
+            return "unknown"
+        ids = [r["toObjectId"] for r in (assoc.get("results") or [])]
+        for tid in ids[:50]:
+            try:
+                task = self._call(
+                    "GET", f"/crm/v3/objects/tasks/{tid}"
+                           f"?properties=hs_task_body,hs_task_status")
+            except Exception:
+                continue
+            pr = task.get("properties") or {}
+            if (self.TASK_MARKER in (pr.get("hs_task_body") or "")
+                    and (pr.get("hs_task_status") or "") != "COMPLETED"):
+                return str(tid)
+        return ""
+
+    def create_task(self, contact_id: str, subject: str, body: str,
+                    due_iso: str, owner_id: str) -> str:
+        props = {"hs_task_subject": subject[:255],
+                 "hs_task_body": body,
+                 "hs_task_status": "NOT_STARTED",
+                 "hs_task_priority": "MEDIUM",
+                 "hs_task_type": "TODO",
+                 # Due DATE. HubSpot takes epoch millis; 13:00 UTC keeps it on the
+                 # intended day for every US timezone rather than landing the previous
+                 # evening for anyone west of London.
+                 "hs_timestamp": due_iso}
+        if owner_id:
+            props["hubspot_owner_id"] = owner_id
+        if not self.apply:
+            return f"would create task {subject!r} due {due_iso[:10]}"
+        r = self._call("POST", "/crm/v3/objects/tasks", {
+            "properties": props,
+            "associations": [{"to": {"id": contact_id},
+                              "types": [{"associationCategory": "HUBSPOT_DEFINED",
+                                         "associationTypeId": self.TASK_TO_CONTACT}]}]})
+        return f"created task {r.get('id')} due {due_iso[:10]}"
 
     def write(self, contact_id: str, props: dict) -> str:
         assert "hs_email_optout" not in props, \
@@ -468,7 +560,7 @@ PLATFORM_ALIASES = {
 # Read them with GET /crm/v3/properties/contacts/lifecyclestage before trusting any of
 # them; assuming HubSpot's defaults is how "already a Posh customer" got said out loud
 # about a contact that merely had been emailed once.
-LIFECYCLE_DISQUALIFIED = "1439306394"
+LIFECYCLE_DISQUALIFIED = lifecycle.DISQUALIFIED
 
 
 def match_platform(said: str, allowed: set[str]) -> str:
@@ -877,7 +969,19 @@ def booking_link_for(sender: str, links: dict[str, str] | None = None,
     # Caroline's on Tuesday, which reads as a company that cannot keep track of itself.
     # Same reasoning as pick_variant in run_generation.
     if contact_email:
-        idx = int(hashlib.sha256(contact_email.strip().lower().encode()).hexdigest(), 16)
+        # **SALTED, and the salt is load-bearing (fixed 2026-09-25).** This used to hash
+        # the bare address, which collided with `split_by_sender --batch K/N` -- that
+        # selects contacts on `hash % N` of the SAME unsalted string. With N=2 the batch
+        # filter consumes the low bit, and because len(pool) is even, `% len(pool)`
+        # inherits that parity: batch 1/2 could only ever reach the even-indexed owners
+        # (Carl, Henry, Lawrence) and batch 2/2 only the odd (Caroline, Kate, Zach).
+        # The 1,314-contact round was silently routing to three of six calendars.
+        #
+        # Two hashes of one string are only independent if something distinguishes them.
+        # `run_generation.pick_variant` takes a `salt` for exactly this reason; this
+        # function predated that lesson. Any future per-contact hash needs its own salt.
+        idx = int(hashlib.sha256(
+            ("meeting-owner:" + contact_email.strip().lower()).encode()).hexdigest(), 16)
         name = pool[idx % len(pool)]
         return name, links[name]
     # No contact email -- a Smartlead-only lead. The sender's own calendar if they have
@@ -890,6 +994,191 @@ def booking_link_for(sender: str, links: dict[str, str] | None = None,
         if name.lower() == fallback.lower():
             return f"{name} (fallback)", links[name]
     return "", ""
+
+
+# HubSpot owner ids for the meeting-routing names, resolved once per run and matched on
+# FIRST NAME -- the same convention `split_by_sender.owner_to_sender()` and
+# `pre-send-defaults.excluded_owners` already use, so a rep is identified one way
+# everywhere. Cached because the reply loop would otherwise re-fetch per contact.
+_OWNER_IDS: dict[str, str] | None = None
+
+
+def owner_ids(token: str | None = None) -> dict[str, str]:
+    """{first name lowercased: owner id} for everyone in the HubSpot owners list."""
+    global _OWNER_IDS
+    if _OWNER_IDS is not None:
+        return _OWNER_IDS
+    import urllib.request as _u
+    tok = token or env_token()
+    req = _u.Request("https://api.hubapi.com/crm/v3/owners?limit=200",
+                     headers={"Authorization": f"Bearer {tok}"})
+    out = {}
+    try:
+        with _u.urlopen(req, timeout=30) as r:
+            for o in json.load(r).get("results", []):
+                fn = (o.get("firstName") or "").strip().lower()
+                if fn:
+                    out.setdefault(fn, str(o["id"]))
+    except (OSError, http.client.HTTPException) as e:
+        # OSError, not URLError: http.client.RemoteDisconnected is a
+        # ConnectionResetError. This has bitten sync_sends and eligibility already.
+        print(f"    !! could not read HubSpot owners ({type(e).__name__}); "
+              f"no contact owner will be assigned this run")
+    _OWNER_IDS = out
+    return out
+
+
+def assign_meeting_owner(props: dict, existing: dict, owner: str, link: str,
+                         draft: str) -> str:
+    """Set the contact owner to the person whose calendar the prospect was just sent.
+
+    Added 2026-09-25 on Aliza's call: meetings round-robin across the whole team, so
+    without this a prospect books with Kate while the contact record stays unowned and
+    nobody is accountable for the relationship.
+
+    THREE CONDITIONS, all necessary:
+
+      1. The draft actually CONTAINS the link. Not the intent label -- the link is
+         offered to the classifier on every reply and the model includes it only when
+         it is warranted, so the draft text is the ground truth for "was this prospect
+         sent someone's calendar". An objection reply that never offers a meeting must
+         not reassign the contact.
+      2. The contact has NO owner today. 90 of the 1,314 in the first large round were
+         owned by people with real relationships (Daniela, Rob, Gabriela and others).
+         A round robin must never displace a human's book.
+      3. The name resolves to a HubSpot owner id. An unresolvable name is reported and
+         skipped rather than written as a blank, which would LOOK like an assignment.
+
+    Assignment happens on REPLY rather than at enrolment, deliberately: ownership then
+    means "this rep has a live conversation", instead of putting ~205 cold, unanswered
+    contacts into each of six reps' dashboards and owner-based workflows.
+
+    Returns a note for the run log, or "" when nothing was done.
+    """
+    if not (owner and link and draft and link in draft):
+        return ""
+    if (existing.get("hubspot_owner_id") or "").strip():
+        return ""                                  # condition 2 -- never displace
+    oid = owner_ids().get(owner.strip().lower())
+    if not oid:
+        return (f"owner NOT assigned: {owner!r} has no HubSpot owner record "
+                f"(add one, or the meeting lands on an unowned contact)")
+    props["hubspot_owner_id"] = oid
+    return f"owner -> {owner} ({oid}), whose calendar the draft offers"
+
+
+def recycle_task_owner(existing: dict, contact_email: str) -> tuple[str, str]:
+    """(owner id, why) for a re-engagement task. Aliza's call, 2026-09-25.
+
+    An existing HubSpot owner wins -- that is a real relationship and the person who
+    should hear that their contact is ready again. Otherwise the contact's deterministic
+    meeting-routing owner takes it, which spreads recycle work across the whole team
+    instead of piling every one of them on the two people who happen to own the warmed
+    mailboxes. Same rotation, same salt, so the rep who would have taken their meeting
+    is the rep who gets the reminder.
+    """
+    owned = (existing.get("hubspot_owner_id") or "").strip()
+    if owned:
+        return owned, "existing contact owner"
+    who, _link = booking_link_for(existing.get("outbound_sender", ""),
+                                  contact_email=contact_email)
+    if not who:
+        return "", "no owner and no routing match"
+    oid = owner_ids().get(who.strip().lower())
+    if not oid:
+        return "", f"{who} has no HubSpot owner record"
+    return oid, f"round-robin -> {who}"
+
+
+def recycle_task_text(existing: dict, res: dict, recycle: str,
+                      reply_excerpt: str, due_note: str = "",
+                      basis: str = "default") -> tuple[str, str]:
+    """Subject and body for the re-engagement task.
+
+    The body carries WHAT THEY SAID. A task reading "follow up" tells a rep in nine
+    months nothing they can act on; their own words, the competitor and the date are
+    the whole value of having recorded the reply in the first place.
+    """
+    org = (existing.get("prospect_org") or existing.get("company")
+           or existing.get("firstname") or "").strip()
+    comp = (res.get("named_platform") or existing.get("current_competitor") or "").strip()
+    # "contract ends" ONLY when the prospect said so. Otherwise the date is our own
+    # +90 day floor, and putting it in front of a rep as a contract end is inventing a
+    # fact about the account -- the CRM equivalent of a claim the copy validator would
+    # reject. An unnamed date gets the honest label.
+    when = {"named": f"contract ends {recycle[:10]}",
+            "objection": f"on {comp or 'a competitor'}, no renewal date given",
+            }.get(basis, f"follow up after {recycle[:10]}")
+    subject = f"Re-engage{' ' + org if org else ''} — {when}"
+    # The objection wording already names the platform; appending it again produced
+    # "on Resident Advisor, no renewal date given (on Resident Advisor)".
+    if comp and basis != "objection":
+        subject += f" (on {comp})"
+    opener = ("They replied with an objection naming their current platform."
+              if basis == "objection" else "They replied 'not now'.")
+    lines = [f"Outbound re-engagement. {opener}", ""]
+    if due_note:
+        lines += [due_note[0].upper() + due_note[1:], ""]
+    if comp:
+        lines.append(f"Currently using: {comp}")
+    if reply_excerpt:
+        lines += ["", "What they said:", f'"{reply_excerpt.strip()[:600]}"']
+    if basis == "named":
+        tail = (f"This task is early on purpose -- the point is to talk before the "
+                f"renewal is drafted. The engine will not cold-email them until "
+                f"{recycle[:10]}; reaching out personally before then is your call.")
+    elif basis == "objection":
+        tail = (f"They told us they are on {comp or 'another platform'} but gave NO "
+                f"renewal date, so {recycle[:10]} is OUR six-month estimate and not "
+                f"something they said -- treat it as a prompt to find out when they "
+                f"are actually up, not as a known deadline. The engine will not "
+                f"cold-email them before then.")
+    else:
+        tail = (f"They gave no date, so {recycle[:10]} is our own 90-day default "
+                f"rather than anything they said. The engine will not cold-email them "
+                f"before it.")
+    lines += ["", tail, "", HubSpotWriter.TASK_MARKER]
+    return subject, "\n".join(lines)
+
+
+def task_due_date(recycle: str, named: str | None, today: str = "",
+                  cfg: dict | None = None) -> tuple[str, str]:
+    """(date the task is due, one-line reason). Aliza's request, 2026-09-28.
+
+    A contract end is a DEADLINE, not an appointment. A prospect under contract with
+    DICE until June is re-papered before June, so a task landing on the expiry date
+    arrives after the decision it was meant to influence. The task moves
+    `recycle_task_lead_days` earlier.
+
+    **Only when the prospect NAMED the date.** This is the part that needs care. When
+    they said nothing about timing, the recycle date is our own +90 day floor -- a
+    guess, not a contract end. Subtracting 90 from a guess makes every vague "not right
+    now" a task due today, and a queue where everything is due today is a queue nobody
+    reads. So an unnamed date gets no lead time at all.
+
+    Floored at TOMORROW, never the past: "we're locked in through next month" is a real
+    answer and it lands inside the lead window.
+
+    The recycle date itself is unchanged. That governs when the ENGINE may cold-email
+    them, and three months before a contract ends is still mid-contract; this only
+    governs when a human is asked to look.
+    """
+    cfg = cfg or defaults()
+    lead = cfg["recycle_task_lead_days"]
+    now = dt.date.fromisoformat(today) if today else dt.datetime.now(dt.timezone.utc).date()
+    try:
+        end = dt.date.fromisoformat((named or "")[:10])
+    except ValueError:
+        return recycle, "no date named; task on the recycle date"
+    if not lead:
+        return recycle, "no lead time configured"
+    due = end - dt.timedelta(days=lead)
+    if due <= now:
+        return (now + dt.timedelta(days=1)).isoformat(), (
+            f"contract ends {end.isoformat()}, inside the {lead}-day lead window; "
+            f"task due tomorrow")
+    return due.isoformat(), (f"contract ends {end.isoformat()}; task {lead} days ahead "
+                             f"so the renewal conversation happens first")
 
 
 def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
@@ -1257,7 +1546,126 @@ def _self_test() -> int:
         print(f"  {'ok  ' if ok else 'WRONG'} {label:15} {'' if ok else '-> ' + got + ' '}"
               f"| {why}")
     print(f"\n{len(CLASSIFY_CASES) - wrong}/{len(CLASSIFY_CASES)} classified correctly")
-    return 1 if (fails or wrong) else 0
+
+    # --- contact-owner assignment -------------------------------------------------
+    # Offline (no model call). These guard the two ways this can do real damage:
+    # displacing a human's contact, and reassigning someone who was never offered a
+    # meeting. Both are silent failures in production -- nothing errors, the wrong
+    # person simply owns the record -- so they are pinned here rather than trusted.
+    _L = "https://meetings.hubspot.com/kate-burge"
+    owner_cases = [
+        ("link in the final draft, contact unowned -> assign",
+         {}, "Kate", _L, f"Grab a time with Kate here: {_L}", True),
+        ("no link in the draft -> never reassign on an objection or a decline",
+         {}, "Kate", _L, "Understood -- I'll check back next year.", False),
+        ("contact already owned -> never displace a human's relationship",
+         {"hubspot_owner_id": "89417286"}, "Kate", _L, f"here: {_L}", False),
+        ("owner name has no HubSpot record -> report, never write a blank id",
+         {}, "Mallory", _L, f"here: {_L}", False),
+        ("no owner and no link -> no-op",
+         {}, "", "", "whatever", False),
+    ]
+    owner_wrong = 0
+    print()
+    for why, existing, owner, link, draft, should in owner_cases:
+        props = {}
+        try:
+            assign_meeting_owner(props, existing, owner, link, draft)
+        except Exception as e:                     # a raise here would abort a real run
+            print(f"  RAISED {type(e).__name__}: {why}")
+            owner_wrong += 1
+            continue
+        got = "hubspot_owner_id" in props
+        ok = got == should and (not got or bool(props["hubspot_owner_id"]))
+        owner_wrong += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} owner          | {why}")
+    print(f"\n{len(owner_cases) - owner_wrong}/{len(owner_cases)} owner-assignment "
+          f"cases correct")
+
+    # --- re-engagement tasks -------------------------------------------------------
+    task_wrong = 0
+    print()
+    _ex = {"prospect_org": "Beretta Music", "outbound_sender": "carl"}
+    subj, body_txt = recycle_task_text(
+        _ex, {"named_platform": "DICE"}, "2027-06-01",
+        "We're with DICE until next summer.", basis="named")
+    checks = [
+        ("subject names the prospect", "Beretta Music" in subj),
+        ("subject carries the date", "2027-06-01" in subj),
+        ("a NAMED date is called a contract end", "contract ends" in subj),
+        ("body quotes what they said", "until next summer" in body_txt),
+        ("body records the competitor", "DICE" in body_txt),
+        # Without the marker the idempotency check cannot recognise its own task and
+        # every heartbeat creates another one.
+        ("body carries the dedup marker", HubSpotWriter.TASK_MARKER in body_txt),
+    ]
+    # An existing owner is a real relationship and must win over the rotation.
+    _owned, _why = recycle_task_owner({"hubspot_owner_id": "89417286"}, "a@b.com")
+    checks.append(("existing owner beats the round robin", _owned == "89417286"))
+
+    # --- task DUE DATE: ahead of a named contract end, on the date otherwise --------
+    _T = "2026-09-28"
+    _d, _ = task_due_date("2027-06-01", "2027-06-01", today=_T)
+    checks.append(("a named contract end lands 90 days early", _d == "2027-03-03"))
+    # The one that matters most. With no named date the recycle date is our own +90
+    # floor -- a guess. Subtracting the lead from a guess would make every vague
+    # "not right now" a task due today and drain the queue of meaning.
+    _d, _ = task_due_date("2026-12-27", None, today=_T)
+    checks.append(("an UNNAMED date gets no lead time", _d == "2026-12-27"))
+    _d, _ = task_due_date("2026-12-27", "", today=_T)
+    checks.append(("an empty named date gets no lead time", _d == "2026-12-27"))
+    _d, _ = task_due_date("2026-11-01", "not a date", today=_T)
+    checks.append(("an unparseable date falls back, never raises",
+                   _d == "2026-11-01"))
+    # A contract ending inside the lead window must not produce a task in the past.
+    _d, _ = task_due_date("2026-10-20", "2026-10-20", today=_T)
+    checks.append(("a contract ending soon is due tomorrow, never in the past",
+                   _d == "2026-09-29"))
+    # The real production call passes NO cfg: the local `cfg` in main() is the sheet
+    # config, and passing it raised KeyError. Exercise the defaulted path.
+    try:
+        task_due_date("2027-06-01", "2027-06-01")
+        checks.append(("the defaulted-cfg path used in production works", True))
+    except Exception as e:
+        checks.append((f"the defaulted-cfg path raised {type(e).__name__}", False))
+    # A contact with no owner still gets one, from the same rotation as their meeting.
+    _rr, _ = recycle_task_owner({"outbound_sender": "carl"}, "a@b.com")
+    checks.append(("unowned contact still gets an assignee", bool(_rr)))
+    # An UNNAMED date must never be presented to a rep as a contract end. That date is
+    # our own +90 default; calling it a contract end puts a fact in the CRM that the
+    # prospect never stated.
+    _s, _b = recycle_task_text(_ex, {}, "2026-12-27", "not right now",
+                               basis="default")
+    checks.append(("an unnamed date is NOT called a contract end",
+                   "contract ends" not in _s and "follow up after" in _s))
+    checks.append(("the body says the date is our default, not theirs",
+                   "our own 90-day default" in _b))
+
+    # --- objection naming an incumbent ---------------------------------------------
+    # The gap this closes: "we have a contract with RA" is an OBJECTION, not not_now,
+    # and objections set no recycle date -- leaving the contact held only by the
+    # 30-day replied window and re-mailable a month after they told us.
+    _A = "2026-09-21T09:00:00Z"
+    _r = recycle_date("objection", _A, None, None, platform="RA")
+    checks.append(("a named incumbent earns a 180-day cooldown", _r == "2027-03-20"))
+    _r = recycle_date("objection", _A, None, None, platform="")
+    checks.append(("a BARE objection earns no cooldown", _r is None))
+    _r = recycle_date("objection", _A, "2027-06-01", None, platform="RA")
+    checks.append(("a date they DID give still wins", _r == "2027-06-01"))
+    _s, _b = recycle_task_text(_ex, {"named_platform": "Resident Advisor"},
+                               "2027-03-20", "We have a contract with RA.",
+                               basis="objection")
+    checks.append(("the objection task names the incumbent, not a fake contract end",
+                   "no renewal date given" in _s and "contract ends" not in _s))
+    checks.append(("the body calls the date OUR estimate",
+                   "our six-month estimate" in _b.lower()))
+    checks.append(("the incumbent is not printed twice in the subject",
+                   _s.count("Resident Advisor") == 1))
+    for why, ok in checks:
+        task_wrong += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} task           | {why}")
+    print(f"\n{len(checks) - task_wrong}/{len(checks)} re-engagement-task cases correct")
+    return 1 if (fails or wrong or owner_wrong or task_wrong) else 0
 
 
 def main(argv=None) -> int:
@@ -1391,19 +1799,88 @@ def main(argv=None) -> int:
                 # company that runs ticketed events on their own tool is exactly who
                 # this engine exists to talk to.
                 if nf and intent == "not_qualified" and not said:
-                    props["lifecyclestage"] = LIFECYCLE_DISQUALIFIED
-                    print(f"      enrich: lifecyclestage -> Disqualified  ({nf})")
+                    # Guarded, not written blind. This wrote straight into `props`
+                    # until 2026-09-25, and for a DORMANT contact (displayOrder 6,
+                    # above Disqualified's 3) HubSpot accepted the PATCH and ignored
+                    # the value -- every such disqualification since this was built
+                    # has been a silent no-op that reported success. 481 of the 1,314
+                    # contacts in the September round are Dormant.
+                    cur_stage = (existing.get("lifecyclestage") or "").strip()
+                    can, why_not = lifecycle.may_promote(
+                        cur_stage, lifecycle.DISQUALIFIED)
+                    if can:
+                        props["lifecyclestage"] = lifecycle.DISQUALIFIED
+                        print(f"      enrich: lifecyclestage -> Disqualified  ({nf})")
+                    else:
+                        print(f"      enrich: NOT marking Disqualified -- {why_not}. "
+                              f"outbound_status still records the outcome; the stage "
+                              f"needs a HubSpot settings change, not a retry")
                 elif nf and intent == "not_qualified" and said:
                     print(f"      enrich: NOT disqualifying -- they named {said!r}, so "
                           f"this is an incumbent objection rather than a structural "
                           f"non-fit, whatever the reason says")
+            # QUALIFIED on genuine interest (added 2026-09-25, Aliza's call). Only 27
+            # contacts portal-wide hold this stage, so it carries real signal; the
+            # same guard applies, and a Dormant contact cannot reach it either.
+            if intent == "interested":
+                cur_stage = (existing.get("lifecyclestage") or "").strip()
+                can, why_not = lifecycle.may_promote(cur_stage, lifecycle.QUALIFIED)
+                if can:
+                    props["lifecyclestage"] = lifecycle.QUALIFIED
+                    print(f"      enrich: lifecyclestage "
+                          f"{lifecycle.label(cur_stage)} -> Qualified")
+                elif "already" not in why_not:
+                    print(f"      enrich: not marking Qualified -- {why_not}")
+            # `platform` is what lets an objection earn a cooldown; without it a
+            # contact who says "we have a contract with RA" is held only by the
+            # 30-day replied window and is re-mailable a month later.
             recycle = recycle_date(intent, newest["at"], res.get("named_return_date"),
-                                   existing.get("outbound_recycle_after"))
+                                   existing.get("outbound_recycle_after"),
+                                   platform=(res.get("named_platform") or ""))
             if recycle:
                 props["outbound_recycle_after"] = recycle
                 held = existing.get("outbound_recycle_after")
                 if held and str(held)[:10] == recycle:
                     print("      recycle: keeping the later date already on the contact")
+                # A TASK, not just a date (added 2026-09-25). The property is a GUARD --
+                # eligibility refuses to mail them before it -- but nothing ever fired
+                # on it, so a prospect who said "come back in June" was only re-approached
+                # if somebody happened to pull a list containing them. Silence looked
+                # identical to a correct skip. not_now only: a flat decline at +180d is a
+                # much colder signal and would swamp the queue.
+                # Objections with a named incumbent get a task too (2026-09-28).
+                # Its date is OUR estimate, which the wording says out loud.
+                if intent in ("not_now", "objection") and cidhs:
+                    existing_task = hs.open_recycle_task(cidhs)
+                    if existing_task == "unknown":
+                        print("      task: could not check for an existing one; "
+                              "NOT creating (a duplicate is worse than a late one)")
+                    elif existing_task:
+                        print(f"      task: {existing_task} already open, left alone")
+                    else:
+                        oid, why = recycle_task_owner(existing, email)
+                        # Due AHEAD of a named contract end, on it otherwise.
+                        # NOT the local `cfg` -- that is rq.load_surface_config()
+                        # (sheet ids), and passing it here raised KeyError on the
+                        # first real not_now. task_due_date reads defaults() itself.
+                        _named = bool((res.get("named_return_date") or "").strip())
+                        due, due_why = task_due_date(
+                            recycle, res.get("named_return_date"))
+                        if intent == "objection" and not _named:
+                            # No lead time: the date is already a guess, and pulling a
+                            # guess 90 days forward does not make it more accurate.
+                            basis, due = "objection", recycle
+                            due_why = (f"no renewal date given; {recycle} is our "
+                                       f"180-day estimate, not their date")
+                        else:
+                            basis = "named" if _named else "default"
+                        subj, body_txt = recycle_task_text(
+                            existing, res, recycle, newest.get("body", ""),
+                            due_note=due_why, basis=basis)
+                        note = hs.create_task(cidhs, subj, body_txt,
+                                              f"{due}T13:00:00Z", oid)
+                        print(f"      task: {note} -> {why or 'UNASSIGNED'}")
+                        print(f"            {due_why}")
             # An out-of-office pauses the sequence rather than ending the relationship,
             # so it gets a date to come back on instead of a recycle window. Written
             # here, acted on by scripts/resume_sequences.py once the date arrives.
@@ -1426,8 +1903,8 @@ def main(argv=None) -> int:
             if draft:
                 # The calendar may not be the sender's -- meetings round-robin across the
                 # team. Say whose it is rather than "with me".
-                _owner, _ = booking_link_for(existing.get("outbound_sender", ""),
-                                             contact_email=email)
+                _owner, _link = booking_link_for(existing.get("outbound_sender", ""),
+                                                 contact_email=email)
                 draft, renamed = name_the_calendar_owner(
                     draft, _owner, existing.get("outbound_sender", ""))
                 if renamed:
@@ -1452,6 +1929,12 @@ def main(argv=None) -> int:
                     res["_banned"] = "; ".join(
                         getattr(f, "detail", "")[:80] for f in hard)
                     print(f"      draft: BANNED PHRASE -- {res['_banned']}")
+                # Checked against the FINAL draft, after every rewrite above, because
+                # the question is what the prospect will actually receive.
+                note = assign_meeting_owner(props, existing, _owner, _link,
+                                            res.get("draft_response", ""))
+                if note:
+                    print(f"      {note}")
             resume_on = resume_date(intent, newest["at"], res.get("named_return_date"))
             if resume_on:
                 props["outbound_resume_after"] = resume_on

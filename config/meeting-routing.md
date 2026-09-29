@@ -123,3 +123,49 @@ conversation goes beyond a first reply.
 - `config/personas.md` — CTA guidance ("scheduling link once interested").
 - `config/senders.md` — mailbox → sign-off name, which decides whether a given thread
   is a Zach mailbox or one of the 9.
+
+
+## The hash is SALTED, and that is load-bearing (fixed 2026-09-25)
+
+The owner is `sha256("meeting-owner:" + email) % 6`. The salt is not decoration.
+
+It was `sha256(email) % 6`, which collided with `split_by_sender --batch K/N` --
+that filter selects contacts on `hash % N` of the **same unsalted string**. With
+`--batch 1/2` the filter consumes the low bit, and because the pool size is even,
+`% 6` inherits that parity:
+
+| | reachable owners |
+|---|---|
+| `--batch 1/2` | Carl, Henry, Lawrence (even indices) |
+| `--batch 2/2` | Caroline, Kate, Zach (odd indices) |
+
+The first 1,314-contact round was routing every meeting to three of six calendars, and
+nothing reported it: each individual assignment was valid, deterministic and
+sender-independent. It surfaced only by running the real list through the function and
+counting. **Two hashes of one string are independent only if something distinguishes
+them** -- `run_generation.pick_variant` takes a `salt` for exactly this reason. Any new
+per-contact hash needs its own.
+
+## The contact OWNER follows the calendar (added 2026-09-25)
+
+When a draft actually hands a prospect someone's booking link, that person becomes the
+HubSpot contact owner -- otherwise a prospect books with Kate while the record stays
+unowned and nobody is accountable for the relationship.
+
+Three conditions, all required (`reply_check.assign_meeting_owner`):
+
+1. **The link appears in the FINAL draft.** Not the intent label: the link is offered
+   to the classifier on every reply and included only where warranted, so the draft
+   text is the ground truth. A decline that never offers a meeting reassigns nobody.
+2. **The contact has no owner today.** 90 of the first 1,314 were already owned by
+   people with real relationships. A round robin never displaces a human's book.
+3. **The name resolves to a HubSpot owner id**, matched on first name like everywhere
+   else. An unresolvable name is reported and skipped, never written as a blank.
+
+**On reply, not at enrolment**, deliberately: ownership then means "this rep has a live
+conversation" rather than putting ~205 cold, unanswered contacts into each of six reps'
+dashboards and owner-based workflows.
+
+**Every meeting owner therefore needs a HubSpot owner record.** All six had one when
+this shipped. A new row in the table above without one still sends the link and logs a
+warning instead of assigning.

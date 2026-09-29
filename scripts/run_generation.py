@@ -373,6 +373,16 @@ sign-off, footer, company name, address, or unsubscribe token. Code appends thos
     return rulebook, instruction
 
 
+# The fallback greets by NAME when we have one. It used to open "Hey there," on every
+# row -- yet all 64 fallbacks in the 1,314-contact round had a first name on file. A
+# nameless greeting is the single most visible tell that a mail is untargeted, and the
+# fallback is exactly the copy that can least afford to look untargeted: it carries no
+# org, no city and no callback, so the greeting is the only personal thing left in it.
+# "there" keeps the sentence grammatical when the name really is missing.
+def personalise_fallback(body: str, first_name: str) -> str:
+    return body.replace("%FIRST_NAME%", (first_name or "").strip() or "there")
+
+
 def load_failure_fallback() -> dict:
     """The static sequence used when a contact exhausts its retries.
 
@@ -1439,9 +1449,10 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
         res.used_fallback = True
         for position in POSITIONS:
             m = failure_fallback[f"message_{position}"]
-            body_final = assemble.assemble(m["body"], mailbox, identity=identity,
+            raw = personalise_fallback(m["body"], c.first_name)
+            body_final = assemble.assemble(raw, mailbox, identity=identity,
                                            sender_map=sender_map)
-            res.messages.append(MessageResult(position, m.get("subject", ""), m["body"],
+            res.messages.append(MessageResult(position, m.get("subject", ""), raw,
                                               body_final))
         assert len(res.messages) == len(POSITIONS), "fallback must fill all three"
         return res
@@ -1465,9 +1476,10 @@ def process_contact(c, client, model, rulebook, instruction, *, mailbox,
         res.messages = []
         for position in POSITIONS:
             m = failure_fallback[f"message_{position}"]
-            body_final = assemble.assemble(m["body"], mailbox, identity=identity,
+            raw = personalise_fallback(m["body"], c.first_name)
+            body_final = assemble.assemble(raw, mailbox, identity=identity,
                                            sender_map=sender_map)
-            res.messages.append(MessageResult(position, m.get("subject", ""), m["body"],
+            res.messages.append(MessageResult(position, m.get("subject", ""), raw,
                                               body_final))
         assert len(res.messages) == len(POSITIONS), "fallback must fill all three"
         return res
@@ -1499,10 +1511,41 @@ COLUMNS = ["hs_object_id", "first_name", "last_name", "email", "job_title", "com
            "persona", "persona_basis", "platform_known", "current_competitor",
            "estimated_gmv_usd", "vertical", "validation", "generation_error",
            "attempts", "validation_rounds", "repairs_applied", "sequence_findings",
+           "flags",
            "shape", "bedrock_message_id",
            "message_1_subject", "message_1_body",
            "message_2_subject", "message_2_body",
            "message_3_subject", "message_3_body"]
+
+
+def row_flags(r: ContactResult) -> str:
+    """One short phrase recording what the validator noticed about this row.
+
+    Written because the reviewer's copy of the truth was empty. Only PASS rows are
+    auto-approved, so a WARN or a fallback lands in the sheet with `Approved` blank and
+    -- until this existed -- nothing at all to say why: the per-email findings lived on
+    `MessageResult.validation.findings` and were never persisted, while the CSV carried
+    only `sequence_findings` (whole-sequence checks, empty for every length warning).
+    A reviewer opening a held row saw a perfectly reasonable email and no hint of the
+    objection, so the only way to recover it was to re-run validation over the CSV,
+    which is what I had to do to answer "what are the 114 blanks?".
+
+    PASS rows get "" -- the validator noticed nothing.
+
+    WARN and fallback rows now auto-approve, so this is no longer a gate; it is the
+    only record of WHY a row is what it is, and the reason a reviewer can sort the tab
+    for fallbacks instead of re-deriving them from the CSV.
+    """
+    if r.status == "PASS":
+        return ""
+    if r.status == "GENERATION_FAILED_FALLBACK":
+        return "fell back to generic copy: " + (r.error or "validation failed")
+    parts = []
+    for mr in r.messages:
+        for f in (mr.validation.findings if mr.validation else []):
+            parts.append(f"email {mr.position} {f.severity}: {f.detail}")
+    parts += [f"sequence: {f.detail}" for f in r.sequence_findings]
+    return "; ".join(parts) or r.status
 
 
 def to_row(r: ContactResult, sender_name: str = "", mailbox: str = "") -> dict:
@@ -1526,6 +1569,8 @@ def to_row(r: ContactResult, sender_name: str = "", mailbox: str = "") -> dict:
         "validation_rounds": r.validation_rounds,
         "repairs_applied": sum(len(m.repairs) for m in r.messages),
         "sequence_findings": "; ".join(f.detail for f in r.sequence_findings),
+        # Surfaced to the reviewer as the sheet's "Why held" column. See held_reason().
+        "flags": row_flags(r),
         "shape": r.shape,
         "bedrock_message_id": r.bedrock_message_id,
     }
@@ -1789,10 +1834,21 @@ def main(argv=None) -> int:
           f"{n_err} with generation_error)")
     print(f"  {len(results) - n_err:3} generated normally")
     print(f"  {n_fallback:3} used the GENERATION-FAILURE FALLBACK "
-          f"(committed copy, NOT model output, not send-ready without review)")
+          f"(committed copy, NOT model output -- AUTO-APPROVED since 2026-09-24)")
     for r in results:
         if r.used_fallback:
             print(f"        - {r.contact.display}: {r.error}")
+    # The fallback is ONE body per sender, so its count is also the number of contacts
+    # about to receive an identical email. That was a reviewer's problem while these
+    # rows were held; now they ship automatically, it is a deliverability problem and
+    # nobody is looking at it. A share this high means generation is broken rather than
+    # unlucky -- the 1,314-contact round ran at 4.9% and that was already the ceiling
+    # of comfortable.
+    if results and n_fallback / len(results) > 0.10:
+        print(f"\n  !! {n_fallback / len(results):.0%} OF THIS RUN IS FALLBACK COPY "
+              f"({n_fallback} contacts share {len(POSITIONS)} identical bodies).\n"
+              f"     Auto-approval will send them as-is. Check the banned-phrase list "
+              f"and the rulebook before building a campaign from this.")
     print(f"  {n_flagged:3} flagged without generating (branch 3)")
 
     repairs = [(r.contact.display, m.position, rec)

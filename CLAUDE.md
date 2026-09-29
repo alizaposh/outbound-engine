@@ -55,8 +55,26 @@ Claude turns that into a complete, reviewed, approved, launched campaign.
    defect was found. The gate was costing a person hours and catching nothing the checks
    would not have caught once they existed.
 
-   What a human is still asked to read is the 4% the validator is unsure about, which is
-   where judgement genuinely beats a regex.
+   **WIDENED 2026-09-24: WARN and the committed fallback auto-approve too.** The first
+   1,314-contact round held 232 rows, and neither category survived inspection as a
+   reason to stop a send:
+
+   - **WARN (168 rows).** Every finding across all of them -- checked exhaustively, not
+     sampled -- was `length`, and the rulebook itself calls length "a target and never a
+     gate". Holding a row for being six words long contradicted the rule it enforced.
+   - **Fallback (64 rows).** Pre-approved static copy from
+     `config/generation-failure-fallback.md`. It was written and reviewed by a human;
+     asking a human to approve it again is a gate with nobody on the other side.
+
+   **FAIL still never auto-approves**, and an unrecognised status still goes to a person.
+   A FAIL is retried up to three times and, failing that, becomes a fallback -- so the
+   thing a FAIL can never do is ship as written.
+
+   What that leaves a human reading is close to nothing, which is the honest description
+   of the current state. The compensating controls are the checks themselves, the
+   shipped-copy audit below, and one new alarm: a run whose fallback share exceeds 10%
+   prints a warning, because the fallback is a single body per sender and a high share
+   means many prospects receiving an identical email.
 
    **The residual risk, stated plainly: a NOVEL defect class now ships unread.** Every
    defect found so far has become a check, so the exposure shrinks with each round --

@@ -316,6 +316,12 @@ def main(argv=None) -> int:
         # sample of the list -- and a fair sample is the whole point of sending half
         # first and reading the results.
         before = len(contacts)
+        # UNSALTED, and it must stay that way for resumability -- the same contact must
+        # land in the same batch on a re-run. But note what that costs elsewhere: any
+        # OTHER per-contact hash of the bare email inherits this filter's bias. With
+        # N=2 this consumes the low bit, which silently restricted the meeting round
+        # robin to three of six owners until that hash was salted (2026-09-25, see
+        # config/meeting-routing.md). Salt new hashes; do not salt this one.
         contacts = [c for c in contacts
                     if int(hashlib.sha256((c.get("email") or "").strip().lower()
                                           .encode()).hexdigest(), 16) % nn == kk - 1]

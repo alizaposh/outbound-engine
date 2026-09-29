@@ -47,9 +47,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from eligibility import HubSpot, env_token, env_value  # noqa: E402
 from reply_check import HubSpotWriter  # noqa: E402
 
+import lifecycle  # noqa: E402
+
 SL_BASE = "https://server.smartlead.ai/api/v1"
 BOOKED_PROP = "engagements_last_meeting_booked"
 READ_PROPS = ["email", "outbound_status", "outbound_suppressed",
+              # read so a booking can also promote the lifecycle stage to Qualified
+              "lifecyclestage",
               "outbound_last_campaign_id", BOOKED_PROP]
 TARGET = "meeting_booked"
 # States a booking legitimately supersedes -- guarantee 3.
@@ -97,7 +101,20 @@ def decide(props: dict, enrolled_on: str | None) -> tuple[str, dict, str]:
         # outreach, so it is somebody else's meeting.
         return ("predates enrolment", {},
                 f"booked {booked}, enrolled {enrolled_on}; not ours to claim")
-    return "promote", {"outbound_status": TARGET}, f"booked {booked}"
+    # A booked meeting is the strongest qualification signal the engine ever sees, so
+    # it moves the LIFECYCLE stage too (added 2026-09-25). Guarded: a Dormant contact
+    # cannot reach Qualified in this portal, and a contact a human has already moved to
+    # Deal Created is not demoted by an automated promotion.
+    out = {"outbound_status": TARGET}
+    cur_stage = (props.get("lifecyclestage") or "").strip()
+    can, why_not = lifecycle.may_promote(cur_stage, lifecycle.QUALIFIED)
+    note = f"booked {booked}"
+    if can:
+        out["lifecyclestage"] = lifecycle.QUALIFIED
+        note += f"; lifecycle {lifecycle.label(cur_stage)} -> Qualified"
+    elif "already" not in why_not:
+        note += f"; lifecycle left at {lifecycle.label(cur_stage)} ({why_not})"
+    return "promote", out, note
 
 
 class Smartlead:
@@ -227,7 +244,8 @@ def _self_test() -> int:
 
     check("a booking after enrolment promotes",
           decide({**base, BOOKED_PROP: "2026-09-10", "outbound_status": "replied"}, E)[:2],
-          ("promote", {"outbound_status": TARGET}))
+          ("promote", {"outbound_status": TARGET,
+                       "lifecyclestage": lifecycle.QUALIFIED}))
     check("promotes from in_sequence too",
           decide({**base, BOOKED_PROP: "2026-09-10",
                   "outbound_status": "in_sequence"}, E)[0], "promote")

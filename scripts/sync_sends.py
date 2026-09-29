@@ -51,7 +51,11 @@ from eligibility import HubSpot, env_token, env_value  # noqa: E402
 from enrich_callbacks import strip_quoted  # noqa: E402
 
 SL_BASE = "https://server.smartlead.ai/api/v1"
-READ_PROPS = ["email", "hubspot_owner_id", "outbound_last_logged_send"]
+import lifecycle  # noqa: E402
+
+READ_PROPS = ["email", "hubspot_owner_id", "outbound_last_logged_send",
+              # read to decide an Outreached promotion; see below
+              "lifecyclestage"]
 # HubSpot's association type for an email engagement -> contact.
 EMAIL_TO_CONTACT = 198
 
@@ -251,6 +255,8 @@ def main(argv=None) -> int:
             return json.loads(raw) if raw else {}
 
     logged = skipped = unmatched = current = 0
+    # contact id -> (email, stage before), verified in one batch after the loop
+    promoted: dict[str, tuple[str, str]] = {}
     for camp in campaigns:
         cid = camp.get("id")
         leads = sl.leads(cid)
@@ -275,6 +281,16 @@ def main(argv=None) -> int:
             kinds = [str(m.get("type") or "?").upper() for m in msgs]
             print(f"  {email}: {len(msgs)} message(s) to log {kinds} "
                   f"owner={owner or '(unowned)'}")
+            cur_stage = (c.get("lifecyclestage") or "").strip()
+            can_stage, why_not = lifecycle.may_promote(cur_stage, lifecycle.OUTREACHED)
+            if can_stage:
+                promoted[c["hs_object_id"]] = (email, cur_stage)
+                print(f"      lifecycle: {lifecycle.label(cur_stage)} -> Outreached"
+                      + ("" if a.apply else " (would)"))
+            elif "already" not in why_not:
+                print(f"      lifecycle: left at {lifecycle.label(cur_stage)} -- {why_not}")
+            # Decided ABOVE the dry-run exit on purpose: a dry run that silently omits
+            # an effect is not a preview of the apply run.
             if not a.apply:
                 logged += len(msgs)
                 continue
@@ -287,9 +303,41 @@ def main(argv=None) -> int:
             # Watermark written AFTER the engagements, so a crash mid-contact re-logs
             # rather than silently skipping. A duplicate timeline entry is visible and
             # fixable; a missing one is invisible.
+            # OUTREACHED, set here rather than at enrolment (added 2026-09-25).
+            # This is the only place that knows an email was ACTUALLY delivered --
+            # enrolment means queued, and a stage that says we reached out to someone
+            # we never reached is worse than no stage at all. Bundled into the
+            # watermark PATCH so it costs no extra call.
+            stage_props = {"outbound_last_logged_send": to_millis(newest)}
+            if can_stage:
+                stage_props["lifecyclestage"] = lifecycle.OUTREACHED
             hs_call("PATCH", f"/crm/v3/objects/contacts/{c['hs_object_id']}",
-                    {"properties": {"outbound_last_logged_send": to_millis(newest)}})
+                    {"properties": stage_props})
             print(f"      logged, watermark -> {newest}")
+
+    # --- verify the lifecycle promotions, in batches of 100 ----------------------
+    if promoted and a.apply:
+        ids = list(promoted)
+        refused = []
+        for i in range(0, len(ids), 100):
+            body = {"inputs": [{"id": x} for x in ids[i:i + 100]],
+                    "properties": ["lifecyclestage"]}
+            got = hs_call("POST", "/crm/v3/objects/contacts/batch/read", body) or {}
+            for r in got.get("results", []):
+                v = ((r.get("properties") or {}).get("lifecyclestage") or "").strip()
+                if v != lifecycle.OUTREACHED:
+                    who, was = promoted.get(r["id"], ("?", ""))
+                    refused.append((who, was, v))
+        print(f"\nlifecycle: {len(ids) - len(refused)}/{len(ids)} promoted to Outreached")
+        if refused:
+            print(f"  ** {len(refused)} WRITE(S) DID NOT TAKE ** -- HubSpot accepted the "
+                  f"call and kept the old value. This is the backward-move refusal; see "
+                  f"config/hubspot-properties.md.")
+            for who, was, now in refused[:15]:
+                print(f"    {who}: asked Outreached, still {lifecycle.label(now)} "
+                      f"(was {lifecycle.label(was)})")
+    elif promoted:
+        print(f"\nlifecycle: {len(promoted)} contact(s) WOULD be promoted to Outreached")
 
     print(f"\n{logged} engagement(s) {'written' if a.apply else 'would be written'}, "
           f"{current} contact(s) already current, {unmatched} unmatched")

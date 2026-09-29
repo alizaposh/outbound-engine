@@ -69,8 +69,22 @@ HUMAN_COLUMNS = ("Approved",)
 # check, so the exposure shrinks over time -- but it is not zero, and the mitigation is
 # to keep auditing shipped copy periodically rather than to assume PASS means perfect.
 AUTO_APPROVE_CLEAN = True
-# Only this. WARN, GENERATION_FAILED_FALLBACK and anything unrecognised go to a human.
-AUTO_APPROVE_STATUSES = ("PASS",)
+# **WIDENED 2026-09-24 to include WARN and the fallback**, by decision of the person
+# doing the reviewing, after the first 1,314-contact round put 232 rows behind a gate
+# neither of us could justify:
+#
+#   WARN -- 168 rows. Every finding across all of them, checked exhaustively rather
+#   than sampled, was `length`: email 2 a few words under 40, email 1 a median of 6
+#   over 75. Length is documented as "a target and never a gate"; holding a row for it
+#   contradicted the rulebook. No WARN row carried a claim, banned-phrase or structural
+#   finding -- those are FAILs, and a FAIL is retried, never shipped.
+#
+#   GENERATION_FAILED_FALLBACK -- 64 rows of pre-approved static copy. It is committed,
+#   human-written and already reviewed; asking a human to re-approve copy a human wrote
+#   is a gate with no reader on the other side.
+#
+# FAIL still never auto-approves, and an unrecognised status still goes to a person.
+AUTO_APPROVE_STATUSES = ("PASS", "WARN", "GENERATION_FAILED_FALLBACK")
 
 # The Approved dropdown. A dropdown rather than a free-text field so the value is always
 # one the engine recognises: a typo ("Yes " with a space, "yep", "APPROVE") in a
@@ -80,6 +94,7 @@ AUTO_APPROVE_STATUSES = ("PASS",)
 # "Y" first because it is the default position in the dropdown and the one used most.
 APPROVED_CHOICES = ["Y", "N"]
 SELLER_COLUMN = "Seller"
+FLAGS_COLUMN = "Flags"
 
 # Always empty since emails 2 and 3 became threaded replies (they inherit the thread
 # subject and must not invent one). A human deleted these two by hand from the existing
@@ -113,6 +128,15 @@ NEW_TAB_COLUMNS = [
     # lived in a Slack message and the campaign got built because someone remembered to
     # run a command -- a step that can be forgotten is not a gate.
     "Approved",
+    # What the validator noticed, on every row it noticed anything about -- INCLUDING
+    # auto-approved ones. Added when 232 rows sat in front of a reviewer with no stated
+    # objection, because the finding existed in the validator and died there.
+    #
+    # It deliberately survived those rows becoming auto-approved. Approval stopped being
+    # the question, but "which of these 1,314 are fallbacks?" is still a question worth
+    # being able to answer by sorting a column, and the alternative is re-deriving it
+    # from a CSV the way I had to the first time.
+    "Flags",
     # Stamped by build_approved.py with the campaign a row was built into. EMPTY means
     # "approved but not yet built", which is what makes per-row dedup possible: a tab
     # can be approved in batches and each batch gets its own campaign, instead of the
@@ -202,6 +226,12 @@ def to_sheet_row(csv_row: dict, seller: str, header: list[str]) -> list[str]:
             # way: the sheet is the copy that ships, so un-approving here removes the
             # row from the build exactly as it always did.
             out.append("Y" if auto else "")
+        elif col == FLAGS_COLUMN:
+            # The sheet's header word differs from the CSV's field name, so this needs
+            # its own branch -- the generic fallback below would look up "Why held" in
+            # the CSV, miss, and write "" on every row, which is the exact silence this
+            # column was added to end.
+            out.append(str(csv_row.get("flags", "") or ""))
         elif col in HUMAN_COLUMNS:
             out.append("")                      # the reviewer's, always left empty
         elif col == SELLER_COLUMN:

@@ -46,13 +46,21 @@ is a dead end.
 summer."* The engine:
 
 1. Classifies it **not now** (a timing answer, not a rejection)
-2. Writes **`Recycle After` = the date they named** — they re-enter outreach then, automatically
+2. Writes **`Recycle After` = the date they named** — the engine will not email them before it
 3. Writes **`Current Competitor` = DICE** on the contact record
 4. Stops the remaining follow-ups
 5. Queues a short reply acknowledging the timing for approval
+6. **Creates a HubSpot task dated that day**, assigned to the contact's owner (or their
+   rotation rep if unowned), carrying what they said and who they're with
 
-Six months later a rep opens that contact and sees who they're with and when they're
-free — without opening the email thread.
+Six months later the rep does not have to remember: the task surfaces on the day, with
+their words and their incumbent attached.
+
+**Why the task and not just the date.** The date is a *guard* — eligibility refuses to
+mail anyone before it. Nothing fired *on* it. A prospect who said "come back in June"
+was only re-approached if somebody happened to pull a list containing them, and the
+silence looked exactly like a correct skip. A stored intention nobody is reminded of is
+not a follow-up process.
 
 ---
 
@@ -68,6 +76,9 @@ Replies are the best source of CRM data we have, so we keep it:
   someone else makes them a prospect, not a bad fit.
 - **Reply intent** — every reply is labeled, so we can report on outcome mix, not just
   volume.
+- **Contact owner** — when a prospect is sent someone's booking link, that person
+  becomes the contact owner, so a booked meeting has an accountable rep. Only where no
+  owner is already set; an existing relationship is never reassigned.
 
 ---
 

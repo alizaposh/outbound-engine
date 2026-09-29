@@ -188,3 +188,89 @@ The following are explicitly out of scope until v2:
   values, never to the display labels.
 - Confirm none of the `outbound_` internal names collide with existing properties
   before creating them.
+
+
+## Re-engagement tasks (added 2026-09-25)
+
+`outbound_recycle_after` is a **guard, not a trigger**: `eligibility.py` refuses to mail
+a contact while the date is in the future, and when it passes the contact simply stops
+being excluded. Nothing fired on the date, so a prospect who said "come back in June"
+was re-approached only if someone happened to pull a list containing them -- and that
+silence was indistinguishable from a correct skip.
+
+`reply_check.py` now also creates a **HubSpot task** on `not_now`:
+
+| | |
+|---|---|
+| **When** | `not_now`, and an `objection` that NAMES an incumbent. Not `not_interested` (+180d) -- a much colder signal that would swamp the queue -- and not a bare objection with no platform named, which is a copy problem rather than a contract. |
+| **Due** | **`recycle_task_lead_days` (90) BEFORE a contract end the prospect NAMED**, so the renewal conversation happens before the paperwork. On the recycle date itself when they named nothing -- that date is our own +90 day default, and subtracting a lead time from a guess would make every vague "later" a task due today. Floored at tomorrow. 13:00 UTC so it lands on the intended day in every US timezone. |
+| **Assignee** | The existing contact owner if there is one; otherwise the contact's deterministic meeting-routing owner, so recycle work spreads across the team instead of piling onto the two people who own the warmed mailboxes. |
+| **Body** | What the prospect actually said, their incumbent, and the date. The wording differs on whether the date was NAMED: a named date is called a contract end, an unnamed one is labelled as our own default. Calling our guess a contract end would put a fact in the CRM the prospect never stated. |
+| **Dedup** | `[outbound-engine:recycle]` in the BODY. The queue is re-read three times a day; without this a single `not_now` would grow a new task every heartbeat. The subject is unusable for matching because it carries the org name and a human may rename it. |
+
+**An objection naming an incumbent now sets a recycle date too** (`recycle_objection_days`,
+180). Found 2026-09-28: "we have a contract with RA" classifies as `objection`, objections
+set no recycle date, and the contact was therefore held only by the 30-day `status=replied`
+window -- eligible for a fresh cold email about a month after telling us they were under
+contract. That task carries no lead time and its wording says the date is OUR estimate,
+because pulling a guess 90 days forward does not make it more accurate.
+
+**`outbound_recycle_after` is NOT moved earlier.** The task asks a human to reach out
+ahead of renewal; the recycle date still governs when the ENGINE may cold-email, and
+three months before a contract ends is still mid-contract. A rep who wants them in a
+campaign early submits them like any other list.
+
+**A failed dedup check does NOT create the task.** If the associations lookup errors we
+cannot prove absence, and a pile of duplicates a rep must clean up by hand is worse than
+a reminder that is late. Same reasoning as the `sync_meetings` cutoff fallback.
+
+
+## Lifecycle stage: what the engine writes, and one portal setting to fix
+
+**The labels are not the internal values.** `customer` displays as *Outreached* and
+`opportunity` as *Qualified*. `scripts/lifecycle.py` holds the mapping; never write a
+literal. Anything outside HubSpot reading `lifecyclestage == customer` as "is a paying
+customer" will miscount ~17,900 contacts.
+
+| Stage written | Internal | When | By |
+|---|---|---|---|
+| Outreached | `customer` | A send is CONFIRMED delivered (not at enrolment — a stage saying we reached someone we never reached is worse than none) | `sync_sends.py` |
+| Qualified | `opportunity` | An `interested` reply, or a booked meeting that postdates enrolment | `reply_check.py`, `sync_meetings.py` |
+| Disqualified | `1439306394` | `not_qualified` with no competitor named | `reply_check.py` |
+
+### HubSpot silently refuses backward moves in this portal
+
+Verified 2026-09-25 by writing and reverting on single contacts. A PATCH to a LOWER
+displayOrder **returns HTTP 200 with a success body and does not change the value.**
+There is no error to catch, which is why `lifecycle.apply_stage` reads back every write
+and why the callers report a refusal instead of assuming.
+
+**This was a live bug, not a hypothetical.** `reply_check` had written Disqualified on
+`not_qualified` replies since it was built, and for every contact then at DORMANT that
+write was a no-op reporting success.
+
+### RESOLVED 2026-09-29: Dormant moved to displayOrder 0
+
+Dormant used to sit at 6, above Deal Won, which made it terminal -- a dormant contact
+could not be marked Qualified, Disqualified or anything else, and roughly a third of
+every list sits there. It was re-ordered to **0**, below every stage the engine writes.
+Verified with real writes (each reverted): Dormant -> Outreached, -> Qualified and ->
+Disqualified are all accepted.
+
+Dormant before New reads oddly in the UI and is right for this motion: a lapsed contact
+is upstream of everything, and the alternative is the terminal-stage bug above.
+
+### The order is READ LIVE, and that is the real lesson
+
+The fix above exposed a worse failure than the one it fixed. `lifecycle.py` held the
+stage order as a hardcoded snapshot. When the portal was re-ordered, the code did not
+notice: it went on refusing exactly the promotions the settings change had enabled, and
+nothing reported a problem, because "refused" is indistinguishable from "nothing to do".
+
+`lifecycle.refresh()` now reads the live property once per process and prints a warning
+when the portal disagrees with the built-in fallback. **A configuration fix that cannot
+reach the code is not a fix.**
+
+**The manual remedy for a stage stuck too far forward:** clear the property, then set
+it -- an empty stage has no order to move backward from. The engine deliberately does
+NOT do this; it would bypass a control set on purpose in the portal.
