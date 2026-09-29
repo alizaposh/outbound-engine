@@ -80,6 +80,27 @@ name, remove the row here, and reassign `outbound_sender` on her contacts — th
 property is write-once precisely so a prospect keeps hearing from one person, and the
 premise fails when that person has gone.
 
+## Pending: Caroline and Kate (mailboxes purchased 2026-09-29)
+
+Four mailboxes bought, two each. Not yet visible in Smartlead -- the provider quotes
+24-48 hours to populate, then warm-up begins. **Nothing about them is live**: their
+intro lines are written below, but with no row in the mailbox table above,
+`known_senders()` and `split_by_sender()` do not return them and the Slack form cannot
+route to them. Verified, not assumed.
+
+**When the addresses arrive**, add them to the mailbox table, add the names to the Slack
+dropdown, and they are senders. Booking links and HubSpot owner records already exist
+for both (Caroline `89417228`, Kate `99102732`), so steps 4 and 5 below are done.
+
+**Set `max_leads_per_day: 20` on their campaigns, not 40.** Two mailboxes carry
+2 x 30 = 60 emails/day, and a sequence is three emails, so 20 new leads/day is exactly
+100% of their capacity. At 40 they would be 200% oversubscribed and Smartlead would
+throttle the follow-ups -- which is worse than sending slower, because it stretches the
+gap between email 1 and email 2 rather than simply starting fewer people.
+
+This takes the engine from 80 to 120 new leads/day, a 1.5x rather than the 2x that four
+mailboxes EACH would have bought. Worth restating if more capacity is ordered.
+
 ## Adding a sender as the team grows
 
 **This table is the source of truth, and as of 2026-09-17 the code derives from it.**
@@ -132,11 +153,20 @@ is allowed inside a sender's own lines and nowhere else.
 | Brooke     | I'm Brooke, I manage partnerships at Posh. |
 | Zach       | I'm Zach, I run partnerships at Posh. |
 | Zach       | I'm Zach, I manage partnerships at Posh. |
+| Caroline   | I'm Caroline, I run partnerships at Posh. |
+| Caroline   | I'm Caroline, I manage partnerships at Posh. |
+| Kate       | I'm Kate, I run partnerships at Posh. |
+| Kate       | I'm Kate, I manage partnerships at Posh. |
 
 - **It belongs at the OPENING of email 1**, not the end. Placement is set by the voice
   anchor in `instructions/message-generation.md`.
 - One line per sender, used across all campaigns for now.
-- **All three senders now use the same two lines** (changed 2026-09-14). Zach's used to
+- **Caroline and Kate added 2026-09-29**, ahead of their mailboxes existing. Intro
+  lines are content, not plumbing: they can be written and reviewed now, and the only
+  thing that makes a sender REAL is a row in the mailbox table above. Until that row
+  exists these lines are inert -- `assemble.resolve_sender_name()` looks up the mailbox,
+  not the name, so an intro line with no mailbox is never selected.
+- **All senders use the same two lines** (changed 2026-09-14). Zach's used to
   read "I help organizers get set up on Posh", which fit while he was the SDR and the
   single meeting owner. He was promoted to AE, so he is a partnerships correspondent like
   Carl and Brooke and introduces himself the same way. Nothing in the copy should still
