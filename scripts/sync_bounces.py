@@ -40,6 +40,7 @@ valuable so a human can see it happen.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import pathlib
 import sys
@@ -48,10 +49,17 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from eligibility import HubSpot, env_token, env_value  # noqa: E402
+import lifecycle  # noqa: E402
 from reply_check import HubSpotWriter  # noqa: E402
 
 SL_BASE = "https://server.smartlead.ai/api/v1"
-READ_PROPS = ["email", "outbound_status", "outbound_suppressed", "firstname", "lastname"]
+# Marks a note as ours so a re-run recognises it and does not stack duplicates.
+NOTE_MARKER = "[outbound-engine:bounce]"
+NOTE_TO_CONTACT = 202          # /crm/v4/associations/notes/contacts/labels
+READ_PROPS = ["email", "outbound_status", "outbound_suppressed", "firstname",
+              # lifecyclestage is read so --disqualify can be guarded and so the note
+              # can say what the stage WAS.
+              "lastname", "lifecyclestage"]
 
 # Fields a statistics row might carry describing the bounce. None is documented; these
 # are checked so a hard/soft distinction is USED when present rather than ignored.
@@ -107,6 +115,80 @@ def decide(kind: str, existing: dict, include_soft: bool) -> tuple[str, dict, st
     return "record", props, note
 
 
+def bounce_note_body(email: str, row: dict, kind: str, evidence: str,
+                     was_stage: str, campaign: str = "") -> str:
+    """The note left on a bounced contact. Written for a human opening the record.
+
+    It says the address is dead, not that the ORGANISATION is a bad fit. That
+    distinction matters because --disqualify writes the Disqualified lifecycle stage,
+    which elsewhere means a structural non-fit ("they do not run ticketed events").
+    A reader who confuses the two will retire a perfectly good account because one
+    person's mailbox was deleted.
+
+    It also states the hard/soft uncertainty. Smartlead exposes `is_bounced` and no
+    SMTP code, diagnostic or bounce category at all, so "permanent" is an inference
+    from the address having failed on first contact -- not something the provider told
+    us. A note that hides that would be more confident than the data.
+    """
+    sent = (row.get("sent_time") or "")[:10]
+    lines = [
+        f"Email bounced -- this address is not deliverable.",
+        "",
+        f"Address:  {email}",
+        f"Bounced:  first send{f', {sent}' if sent else ''}"
+        + (f" (campaign {campaign})" if campaign else ""),
+        f"Type:     {kind}" + (f" -- {evidence}" if evidence else ""),
+    ]
+    if was_stage:
+        lines.append(f"Was:      lifecycle {lifecycle.label(was_stage)}")
+    lines += [
+        "",
+        "THIS IS A DATA PROBLEM, NOT A JUDGEMENT ABOUT THE ACCOUNT. The lifecycle "
+        "stage is set to Disqualified so the engine stops mailing a dead address; it "
+        "does NOT mean the organisation is a bad fit. If someone finds a working "
+        "address for this person, clear the stage and they become workable again.",
+        "",
+        "Smartlead reports no SMTP code or bounce category, so hard vs soft cannot be "
+        "confirmed from the provider. Treated as permanent because it failed on first "
+        "contact.",
+        "",
+        NOTE_MARKER,
+    ]
+    return "\n".join(lines)
+
+
+def existing_bounce_note(writer, contact_id: str) -> str:
+    """Id of a note we already left on this contact, or "". Same reasoning as the
+    re-engagement task: this job runs on the morning heartbeat, so without a check a
+    single bounce grows a note per day."""
+    try:
+        assoc = writer._call(
+            "GET", f"/crm/v4/objects/contacts/{contact_id}/associations/notes")
+    except Exception:
+        return "unknown"                  # cannot prove absence -> do not add another
+    for nid in [r["toObjectId"] for r in (assoc.get("results") or [])][:50]:
+        try:
+            n = writer._call("GET", f"/crm/v3/objects/notes/{nid}?properties=hs_note_body")
+        except Exception:
+            continue
+        if NOTE_MARKER in ((n.get("properties") or {}).get("hs_note_body") or ""):
+            return str(nid)
+    return ""
+
+
+def write_bounce_note(writer, contact_id: str, body: str) -> str:
+    if not writer.apply:
+        return "would add a bounce note"
+    r = writer._call("POST", "/crm/v3/objects/notes", {
+        "properties": {"hs_note_body": body,
+                       "hs_timestamp": dt.datetime.now(dt.timezone.utc)
+                       .strftime("%Y-%m-%dT%H:%M:%SZ")},
+        "associations": [{"to": {"id": contact_id},
+                          "types": [{"associationCategory": "HUBSPOT_DEFINED",
+                                     "associationTypeId": NOTE_TO_CONTACT}]}]})
+    return f"added bounce note {r.get('id')}"
+
+
 class Smartlead:
     """Read-only. This job never changes anything in Smartlead."""
 
@@ -151,6 +233,10 @@ def main(argv=None) -> int:
     ap.add_argument("--apply", action="store_true",
                     help="WRITE outbound_status=bounced to HubSpot.")
     ap.add_argument("--campaign", help="one campaign id; default is every campaign")
+    ap.add_argument("--disqualify", action="store_true",
+                    help="ALSO set lifecyclestage=Disqualified and leave a note "
+                         "explaining the address is dead. Stops all future enrolment, "
+                         "since Disqualified is not in lifecycle_allow.")
     ap.add_argument("--include-soft", action="store_true",
                     help="also act on rows whose bounce type cannot be determined. Off "
                          "by default: a soft bounce is temporary and permanent exclusion "
@@ -224,6 +310,30 @@ def main(argv=None) -> int:
             print(f"           {note}")
         if props:
             print(f"           {writer.write(existing['hs_object_id'], props)}")
+        if a.disqualify and outcome in ("record", "already recorded"):
+            cid = existing["hs_object_id"]
+            was = (existing.get("lifecyclestage") or "").strip()
+            can, why_not = lifecycle.may_promote(was, lifecycle.DISQUALIFIED)
+            if can:
+                print(f"           {writer.write(cid, {'lifecyclestage': lifecycle.DISQUALIFIED})}")
+                if a.apply:
+                    got = (writer._call(
+                        'GET', f"/crm/v3/objects/contacts/{cid}?properties=lifecyclestage"
+                        ).get('properties') or {}).get('lifecyclestage', '')
+                    if str(got).strip() != lifecycle.DISQUALIFIED:
+                        print(f"           ** stage did NOT take -- still "
+                              f"{lifecycle.label(got)} **")
+            else:
+                print(f"           lifecycle unchanged -- {why_not}")
+            seen = existing_bounce_note(writer, cid)
+            if seen == "unknown":
+                print("           note: could not check for an existing one; skipping")
+            elif seen:
+                print(f"           note: {seen} already present, left alone")
+            else:
+                body = bounce_note_body(email, row, kind, evidence, was,
+                                        str(row.get("campaign_id") or ""))
+                print(f"           {write_bounce_note(writer, cid, body)}")
 
     print(f"\n{counts['record']} recorded, {counts['skip']} skipped, "
           f"{counts['already recorded']} already current, {counts['unmatched']} unmatched")
