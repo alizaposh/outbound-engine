@@ -240,25 +240,33 @@ customer" will miscount ~17,900 contacts.
 
 ### HubSpot silently refuses backward moves in this portal
 
-Verified 2026-09-25 by writing and reverting on single contacts. A PATCH to a LOWER
-displayOrder **returns HTTP 200 with a success body and does not change the value.**
-There is no error to catch, which is why `lifecycle.apply_stage` reads back every write
-and why the callers report a refusal instead of assuming.
+Verified 2026-09-25, and diagnosed properly 2026-09-29. A PATCH to a LOWER displayOrder
+**returns HTTP 200 and the response body itself carries the OLD value**; the property
+history records nothing at all. So it is rejected at WRITE time -- not reverted
+afterwards by a workflow, which was the competing explanation. There is no error to
+catch, which is why `lifecycle.apply_stage` reads back every write.
+
+**This is not the "Restrict contacts from moving backwards" portal setting.** That
+governs pipeline stages and UI actions, and it was OFF throughout. This is platform
+behaviour specific to `lifecyclestage` and cannot be switched off. The documented way
+round it is to CLEAR the property and then set it.
 
 **This was a live bug, not a hypothetical.** `reply_check` had written Disqualified on
 `not_qualified` replies since it was built, and for every contact then at DORMANT that
 write was a no-op reporting success.
 
-### RESOLVED 2026-09-29: Dormant moved to displayOrder 0
+### RESOLVED 2026-09-29: Dormant moved to displayOrder 1
 
 Dormant used to sit at 6, above Deal Won, which made it terminal -- a dormant contact
 could not be marked Qualified, Disqualified or anything else, and roughly a third of
-every list sits there. It was re-ordered to **0**, below every stage the engine writes.
-Verified with real writes (each reverted): Dormant -> Outreached, -> Qualified and ->
+every list sits there. It is now at **1**, between New and Outreached. Verified with
+real writes (each reverted): New -> Dormant, Dormant -> Outreached, -> Qualified and ->
 Disqualified are all accepted.
 
-Dormant before New reads oddly in the UI and is right for this motion: a lapsed contact
-is upstream of everything, and the alternative is the terminal-stage bug above.
+**Position 1 and not 0.** It sat briefly at 0, which fixed everything the engine writes
+and broke the other direction: `New -> Dormant` became backward, silently disabling
+anything that marks inactive contacts Dormant. Moving a stage to an extreme fixes one
+side and breaks the other; 1 satisfies both.
 
 ### The order is READ LIVE, and that is the real lesson
 

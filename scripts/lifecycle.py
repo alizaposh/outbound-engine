@@ -7,26 +7,33 @@ and assuming it marks somebody a paying customer is wrong here, and so is the re
 anything outside HubSpot that interprets `lifecyclestage == customer` literally will
 miscount 17,891 contacts. Always go through STAGES below rather than a literal.
 
-**HUBSPOT SILENTLY REFUSES BACKWARD MOVES IN THIS PORTAL** (verified 2026-09-25 by
-writing and reverting on single contacts). A PATCH moving a contact to a lower
-displayOrder returns HTTP 200 with a success body, and the value does not change. There
-is no error to catch. That is why every write here is READ BACK and why `apply_stage`
-reports a refusal instead of assuming.
+**HUBSPOT SILENTLY REFUSES A BACKWARD `lifecyclestage` WRITE.** A PATCH to a lower
+displayOrder returns HTTP 200, and the response body itself carries the OLD value. The
+property history records nothing -- so it is rejected at write time, not reverted
+afterwards by a workflow. There is no error to catch, which is why every write here is
+READ BACK and why `apply_stage` reports a refusal instead of assuming.
+
+**It is not the "Restrict contacts from moving backwards" setting** -- that governs
+pipeline stages and UI actions, and was OFF throughout the investigation on 2026-09-29.
+This is platform behaviour specific to `lifecyclestage`, so it cannot be turned off.
+The documented way round it is to CLEAR the property and then set it; an empty stage has
+no order to move backward from. The engine does not do this, because with the order
+above it never needs a backward write -- but it is how a human repairs one by hand.
 
 This was not theoretical when it was found: `reply_check` had been writing Disqualified
 on `not_qualified` replies since it was built, and for any DORMANT contact (then at
 displayOrder 6, higher than Disqualified's 3) that write had always been a no-op. It
 reported success every time.
 
-**RESOLVED 2026-09-29 in HubSpot, not here.** Dormant was re-ordered to displayOrder 0,
-below every stage the engine writes, so Dormant -> Outreached, -> Qualified and ->
-Disqualified are ALL accepted (verified with real writes, each reverted). The ~480
+**RESOLVED 2026-09-29 in HubSpot, not here.** Dormant was re-ordered from 6 to **1**,
+between New and Outreached. Verified with real writes (each reverted): New -> Dormant,
+Dormant -> Outreached, -> Qualified and -> Disqualified are all accepted. The ~480
 Dormant contacts per round can carry a full outcome again, which matters because Dormant
 is the re-engagement audience this engine exists for.
 
-Dormant sitting before New reads slightly oddly in the HubSpot UI. It is correct for
-this motion: a lapsed contact is upstream of everything, and the alternative -- Dormant
-as a terminal stage nothing can leave -- is what caused the original bug.
+Position 1 rather than 0 on purpose. At 0 everything the engine writes still worked, but
+**New -> Dormant became backward**, which would silently break anything that marks
+inactive contacts Dormant -- the same failure in the other direction. At 1 both hold.
 
 **That fix exposed a second failure, which is why the order is now read LIVE.** The
 order was hardcoded here from a 2026-09-25 snapshot. When the portal changed, the code
@@ -52,8 +59,8 @@ from __future__ import annotations
 # for when that call fails, and it is the 2026-09-29 snapshot -- keep it roughly current,
 # but nothing should depend on it being exact.
 FALLBACK_STAGES: dict[str, tuple[str, int]] = {
-    "1442770269":  ("Dormant", 0),
-    "lead":        ("New", 1),
+    "lead":        ("New", 0),
+    "1442770269":  ("Dormant", 1),
     "customer":    ("Outreached", 2),
     "opportunity": ("Qualified", 3),
     "1439306394":  ("Disqualified", 4),
