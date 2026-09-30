@@ -57,7 +57,12 @@ READ_PROPS = ["email", "outbound_status", "outbound_suppressed",
               "outbound_last_campaign_id", BOOKED_PROP]
 TARGET = "meeting_booked"
 # States a booking legitimately supersedes -- guarantee 3.
-PROMOTABLE = {"replied", "in_sequence", "no_response", ""}
+# `handed_off` is promotable, and deliberately so. A rep taking a conversation over and
+# closing a meeting is the SUCCESS case for a handoff; leaving it unpromoted would make
+# every handed-off win invisible in reporting and understate exactly the outcome the
+# engine exists to produce. Guarantee 2 still applies -- the booking must postdate
+# enrolment -- so this cannot claim a meeting that was somebody else's already.
+PROMOTABLE = {"replied", "in_sequence", "no_response", "handed_off", ""}
 # States that carry information this job does not have -- guarantee 4.
 TERMINAL = {"opted_out", "bounced", "disqualified"}
 

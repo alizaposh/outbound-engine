@@ -282,3 +282,26 @@ reach the code is not a fix.**
 **The manual remedy for a stage stuck too far forward:** clear the property, then set
 it -- an empty stage has no order to move backward from. The engine deliberately does
 NOT do this; it would bypass a control set on purpose in the portal.
+
+
+## `handed_off` (added 2026-09-30)
+
+An `outbound_status` value meaning **a named human owns this conversation now.** Set by
+a reviewer choosing "Hand off" on a queue row, which sends the reply and writes the
+status in one action -- deliberately one decision and not two, because a handoff that
+sends the introduction and forgets to stand the engine down produces the worst outcome
+available: the prospect is told a colleague is taking over, and then the engine replies
+again as the original sender.
+
+| Component | Behaviour |
+|---|---|
+| `reply_check` | **Never drafts.** Checked before classifying, so no model call and no queue row. The reply is still marked processed so it does not re-surface every heartbeat. Counted separately in the run summary -- a conversation deliberately left alone is not the same fact as a duplicate. |
+| `eligibility` | In `status_skip_values`. Never re-enrolled. SOFT and reversible: clearing the status makes them mailable again if the handoff goes nowhere. |
+| `sync_meetings` | **Still promotes to `meeting_booked`.** A rep closing a meeting is the SUCCESS case for a handoff; not promoting would make every handed-off win invisible and understate exactly the outcome the engine exists to produce. Guarantee 2 still applies, so it cannot claim a booking that predates enrolment. |
+| `sync_sends` | Unchanged. Logging activity to the timeline stays useful. |
+| `send_replies` | Writes the status **only after a confirmed send.** A failed send means the prospect was never told anybody is taking over, so standing down would abandon a live conversation on the strength of an email that does not exist. Pinned by a self-test. |
+
+**Why a status and not just a note.** The engine has no other way to know. The sending
+mailboxes are unwatched, so a colleague CC'd on a reply is invisible to it -- the next
+prospect reply arrives exactly like any other and gets drafted for. The CC tells the
+prospect who is coming; this tells the engine to stop.

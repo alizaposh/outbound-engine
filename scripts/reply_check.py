@@ -563,6 +563,12 @@ PLATFORM_ALIASES = {
 # about a contact that merely had been emailed once.
 LIFECYCLE_DISQUALIFIED = lifecycle.DISQUALIFIED
 
+# outbound_status meaning "a named human owns this thread now". Set when a reviewer
+# picks "Hand off" on a queue row; honoured here (no draft), by eligibility (never
+# re-enrolled) and by sync_meetings (a booking STILL promotes -- a meeting the rep
+# closes is the point of handing over, and losing it would understate the outcome).
+HANDED_OFF = "handed_off"
+
 
 def match_platform(said: str, allowed: set[str]) -> str:
     """The prospect's words -> an exact HubSpot option, or "".
@@ -1837,7 +1843,7 @@ def main(argv=None) -> int:
     comp_options = competitor_options(hs)
     store = rq.get_processed_id_store(svc, cfg["REPLY_REVIEW_SHEET_ID"],
                                      cfg["REPLY_REVIEW_TAB"])
-    processed = queued = skipped = blocked = 0
+    processed = queued = skipped = blocked = handed_off = 0
 
     for camp in campaigns:
         cid = camp.get("id")
@@ -1874,6 +1880,21 @@ def main(argv=None) -> int:
             # be fetched after, when every meeting routed to one owner and the link was
             # a constant.
             cidhs, existing = hs.find_by_email(email) if email else (None, {})
+            # HANDED OFF: a person owns this conversation now, so the engine must not
+            # write to it. Checked BEFORE classifying -- there is no point spending a
+            # model call, and more importantly no draft must reach the queue where a
+            # reviewer might send it on top of whatever the rep has been saying.
+            #
+            # The reply is still marked processed, so it does not re-surface every
+            # heartbeat forever. Losing sight of it is fine: the rep is reading their
+            # own inbox, which is the whole point of handing it over.
+            if (existing.get("outbound_status") or "").strip() == HANDED_OFF:
+                store.mark_processed(newest["id"], email,
+                                     f"handed off -- {email} is owned by a rep; "
+                                     f"no draft queued")
+                print(f"  {email}: HANDED OFF to a rep; not drafting")
+                handed_off += 1
+                continue
             res = classify(client, model, messages,
                            sender=existing.get("outbound_sender", ""),
                            contact_email=email)
@@ -2169,6 +2190,10 @@ def main(argv=None) -> int:
     # and gets more invisible every week as the dedup count climbs.
     print(f"\n{processed} reply(s) processed, {queued} {verb}, "
           f"{skipped} already handled"
+          # Reported separately, never folded into "already handled". These are live
+          # conversations the engine chose to stay out of, and that is a different
+          # fact from a duplicate it had already seen.
+          + (f", {handed_off} handed off to a rep" if handed_off else "")
           + (f", ** {blocked} COULD NOT BE READ **" if blocked else ""))
     print(f"{sl.calls} Smartlead calls, {hs.calls} HubSpot calls")
     if not a.apply:

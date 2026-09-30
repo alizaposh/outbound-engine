@@ -25,6 +25,12 @@ status_hard_values:                     # outbound_status values that are ALSO n
 status_skip_values:
   - disqualified                        # not_qualified / wrong_contact (reversible)
   - in_sequence                         # already enrolled in a live campaign
+  - handed_off                          # a named rep owns the conversation. SOFT and
+                                        # reversible on purpose: if the handoff goes
+                                        # nowhere, clearing the status makes them
+                                        # mailable again. Automated mail arriving in
+                                        # the middle of a rep's live thread is the
+                                        # failure this prevents.
 status_recent_reply_skip_days: 30       # skip status=replied within this window.
                                         # This is the MID-CONVERSATION floor, NOT the
                                         # recycle window for not_now / not_interested

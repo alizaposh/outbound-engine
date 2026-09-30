@@ -52,10 +52,18 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import review_queue as rq  # noqa: E402
+from reply_check import HubSpotWriter as rc_HubSpotWriter  # noqa: E402
 from eligibility import HubSpot, env_token, env_value  # noqa: E402
 
 SL_BASE = "https://server.smartlead.ai/api/v1"
-SENDING_DECISIONS = {"approve", "edit & send", "edit and send"}
+# "hand off" SENDS like the others and additionally writes outbound_status=handed_off,
+# which stops the engine drafting anything further for that contact. One decision, not
+# two, because a handoff that sends the introduction but forgets to stand the engine
+# down produces the worst outcome available: the prospect is told a colleague is taking
+# over, and then the engine replies again as the original sender.
+HANDOFF_DECISION = "hand off"
+SENDING_DECISIONS = {"approve", "edit & send", "edit and send", HANDOFF_DECISION}
+HANDED_OFF_STATUS = "handed_off"
 SUPPRESSION_PROPS = ["email", "outbound_suppressed", "hs_email_optout", "outbound_status"]
 
 
@@ -165,6 +173,9 @@ def send_reply(campaign_id: str, stats_id: str, body: str, key: str,
 
 
 def _self_test() -> int:
+    import inspect as _i
+    import reply_check as _rc
+    _MAIN = _i.getsource(main)
     """Offline checks on CC parsing. No API calls.
 
     Worth pinning because this field is the only one in the queue that adds a NEW
@@ -196,7 +207,36 @@ def _self_test() -> int:
             print(f"         got {got_cc!r}, {len(problems)} problem(s); "
                   f"wanted {want_cc!r}, {want_problems}")
     print(f"\n{len(cases) - bad}/{len(cases)} cc cases correct")
-    return 1 if bad else 0
+
+    # --- hand off -------------------------------------------------------------------
+    hand = [
+        ("'hand off' sends like any other approval",
+         HANDOFF_DECISION in SENDING_DECISIONS),
+        ("the other sending decisions are unchanged",
+         {"approve", "edit & send", "edit and send"} <= SENDING_DECISIONS),
+        ("a non-sending decision still does not send",
+         "do not send" not in SENDING_DECISIONS
+         and "suppress" not in SENDING_DECISIONS),
+        ("the status written matches the one reply_check refuses to draft for",
+         HANDED_OFF_STATUS == _rc.HANDED_OFF),
+        # The ordering rule. The status write lives inside the `else` of
+        # `if definitely_failed`, so a failed send cannot stand the engine down --
+        # otherwise a live conversation is abandoned on the strength of an email the
+        # prospect never received.
+        # Scoped to main() on purpose. The first version searched the WHOLE module
+        # and split on a literal that its own source contained, so it was testing the
+        # position of its own text. A self-test that can match itself proves nothing.
+        ("the status is written only AFTER a confirmed send",
+         _MAIN.index("if decision == HANDOFF_DECISION")
+         > _MAIN.index("failed += 1")),
+    ]
+    hand_bad = 0
+    print()
+    for why, ok in hand:
+        hand_bad += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} handoff | {why}")
+    print(f"\n{len(hand) - hand_bad}/{len(hand)} hand-off cases correct")
+    return 1 if (bad or hand_bad) else 0
 
 
 def main(argv=None) -> int:
@@ -246,6 +286,9 @@ def main(argv=None) -> int:
         return (r[i] if i < len(r) else "").strip()
 
     hs = HubSpot(env_token())
+    # Separate from `hs`, which is deliberately read-only. Honours --apply itself, so a
+    # dry run reports "would write" rather than writing.
+    writer = rc_HubSpotWriter(env_token(), a.apply)
     sent = already_sent = needs_fix = refused = failed = capped = 0
     seen_threads: set[str] = set()
 
@@ -346,6 +389,21 @@ def main(argv=None) -> int:
             stamp(f"sent {now}")
             print(f"      sent. {detail}")
             sent += 1
+            # AFTER a confirmed send, never before. If the send failed, the prospect
+            # was never told anybody is taking over, so standing the engine down would
+            # abandon a live conversation on the strength of an email that does not
+            # exist.
+            if decision == HANDOFF_DECISION:
+                # `props` comes from the suppression lookup a few lines above and
+                # already carries hs_object_id -- no second fetch.
+                cid = (props or {}).get("hs_object_id")
+                if not cid:
+                    print(f"      ** HANDED OFF BUT NOT RECORDED ** no HubSpot contact "
+                          f"for {email}, so the engine will keep drafting for them. "
+                          f"Set outbound_status by hand or it will reply over the rep.")
+                else:
+                    print(f"      {writer.write(cid, {'outbound_status': HANDED_OFF_STATUS})}"
+                          f"  (engine will not draft for them again)")
 
     # Three reasons a row does not send, reported separately because only one of them
     # is routine. `already_sent` rows keep their sent_at stamp for good, so this count
