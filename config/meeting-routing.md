@@ -178,9 +178,17 @@ calendar is booked and no rep is committed -- which is exactly why it can be off
 where a booking link cannot.
 
 ```
-starter_kit_url: https://posh.vip/s/1165?t=planhat-playbook-tracking
+starter_kit_url: https://posh.vip/s/1165
 starter_kit_when: Tuesdays at 5:30pm
 ```
+
+**The tracking parameter was REMOVED 2026-09-30** (`?t=planhat-playbook-tracking`).
+Aliza's call, and the clean form is also the safer one to hold here: every consumer of
+this value tests `url in body`, so the SHORTER string matches a body carrying either
+form. Had the config kept the longer URL and a reviewer sent the short one, the offer
+would have reached the prospect and `outbound_starter_kit_offered` would never have
+been written -- an invisible hole in the only metric measuring this CTA. **Keep this
+value the shortest form that identifies the link.**
 
 **When it is offered: an `objection` that names NO recognised competitor.**
 

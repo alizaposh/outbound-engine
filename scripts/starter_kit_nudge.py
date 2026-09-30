@@ -66,15 +66,21 @@ READ_PROPS = ["email", "outbound_status", "outbound_suppressed",
 def nudge_body(kit: dict[str, str]) -> str:
     """The follow-up. Fixed text, from config -- no model involved.
 
-    Aliza's wording, 2026-09-30. Two things it deliberately does NOT do: re-pitch, and
-    repeat the calendar link. The prospect already declined that ask by not taking it;
-    offering it twice is the same request in a smaller font.
+    Aliza's wording, taken from the edit she made to the first real nudge. Two things
+    it deliberately does NOT do: re-pitch, and repeat the calendar link -- the prospect
+    declined that ask by not taking it, and offering it twice is the same request in a
+    smaller font.
+
+    Her edit also dropped "but aren't ready to commit to a call yet" from my draft, and
+    that is the better line. It presumed a reason for the silence. They might have been
+    busy, or forwarded it internally, or simply missed it; telling someone why they did
+    not reply is a good way to be wrong out loud.
     """
     url = (kit.get("starter_kit_url") or "").strip()
     when = (kit.get("starter_kit_when") or "").strip()
-    return (f"If you're still interested in learning more about Posh but aren't ready "
-            f"to commit to a call yet, feel free to sign up for a Starter Kit session"
-            f"{' -- ' + when if when else ''}. Here's the link to sign up: {url}")
+    return (f"If you're still interested in learning more about Posh, feel free to "
+            f"sign up for a Starter Kit session"
+            f"{' -- ' + when if when else ''}! Here's the link to sign up: {url}")
 
 
 def parse_sent_at(raw: str) -> dt.datetime | None:
@@ -332,6 +338,14 @@ def _self_test() -> int:
         ("it does NOT repeat the booking link", "meetings.hubspot.com" not in body),
         ("it names the session time",
          (rc.starter_kit().get("starter_kit_when") or "") in body),
+        # The URL is the join between the copy and the metric. Every consumer tests
+        # `url in body`, so a config value LONGER than what a reviewer sends means the
+        # offer goes out and outbound_starter_kit_offered is never written -- silently.
+        # Holding the shortest identifying form makes that impossible.
+        ("the configured url carries no query string, so it matches either form",
+         "?" not in (rc.starter_kit().get("starter_kit_url") or "")),
+        ("it does not presume WHY they went quiet",
+         "aren't ready" not in body and "not ready" not in body),
         ("the derived id would dedup", NUDGE_PREFIX + "<abc>" != "<abc>"),
     ]
     for why, ok in checks:
