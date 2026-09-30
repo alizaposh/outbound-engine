@@ -129,7 +129,7 @@ def defaults() -> dict:
         cfg = load_config(REPLY_CONFIG)
         for key in ("recycle_not_now_days", "recycle_not_interested_days",
                     "resume_ooo_default_days", "recycle_task_lead_days",
-                    "recycle_objection_days"):
+                    "recycle_objection_days", "recycle_after_nudge_days"):
             if not isinstance(cfg.get(key), int) or cfg[key] < 0:
                 raise RuntimeError(
                     f"{REPLY_CONFIG.name}: {key} must be a non-negative integer, "

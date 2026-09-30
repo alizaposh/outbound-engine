@@ -72,7 +72,19 @@ HANDED_OFF_STATUS = "handed_off"
 # "Do not send", or the send can fail -- all of which would leave a metric claiming an
 # offer nobody received. The sent body is the only evidence that counts.
 STARTER_KIT_PROP = "outbound_starter_kit_offered"
-SUPPRESSION_PROPS = ["email", "outbound_suppressed", "hs_email_optout", "outbound_status"]
+
+# A queued nudge carries a derived message id. Asserted equal to
+# starter_kit_nudge.NUDGE_PREFIX in the self-test rather than imported, so this module
+# stays free of a dependency on a script that depends on it in spirit.
+NUDGE_PREFIX = "nudge-starter-kit:"
+RECYCLE_PROP = "outbound_recycle_after"
+# outbound_recycle_after is read so the post-nudge cooldown can refuse to SHORTEN a
+# later date already on the contact. It must be in this list: `.get()` on an unread
+# property returns exactly what an empty one returns, so leaving it out would make that
+# comparison a silent no-op -- the third time that shape of bug has appeared in this
+# engine (prospect_org in the task subject, lifecyclestage in sync_sends).
+SUPPRESSION_PROPS = ["email", "outbound_suppressed", "hs_email_optout",
+                     "outbound_status", "outbound_recycle_after"]
 
 
 def col_letter(i: int) -> str:
@@ -267,6 +279,24 @@ def _self_test() -> int:
         ("the configured url is non-empty, or the check can never fire",
          bool((_rc.starter_kit().get("starter_kit_url") or "").strip())),
     ]
+    kit.extend([
+        # One nudge, then silence. The cooldown is what makes "leave them be" true --
+        # `interested` writes no recycle date of its own, so without it the contact is
+        # held only by the 30-day status=replied window and returns to the cold pool.
+        ("the nudge prefix matches the one starter_kit_nudge writes",
+         NUDGE_PREFIX == __import__("starter_kit_nudge").NUDGE_PREFIX),
+        ("a sent nudge sets a recycle date",
+         "RECYCLE_PROP: until" in _MAIN),
+        ("the cooldown is written only after a confirmed send",
+         _MAIN.index("NUDGE_PREFIX") > _MAIN.index("sent += 1")),
+        ("it refuses to SHORTEN a later date already on the contact",
+         "keeping the later date" in _MAIN),
+        # If this property is not READ, the comparison above is a silent no-op.
+        ("the recycle property is in the read list",
+         RECYCLE_PROP in SUPPRESSION_PROPS),
+        ("the cooldown window is configured",
+         isinstance(_rc.defaults().get("recycle_after_nudge_days"), int)),
+    ])
     kit_bad = 0
     print()
     for why, ok in kit:
@@ -448,6 +478,29 @@ def main(argv=None) -> int:
                           f"  (Starter Kit offer recorded)")
                 else:
                     print(f"      Starter Kit sent but NOT recorded: no HubSpot "
+                          f"contact for {email}")
+            # A SENT nudge is the second ignored ask, so leave them alone. Written
+            # here and not at queue time on purpose: a nudge a reviewer discards must
+            # not silence the contact for a quarter. `interested` writes no recycle
+            # date of its own, so without this the only thing holding them is the
+            # 30-day status=replied window.
+            if (cell(row, "smartlead_message_id") or "").startswith(NUDGE_PREFIX):
+                cid = (props or {}).get("hs_object_id")
+                days = _rc.defaults()["recycle_after_nudge_days"]
+                until = (dt.datetime.now(dt.timezone.utc)
+                         + dt.timedelta(days=days)).date().isoformat()
+                if cid:
+                    have = (props.get(RECYCLE_PROP) or "").strip()
+                    # Rule 4 of recycle_date: a later date already on the contact wins.
+                    # Never shorten somebody else's patience.
+                    if have and str(have)[:10] >= until:
+                        print(f"      recycle: keeping the later date already on the "
+                              f"contact ({str(have)[:10]})")
+                    else:
+                        print(f"      {writer.write(cid, {RECYCLE_PROP: until})}"
+                              f"  (two asks ignored; left alone for {days}d)")
+                else:
+                    print(f"      nudge sent but NO recycle date set: no HubSpot "
                           f"contact for {email}")
             if decision == HANDOFF_DECISION:
                 # `props` comes from the suppression lookup a few lines above and

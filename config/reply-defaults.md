@@ -37,6 +37,13 @@ recycle_task_lead_days: 90
 # tuning note. A date they DO name always wins over this.
 recycle_objection_days: 180
 
+# How long to leave an INTERESTED prospect alone after the Starter Kit nudge has also
+# gone unanswered. `interested` sets no recycle date of its own -- there is nothing to
+# defer, they said yes -- so without this the contact is held only by the 30-day
+# status=replied window and returns to the cold pool a month later. Two asks ignored is
+# a signal; a third one a month later is a nuisance.
+recycle_after_nudge_days: 90
+
 # How long to wait before restarting a sequence halted by an out-of-office
 # auto-responder that named NO return date. A date the auto-responder DOES name always
 # wins over this. Applies to out_of_office only: automated_reply resumes immediately,
@@ -88,6 +95,16 @@ auto_send_intents: []
   The task created alongside it says the date is OUR estimate, not something the
   prospect said. Same rule as the unnamed `not_now`: never present a guess as a fact
   about the account.
+- **`recycle_after_nudge_days = 90`** exists because `interested` is the one warm
+  intent with NO recycle date. That is right when it is written -- a prospect who said
+  "tell me more" is not being deferred -- and wrong once two asks have gone unanswered.
+  At that point `status=replied` is the only thing holding them, and it lapses after 30
+  days, so the engine would cold-email someone it had already approached twice about
+  the same thing.
+
+  90 rather than 180: they showed genuine interest, so they are warmer than a decline.
+  Written by `send_replies.py` when the NUDGE sends, not when it is queued -- a nudge a
+  reviewer discards must not silence the contact for a quarter.
 - **`recycle_not_interested_days = 180`** always applies. No date is read from a
   `not_interested` reply: a decline is not an invitation to negotiate timing.
 - **Lengthening either is safe. Shortening is not**, and not because of the code — the
