@@ -223,12 +223,18 @@ def _self_test() -> int:
         # `if definitely_failed`, so a failed send cannot stand the engine down --
         # otherwise a live conversation is abandoned on the strength of an email the
         # prospect never received.
-        # Scoped to main() on purpose. The first version searched the WHOLE module
-        # and split on a literal that its own source contained, so it was testing the
-        # position of its own text. A self-test that can match itself proves nothing.
+        # Anchored on the WRITE ITSELF, not on a mention of the constant. Two earlier
+        # versions of this check were wrong in the same way -- matching text that was
+        # not the thing being tested. v1 split the whole module on a literal its own
+        # source contained; v2 used .index() on the constant and broke the moment a
+        # DRY-RUN PREVIEW line mentioned it earlier in the file, even though the
+        # behaviour was unchanged. Both passed or failed for reasons unrelated to the
+        # guard. The write is what must sit in the success branch, so match on that.
         ("the status is written only AFTER a confirmed send",
-         _MAIN.index("if decision == HANDOFF_DECISION")
-         > _MAIN.index("failed += 1")),
+         _MAIN.index("writer.write(cid,") > _MAIN.index("sent += 1")),
+        ("...and the dry run still previews it",
+         _MAIN.index("hand off: will set outbound_status")
+         < _MAIN.index("would stamp")),
     ]
     hand_bad = 0
     print()
@@ -360,6 +366,14 @@ def main(argv=None) -> int:
         print(f"  row {n} {email}: decision={decision!r} thread={stats_id[:8]}… "
               f"{len(body)} chars")
         print(f"      {body[:110]}{'…' if len(body) > 110 else ''}")
+        # Previewed BEFORE the dry-run exit. cc adds a recipient and "hand off" stands
+        # the engine down; both are exactly what a reviewer is dry-running to check,
+        # and a preview that omits them is not a preview.
+        if cc:
+            print(f"      cc: {cc}")
+        if decision == HANDOFF_DECISION:
+            print(f"      hand off: will set outbound_status={HANDED_OFF_STATUS} "
+                  f"after a confirmed send")
         if not a.apply:
             print("      would stamp 'sending', send, then stamp 'sent'")
             sent += 1
@@ -378,8 +392,6 @@ def main(argv=None) -> int:
         # row reads "sending", which blocks a retry and asks a human to check.
         stamp(f"sending {now}")
         seen_threads.add(stats_id)
-        if cc:
-            print(f"      cc: {cc}")
         definitely_failed, detail = send_reply(campaign, stats_id, body, key, cc=cc)
         if definitely_failed:
             stamp(f"FAILED {now}: {detail[:80]}")
