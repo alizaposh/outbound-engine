@@ -169,3 +169,51 @@ dashboards and owner-based workflows.
 **Every meeting owner therefore needs a HubSpot owner record.** All six had one when
 this shipped. A new row in the table above without one still sends the link and logs a
 warning instead of assigning.
+
+
+## Starter Kit: the low-commitment CTA (added 2026-09-30)
+
+A standing group session prospects can drop into. **This is not a meeting** -- nobody's
+calendar is booked and no rep is committed -- which is exactly why it can be offered
+where a booking link cannot.
+
+```
+starter_kit_url: https://posh.vip/s/1165?t=planhat-playbook-tracking
+starter_kit_when: Tuesdays at 5:30pm
+```
+
+**When it is offered: an `objection` that names NO recognised competitor.**
+
+That is a specific and currently empty-handed case. A prospect who says "we have a
+business deal with our website creator who provides our links and ticketing" has an
+incumbent, but not one in `PLATFORM_ALIASES`, so:
+
+- `current_competitor` is not written -- there is no platform to write
+- `recycle_objection_days` does not apply, because that requires a named platform
+- no re-engagement task is created
+- and `outbound_status = replied` lapses after 30 days, so they become re-mailable
+
+They get a draft and nothing else, despite often being warm. The real 2026-09-29 reply
+this was built from read "I've proposed the idea of going through Posh" -- a prospect
+actively advocating for us internally, with no path back.
+
+**Why it is safe here when a booking link is not.** `instructions/reply-handling.md`
+forbids a booking link on objections because "a meeting you are forbidden to justify
+forces you to invent a justification" -- told to offer a call on an objection, the model
+once produced "reserved seating is actually something we handle well", a capability
+claim about a product it has never seen documentation for. The Starter Kit carries no
+such pressure: it is the same session for everyone, it makes no claim about this
+prospect's situation, and it asks for nothing but an hour they may or may not spend.
+
+**The sentence is appended in CODE, not written by the model.** Same reasoning as the
+sign-off and the footer. An instruction in the prompt is a suggestion; six separate
+copy rules in this engine were "fixed" by instruction and then broken again, and each
+one was only settled by enforcing it outside the model. The model is told the offer
+exists so it does not write a competing version.
+
+**Not offered on:** `interested` or `question` (they get the booking link -- a warmer
+ask for a warmer signal), `not_interested`, `asked_to_stop`, `not_qualified`,
+`wrong_contact`, or an objection that DID name a competitor (those already get a
+180-day cooldown and a dated task, so they have a path). Widening it to a competitor
+objection would be defensible; it is deliberately not done yet, because that case is
+not the one that was empty-handed.

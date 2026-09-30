@@ -60,6 +60,7 @@ import os
 import pathlib
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -828,6 +829,13 @@ save. What each one says (from instructions/reply-handling.md):
                            as the only example made the model put "once your contract is
                            up for renewal" on a reply that said merely "we are good,
                            thank you" -- inventing a contract out of an exemplar.
+
+                           **DO NOT WRITE A STARTER KIT INVITE.** Where one belongs, the
+                           engine appends it after you, verbatim from config. You are
+                           told only so you do not write a second, different version of
+                           the same offer. Never mention a Starter Kit, a webinar, a
+                           session, a demo or a walkthrough yourself, and never invent a
+                           time or a link for one.
   not_now               -> acknowledge their timing, say you will come back then, name
                            the time they gave. No link, no pitch.
   not_interested        -> short and gracious. No re-pitch, no link, no "just one more
@@ -1181,6 +1189,68 @@ def task_due_date(recycle: str, named: str | None, today: str = "",
                              f"so the renewal conversation happens first")
 
 
+_STARTER_KIT: dict[str, str] | None = None
+
+
+def starter_kit() -> dict[str, str]:
+    """{url, when} for the Starter Kit session, from config/meeting-routing.md.
+
+    Parsed rather than restated, like the booking links in the same file. Returns {}
+    when the block is absent, which disables the offer rather than raising -- unlike a
+    missing BOOKING link, a missing Starter Kit costs a soft CTA and not a meeting, so
+    it must not be able to abort a reply run.
+    """
+    global _STARTER_KIT
+    if _STARTER_KIT is not None:
+        return _STARTER_KIT
+    m = re.search(r"## Starter Kit.*?```(.*?)```",
+                  MEETING_ROUTING.read_text(encoding="utf-8"), re.S)
+    out: dict[str, str] = {}
+    if m:
+        for line in m.group(1).splitlines():
+            line = line.split("#", 1)[0].strip()
+            if ":" in line:
+                k, v = line.split(":", 1)
+                out[k.strip()] = v.strip()
+    if not out.get("starter_kit_url"):
+        print("    starter kit: no url in config/meeting-routing.md; offer disabled")
+        out = {}
+    _STARTER_KIT = out
+    return out
+
+
+def wants_starter_kit(intent: str, named_platform: str) -> bool:
+    """An objection that names NO recognised competitor -- the case with no path.
+
+    A named platform earns a 180-day cooldown and a dated task, so those prospects are
+    already tracked. A bare objection gets a draft and nothing else, and lapses back
+    into the mailable pool after 30 days. See config/meeting-routing.md.
+    """
+    return intent == "objection" and not (named_platform or "").strip()
+
+
+def add_starter_kit(draft: str, kit: dict[str, str] | None = None) -> tuple[str, bool]:
+    """Append the Starter Kit offer if it is not already there. (draft, was_added).
+
+    APPENDED IN CODE on purpose. Every copy rule in this engine that was left to the
+    prompt was broken again later -- the greeting blank line, the reply dashes, the beat
+    order, "with me" over another person's calendar. The model is told the offer exists
+    so it does not invent a competing sentence; the sentence itself is ours.
+
+    Idempotent on the URL, so a re-run or a model that did include it cannot produce it
+    twice.
+    """
+    kit = kit if kit is not None else starter_kit()
+    url = (kit.get("starter_kit_url") or "").strip()
+    if not url or not draft.strip() or url in draft:
+        return draft, False
+    when = (kit.get("starter_kit_when") or "").strip()
+    sentence = (f"In the meantime, feel free to check out our next Starter Kit session"
+                f"{' on ' + when if when else ''} for tips on making the most of Posh! "
+                f"Here is the link: {url}")
+    return draft.rstrip() + "\n\n" + sentence, True
+
+
 def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
     """Normalise a message-history list. Returns (all messages, newest inbound).
 
@@ -1258,8 +1328,33 @@ def classify(client, model: str, thread: list[dict], sender: str = "",
               .replace("{booking_link}", link)
               .replace("{owner}", owner)
               .replace("{thread}", rendered[:12000]))
-    resp = client.messages.create(model=model, max_tokens=500,
-                                  messages=[{"role": "user", "content": prompt}])
+    # RETRIED, because this call is not guarded by anything above it. There is no
+    # per-reply try/except in the loop, so an exception here aborts the whole run and
+    # every reply after this one goes unprocessed until the next heartbeat. On
+    # 2026-09-30 Bedrock returned 503 on two of three consecutive calls -- with the
+    # SDK's own retries on top, that is a sustained wobble rather than a blip, and an
+    # unguarded call through it would have silently cost a run.
+    #
+    # Caught broadly on PURPOSE. The interesting failures here are transport and
+    # service-level (503, 429, timeouts, resets) and the SDK wraps them in its own
+    # exception types; enumerating those couples this to the SDK's class names, which
+    # is the same brittleness as catching URLError and missing RemoteDisconnected. A
+    # deterministic error (a bad prompt, a malformed model id) simply fails four times
+    # and then raises, which is the old behaviour.
+    resp = None
+    for attempt in range(4):
+        try:
+            resp = client.messages.create(
+                model=model, max_tokens=500,
+                messages=[{"role": "user", "content": prompt}])
+            break
+        except Exception as e:
+            if attempt == 3:
+                raise
+            wait = 2 ** attempt
+            print(f"    model call failed ({type(e).__name__}: {str(e)[:70]}); "
+                  f"retry {attempt + 1}/3 in {wait}s")
+            time.sleep(wait)
     raw = resp.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -1665,7 +1760,40 @@ def _self_test() -> int:
         task_wrong += 0 if ok else 1
         print(f"  {'ok  ' if ok else 'WRONG'} task           | {why}")
     print(f"\n{len(checks) - task_wrong}/{len(checks)} re-engagement-task cases correct")
-    return 1 if (fails or wrong or owner_wrong or task_wrong) else 0
+
+    # --- Starter Kit ----------------------------------------------------------------
+    kit_checks = []
+    for intent, plat, want, why in (
+            ("objection", "", True, "a bare objection gets it -- the case with no path"),
+            ("objection", "DICE", False,
+             "a NAMED competitor does not: it already has a cooldown and a task"),
+            ("interested", "", False, "interested gets the booking link instead"),
+            ("question", "", False, "question gets the booking link instead"),
+            ("not_interested", "", False, "a decline gets nothing"),
+            ("asked_to_stop", "", False, "never to someone who asked us to stop")):
+        kit_checks.append((why, wants_starter_kit(intent, plat) == want))
+    _d = "Gotcha, thanks for letting me know."
+    _out, _added = add_starter_kit(_d)
+    kit_checks.append(("the offer is appended", _added and _out != _d))
+    kit_checks.append(("the original draft is preserved", _out.startswith(_d)))
+    _again, _twice = add_starter_kit(_out)
+    kit_checks.append(("idempotent -- never appended twice",
+                       not _twice and _again == _out))
+    kit_checks.append(("an empty draft is left alone", add_starter_kit("")[0] == ""))
+    # The sentence is appended AFTER the banned-phrase check runs, so it never faces
+    # the validator in production. This is the only thing standing between a careless
+    # config edit and a banned phrase reaching a prospect.
+    _lits, _res = banned_lists()
+    _f = validate.check_banned("", add_starter_kit("x")[0], literals=_lits,
+                               regexes=_res)
+    kit_checks.append(("the CONFIGURED sentence carries no banned phrase", not _f))
+    kit_wrong = 0
+    print()
+    for why, ok in kit_checks:
+        kit_wrong += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} starterkit     | {why}")
+    print(f"\n{len(kit_checks) - kit_wrong}/{len(kit_checks)} Starter Kit cases correct")
+    return 1 if (fails or wrong or owner_wrong or task_wrong or kit_wrong) else 0
 
 
 def main(argv=None) -> int:
@@ -1931,6 +2059,15 @@ def main(argv=None) -> int:
                     print(f"      draft: BANNED PHRASE -- {res['_banned']}")
                 # Checked against the FINAL draft, after every rewrite above, because
                 # the question is what the prospect will actually receive.
+                # The Starter Kit, for an objection naming no known competitor --
+                # the one case that otherwise gets a draft and no path at all.
+                # Appended in code; see config/meeting-routing.md.
+                if wants_starter_kit(intent, res.get("named_platform") or ""):
+                    kitted, added = add_starter_kit(res["draft_response"])
+                    if added:
+                        res["draft_response"] = kitted
+                        print("      draft: Starter Kit offer appended (objection with "
+                              "no named competitor)")
                 note = assign_meeting_owner(props, existing, _owner, _link,
                                             res.get("draft_response", ""))
                 if note:
