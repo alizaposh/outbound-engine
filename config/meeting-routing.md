@@ -217,3 +217,37 @@ ask for a warmer signal), `not_interested`, `asked_to_stop`, `not_qualified`,
 180-day cooldown and a dated task, so they have a path). Widening it to a competitor
 objection would be defensible; it is deliberately not done yet, because that case is
 not the one that was empty-handed.
+
+
+### The 7-day nudge (`scripts/starter_kit_nudge.py`, added 2026-09-30)
+
+An `interested` or `question` reply that we answered with a **booking link** and that
+has been silent for `--quiet-days` (7) gets ONE follow-up offering the Starter Kit
+instead. It does not repeat the calendar link: the prospect declined that ask by not
+taking it, and offering it twice is the same request in a smaller font.
+
+**It QUEUES, it does not send.** The row enters the reply review queue like any
+classified reply and goes out through `send_replies.py` after a human approves. Not
+timidity about a fixed template -- it keeps ONE send path, which already re-checks
+suppression at send time, refuses two replies on a thread per run, honours `cc`, stamps
+`sent_at`, and records `outbound_starter_kit_offered` from the body that actually went.
+
+**Nine reasons it will refuse**, checked live rather than trusted from the sheet, since
+the row was written when the reply arrived and any of these can change after: a meeting
+booked (by status OR the native field, which can lead the status), opted out,
+suppressed, bounced, disqualified, handed off to a rep, the Starter Kit already offered,
+our answer not yet sent, and **the prospect having replied since** -- someone who wrote
+back is owed a human response, not a canned nudge.
+
+**Two things stop it eating its own output.** The queue dedups on
+`smartlead_message_id`, and the row carries a derived one
+(`nudge-starter-kit:<original>`), so a re-run cannot double-queue. And `decide()`
+refuses any row whose `review_reason` is the nudge's own. That second guard exists
+because the nudge row carries `intent=interested` and eventually a `sent_at`, so it
+re-enters the candidate pool by itself -- today it is saved only by having no calendar
+link in its body, which is accidental and would stop being true if anyone added one.
+
+**Morning slot only, after `sync_meetings`.** The order is load-bearing: the nudge
+refuses to chase anyone who has booked, and `sync_meetings` is what makes that true for
+today's bookings. It measures days of silence, so a second run in the same day can
+discover nothing.

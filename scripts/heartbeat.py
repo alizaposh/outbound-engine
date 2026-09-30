@@ -89,7 +89,13 @@ PY = sys.executable
 SLOTS = {
     "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
                    "sync_bounces", "close_sequences", "resume_sequences", "sync_sends",
-                   "sync_meetings", "check_enrolment", "slack_intake"],
+                   # AFTER sync_meetings on purpose: the nudge refuses to chase anyone
+                   # who has booked, and sync_meetings is what makes that true for
+                   # today's bookings. Running it first would nudge someone who booked
+                   # yesterday. MORNING ONLY -- it measures days of silence, so there is
+                   # nothing a second run in the same day can discover.
+                   "sync_meetings", "starter_kit_nudge",
+                   "check_enrolment", "slack_intake"],
     # `build_approved` is MORNING ONLY, by decision on 2026-09-14. It was briefly in all
     # three slots so an approval reached a campaign within hours; that was reverted
     # because it produces one campaign PER BATCH, and a reviewer approving a list over a
