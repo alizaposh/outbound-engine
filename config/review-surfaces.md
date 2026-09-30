@@ -299,3 +299,40 @@ blocks a curated list, which is the same reasoning as the validation retries.
 
 **Launch is still manual.** This produces a DRAFTED campaign. The unsubscribe settings
 have no API, so a human still opens Smartlead — see `instructions/campaign-creation.md`.
+
+
+## The `cc` column (added 2026-09-30)
+
+Reviewer-owned, like `decision` and `notes`. Comma-separated; Smartlead's
+`reply-email-thread` takes a `cc` field verbatim.
+
+**Added to hand a live thread to a colleague.** A draft that says "I'm connecting you
+with Rob" is only a promise until Rob is actually on the mail.
+
+**Restricted to `@posh.vip` by an allowlist, not a format check.** This is the one
+field in the queue that adds a NEW RECIPIENT to a real prospect's thread. A typo here
+does not bounce -- it forwards a named prospect's reply, and everything below it in the
+thread, to whoever the typo resolves to. A domain allowlist makes the worst case "a
+colleague who did not need it".
+
+**Any problem blocks the whole row.** A reviewer who typed two addresses and got one
+sent has been silently half-obeyed, which is worse than a refusal they can see.
+
+### What CC does NOT do
+
+**It does not hand the thread over**, and this matters more than it looks. The sending
+mailboxes are unwatched (`config/senders.md`): no forwarding is configured, Smartlead
+reads them over IMAP, and `reply_check` is the only path from a prospect to a person.
+So after a CC'd reply:
+
+- the colleague sees THAT message, and nothing after it
+- if the prospect hits Reply, it goes to the sending mailbox -> the engine queues
+  another draft, written as though the original sender is still handling it
+- if they hit Reply All, BOTH the colleague and the engine have it, and two people can
+  answer the same prospect -- the exact coordination failure that not forwarding these
+  mailboxes was chosen to prevent
+
+**A real handoff needs the colleague to write to the prospect directly**, from their own
+watched mailbox. The CC gives them the context and tells the prospect who is coming;
+their first direct email is what actually moves the conversation. Until then the engine
+still owns the thread.

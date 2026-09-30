@@ -110,7 +110,35 @@ def is_suppressed(props: dict, intent: str = "") -> str | None:
     return None
 
 
-def send_reply(campaign_id: str, stats_id: str, body: str, key: str) -> tuple[bool, str]:
+# Addresses a reviewer may CC. **An allowlist, not a format check.** This field goes
+# straight onto a mail to a real prospect, and the cost of a typo is not a bounce --
+# it is the prospect's name, their reply, and our whole thread landing in a stranger's
+# inbox. A domain allowlist makes the worst case "a colleague who did not need it".
+CC_ALLOWED_DOMAINS = ("posh.vip",)
+EMAIL_RE = re.compile(r"^[^@\s,]+@[^@\s,]+\.[^@\s,]+$")
+
+
+def parse_cc(raw: str) -> tuple[str, list[str]]:
+    """(comma-joined valid addresses, problems). Empty input is not a problem."""
+    if not (raw or "").strip():
+        return "", []
+    out, bad = [], []
+    for part in re.split(r"[,;]", raw):
+        addr = part.strip()
+        if not addr:
+            continue
+        if not EMAIL_RE.match(addr):
+            bad.append(f"{addr!r} is not an email address")
+        elif not addr.lower().endswith(tuple("@" + d for d in CC_ALLOWED_DOMAINS)):
+            bad.append(f"{addr!r} is outside {'/'.join(CC_ALLOWED_DOMAINS)}; "
+                       f"CC is for colleagues, not for adding recipients")
+        else:
+            out.append(addr)
+    return ",".join(out), bad
+
+
+def send_reply(campaign_id: str, stats_id: str, body: str, key: str,
+               cc: str = "") -> tuple[bool, str]:
     """POST the reply. Returns (definitely_failed, detail).
 
     Note the asymmetry: True means we KNOW it did not send. A timeout or an unreadable
@@ -120,7 +148,8 @@ def send_reply(campaign_id: str, stats_id: str, body: str, key: str) -> tuple[bo
     req = urllib.request.Request(
         f"{SL_BASE}/campaigns/{campaign_id}/reply-email-thread?api_key={key}",
         method="POST",
-        data=json.dumps({"email_stats_id": stats_id, "email_body": body}).encode(),
+        data=json.dumps({"email_stats_id": stats_id, "email_body": body,
+                         **({"cc": cc} if cc else {})}).encode(),
         headers={"Content-Type": "application/json",
                  "User-Agent": "outbound-engine/1.0"})
     try:
@@ -135,14 +164,53 @@ def send_reply(campaign_id: str, stats_id: str, body: str, key: str) -> tuple[bo
         return False, f"{type(e).__name__}: {e} (ambiguous, treated as sent)"
 
 
+def _self_test() -> int:
+    """Offline checks on CC parsing. No API calls.
+
+    Worth pinning because this field is the only one in the queue that adds a NEW
+    RECIPIENT to a real prospect's thread. A bug here does not bounce, it forwards a
+    named prospect's reply to whoever the typo resolves to.
+    """
+    cases = [
+        ("a colleague passes", "rob@posh.vip", "rob@posh.vip", 0),
+        ("several colleagues", "rob@posh.vip, kate@posh.vip",
+         "rob@posh.vip,kate@posh.vip", 0),
+        ("semicolons too", "rob@posh.vip; kate@posh.vip",
+         "rob@posh.vip,kate@posh.vip", 0),
+        ("whitespace is trimmed", "  rob@posh.vip  ", "rob@posh.vip", 0),
+        ("empty is not an error", "", "", 0),
+        # The three that matter. Each returns "" so the caller blocks the row rather
+        # than sending to a partial or wrong list.
+        ("an outside domain is refused", "rob@gmail.com", "", 1),
+        ("a malformed address is refused", "not-an-email", "", 1),
+        ("one good + one outside blocks the WHOLE row, never sends partially",
+         "rob@posh.vip, evil@attacker.com", "rob@posh.vip", 1),
+    ]
+    bad = 0
+    for why, raw, want_cc, want_problems in cases:
+        got_cc, problems = parse_cc(raw)
+        ok = got_cc == want_cc and len(problems) == want_problems
+        bad += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} cc | {why}")
+        if not ok:
+            print(f"         got {got_cc!r}, {len(problems)} problem(s); "
+                  f"wanted {want_cc!r}, {want_problems}")
+    print(f"\n{len(cases) - bad}/{len(cases)} cc cases correct")
+    return 1 if bad else 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Send replies approved in the review Sheet. Dry run by default.")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prove the CC rules with no API calls")
     ap.add_argument("--apply", action="store_true",
                     help="actually send. Without this, nothing is sent or stamped.")
     ap.add_argument("--limit", type=int, default=0, help="max replies to send")
     ap.add_argument("--row", type=int, help="only this sheet row number")
     a = ap.parse_args(argv)
+    if a.self_test:
+        return _self_test()
 
     key = env_value("SMARTLEAD_API_KEY")
     if not key:
@@ -213,6 +281,11 @@ def main(argv=None) -> int:
             problems.append("no campaign id")
         if stats_id and stats_id in seen_threads:            # guarantee 6
             problems.append("a reply to this thread was already sent in this run")
+        # A CC problem BLOCKS the row; it never sends a partial list. A reviewer who
+        # typed two addresses and got one has been silently half-obeyed, which is worse
+        # than a refusal they can see and fix.
+        cc, cc_bad = parse_cc(cell(row, "cc") if "cc" in idx else "")
+        problems += cc_bad
         if problems:
             print(f"  row {n} {email}: SKIPPED, {'; '.join(problems)}")
             needs_fix += 1
@@ -262,7 +335,9 @@ def main(argv=None) -> int:
         # row reads "sending", which blocks a retry and asks a human to check.
         stamp(f"sending {now}")
         seen_threads.add(stats_id)
-        definitely_failed, detail = send_reply(campaign, stats_id, body, key)
+        if cc:
+            print(f"      cc: {cc}")
+        definitely_failed, detail = send_reply(campaign, stats_id, body, key, cc=cc)
         if definitely_failed:
             stamp(f"FAILED {now}: {detail[:80]}")
             print(f"      FAILED (nothing sent): {detail}")

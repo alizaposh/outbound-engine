@@ -60,8 +60,17 @@ COLUMNS = ["received_at", "contact_name", "email", "company", "campaign", "sent_
            # reply-email-thread requires, while smartlead_message_id is unique per
            # message and is what dedup keys on. Using either for the other's job breaks
            # something quietly.
-           "smartlead_stats_id", "sent_at"]
-HUMAN_COLUMNS = ("decision", "notes")
+           "smartlead_stats_id", "sent_at",
+           # APPENDED, never inserted. DECISION_COL / MSG_ID_COL / STATS_ID_COL below
+           # are positional, and so are the ranges every writer builds from them;
+           # inserting a column mid-list silently shifts all of them.
+           #
+           # `cc` is the reviewer's. Added 2026-09-30 to hand a live thread to a
+           # colleague: the draft says "I'm connecting you with Rob", and this is what
+           # actually puts Rob on the mail. Comma-separated, and Smartlead's
+           # reply-email-thread takes it verbatim.
+           "cc"]
+HUMAN_COLUMNS = ("decision", "notes", "cc")
 DECISION_COL = COLUMNS.index("decision")          # 11 -> column L
 MSG_ID_COL = COLUMNS.index("smartlead_message_id")  # 13 -> column N
 STATS_ID_COL = COLUMNS.index("smartlead_stats_id")  # 15 -> column P
