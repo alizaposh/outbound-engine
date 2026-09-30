@@ -84,7 +84,9 @@ def senders_and_mailboxes() -> tuple[list[str], dict[str, str]]:
     """
     import assemble
     m = assemble.load_sender_map()                       # mailbox -> "Carl"
-    gone = assemble.departed_senders()
+    # departed OR still warming -- both mean 'no new contacts', and calling the
+    # combined helper is what stops one being honoured and the other forgotten.
+    gone = assemble.unassignable_senders()
     by_sender: dict[str, str] = {}
     for box, who in sorted(m.items()):
         n = who.strip().lower()

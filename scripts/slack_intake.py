@@ -125,7 +125,9 @@ def known_senders() -> tuple[tuple[str, ...], dict[str, str]]:
         import assemble
         # Departed senders keep their mailbox rows -- existing threads still sign with
         # their name -- but must never be assigned somebody new.
-        gone = assemble.departed_senders()
+        # Departed OR still warming: both mean 'no new contacts', and calling the
+        # combined helper is what stops one being honoured and the other forgotten.
+        gone = assemble.unassignable_senders()
         by_sender: dict[str, str] = {}
         for box, who in sorted(assemble.load_sender_map().items()):
             n = who.strip().lower()

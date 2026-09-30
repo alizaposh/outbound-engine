@@ -98,6 +98,42 @@ def departed_senders(path: pathlib.Path = SENDERS) -> set[str]:
 INTRO_SECTION = "email-1 intro line"
 
 
+WARMING_SECTION = "warming — mailboxes connected, not yet assignable"
+
+
+def warming_senders(path: pathlib.Path = SENDERS) -> set[str]:
+    """Lower-cased names whose mailboxes exist but are still warming up.
+
+    Same EFFECT as departed_senders -- no new contacts -- for the opposite reason. A
+    departed rep must not meet anyone new; a warming rep has not built the sending
+    history to meet anyone new *yet*. Both need their rows in the mailbox table (so the
+    config is complete and reviewable) while being unassignable.
+
+    Why this is not just "check warmup status in Smartlead": `warmup: ACTIVE` means the
+    warm-up is RUNNING, not finished. All four mailboxes added 2026-09-30 reported
+    ACTIVE with `total_sent_count: 0`. Reading that field as readiness would hand a
+    brand-new mailbox a 657-contact campaign, which is how a domain gets burned.
+    Readiness is a judgement a person makes; this is where they record it.
+    """
+    out = set()
+    for a, _b in _tables_by_section(path).get(WARMING_SECTION, []):
+        n = (a or "").strip().lower()
+        if n and n not in ("first name", "name", "---"):
+            out.add(n)
+    return out
+
+
+def unassignable_senders(path: pathlib.Path = SENDERS) -> set[str]:
+    """Every name that must not be given NEW contacts, whatever the reason.
+
+    One function so a caller cannot honour one exclusion and forget the other -- which
+    is exactly the bug shape that let a departed rep be assigned 466 leads.
+    """
+    return departed_senders(path) | warming_senders(path)
+
+
+
+
 def _tables_by_section(path: pathlib.Path) -> dict[str, list[tuple[str, str]]]:
     """Two-column markdown rows, grouped by the `##` heading they sit under.
 

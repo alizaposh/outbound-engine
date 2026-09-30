@@ -11,7 +11,7 @@ and appends the sign-off in code. The model never writes a sign-off.
 
 ## Mailbox to sender
 
-3 sender identities across 4 warmed domains, 12 mailboxes.
+5 sender identities, 16 mailboxes. Caroline and Kate were added 2026-09-30 and are WARMING -- see the section below; they are in this table because their mailboxes exist, and unassignable until warm.
 
 | mailbox                            | first name |
 |------------------------------------|------------|
@@ -27,6 +27,10 @@ and appends the sign-off in code. The model never writes a sign-off.
 | zach.hickman@coreposhvip.com       | Zach       |
 | zach.hickman@poshvippulse.com      | Zach       |
 | zach.hickman@poshviphub.com        | Zach       |
+| caroline.reyda@coreposhvip.com     | Caroline   |
+| caroline.reyda@poshviphub.com      | Caroline   |
+| kate.burge@coreposhvip.com         | Kate       |
+| kate.burge@poshviphub.com          | Kate       |
 
 Smartlead `from_name` is the full name ("Carl Newmark"); the sign-off is first-name
 only ("Carl"), which is the same identity written the way a person signs a short email.
@@ -80,26 +84,42 @@ name, remove the row here, and reassign `outbound_sender` on her contacts — th
 property is write-once precisely so a prospect keeps hearing from one person, and the
 premise fails when that person has gone.
 
-## Pending: Caroline and Kate (mailboxes purchased 2026-09-29)
+## Warming — mailboxes connected, not yet assignable
 
-Four mailboxes bought, two each. Not yet visible in Smartlead -- the provider quotes
-24-48 hours to populate, then warm-up begins. **Nothing about them is live**: their
-intro lines are written below, but with no row in the mailbox table above,
-`known_senders()` and `split_by_sender()` do not return them and the Slack form cannot
-route to them. Verified, not assumed.
+| first name | since |
+|---|---|
+| Caroline | 2026-09-30 |
+| Kate | 2026-09-30 |
 
-**When the addresses arrive**, add them to the mailbox table, add the names to the Slack
-dropdown, and they are senders. Booking links and HubSpot owner records already exist
-for both (Caroline `89417228`, Kate `99102732`), so steps 4 and 5 below are done.
+Names here keep their rows in the mailbox table above and are **excluded from being
+assigned new contacts**, exactly like the Departed section and for the opposite reason:
+a departed rep must not meet anyone new, a warming rep cannot yet. Both feed
+`assemble.unassignable_senders()`, which `slack_intake` and `split_by_sender` call.
 
-**Set `max_leads_per_day: 20` on their campaigns, not 40.** Two mailboxes carry
-2 x 30 = 60 emails/day, and a sequence is three emails, so 20 new leads/day is exactly
-100% of their capacity. At 40 they would be 200% oversubscribed and Smartlead would
-throttle the follow-ups -- which is worse than sending slower, because it stretches the
-gap between email 1 and email 2 rather than simply starting fewer people.
+**`warmup: ACTIVE` does not mean ready.** All four mailboxes reported ACTIVE with
+`total_sent_count: 0` the moment warming was switched on -- ACTIVE means the warm-up is
+RUNNING. Treating that field as readiness would hand a mailbox with no sending history
+a 657-contact campaign, which is how a domain gets burned. Readiness is a person's
+judgement, and this table is where it is recorded.
 
-This takes the engine from 80 to 120 new leads/day, a 1.5x rather than the 2x that four
-mailboxes EACH would have bought. Worth restating if more capacity is ordered.
+**Their mailboxes are on coreposhvip.com and poshviphub.com**, two domains already
+warmed by Carl and Zach. That is the good version of this: a new mailbox on an
+established domain inherits the domain's reputation, unlike a new domain starting at
+zero. It also means those two domains now carry four identities rather than two, so
+per-domain volume roughly doubles once these are live -- worth watching, and a reason
+not to add a third identity to them without thought.
+
+**`message_per_day` is 15, not the 30 the others run at.** Correct for a mailbox with
+zero history, and it changes the arithmetic: 2 x 15 = 30 emails/day per sender, which
+at three emails a sequence supports **10 new leads/day each**, not 20. So these four
+mailboxes take the engine from 80 to 100 leads/day -- 1.25x, not the 1.5x that 30/day
+would give. Raise them with `scripts/set_send_limits.py` as history builds, and
+re-read `config/smartlead-defaults.md` before going past 30.
+
+**When they are ready:** delete their rows from this table, set
+`max_leads_per_day` on their campaigns to match whatever `message_per_day` has reached
+by then, and add the names to the Slack form dropdown. Booking links and HubSpot owner
+records already exist for both.
 
 ## Adding a sender as the team grows
 
