@@ -127,6 +127,17 @@ def specs(cfg: dict) -> list[tuple[str, str, dict]]:
                                   positive + negative + neutral)])),
         ("Meetings booked", "booked after we enrolled them; the outcome metric",
          branch([enrolled, is_any("outbound_status", ["meeting_booked"])])),
+        # The Starter Kit funnel, in two lists rather than one. The offer count alone
+        # says how often we used the softer CTA; it says nothing about whether it
+        # WORKS. The pair does, and the second list is the one that answers the
+        # question in the Notion doc -- is a lower-commitment ask a better ask?
+        ("Starter Kit offered", "sent the Starter Kit session link (a confirmed send, "
+                                "not a draft)",
+         branch([enrolled, has("outbound_starter_kit_offered")])),
+        ("Starter Kit -> meeting", "offered the Starter Kit AND later booked; the "
+                                   "conversion this CTA has to earn",
+         branch([enrolled, has("outbound_starter_kit_offered"),
+                 is_any("outbound_status", ["meeting_booked"])])),
         ("Positive replies", f"intent in {', '.join(positive)}",
          branch([enrolled, is_any("outbound_reply_intent", positive)])),
         ("Negative replies", f"intent in {', '.join(negative)}",

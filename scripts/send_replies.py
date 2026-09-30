@@ -52,6 +52,7 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import review_queue as rq  # noqa: E402
+import reply_check as _rc  # noqa: E402
 from reply_check import HubSpotWriter as rc_HubSpotWriter  # noqa: E402
 from eligibility import HubSpot, env_token, env_value  # noqa: E402
 
@@ -64,6 +65,13 @@ SL_BASE = "https://server.smartlead.ai/api/v1"
 HANDOFF_DECISION = "hand off"
 SENDING_DECISIONS = {"approve", "edit & send", "edit and send", HANDOFF_DECISION}
 HANDED_OFF_STATUS = "handed_off"
+
+# Date property recording that the Starter Kit link actually REACHED a prospect.
+# Written here and not in reply_check on purpose: reply_check appends the offer to a
+# DRAFT, and a draft is not a send. A reviewer can delete the sentence, mark the row
+# "Do not send", or the send can fail -- all of which would leave a metric claiming an
+# offer nobody received. The sent body is the only evidence that counts.
+STARTER_KIT_PROP = "outbound_starter_kit_offered"
 SUPPRESSION_PROPS = ["email", "outbound_suppressed", "hs_email_optout", "outbound_status"]
 
 
@@ -174,7 +182,6 @@ def send_reply(campaign_id: str, stats_id: str, body: str, key: str,
 
 def _self_test() -> int:
     import inspect as _i
-    import reply_check as _rc
     _MAIN = _i.getsource(main)
     """Offline checks on CC parsing. No API calls.
 
@@ -242,7 +249,31 @@ def _self_test() -> int:
         hand_bad += 0 if ok else 1
         print(f"  {'ok  ' if ok else 'WRONG'} handoff | {why}")
     print(f"\n{len(hand) - hand_bad}/{len(hand)} hand-off cases correct")
-    return 1 if (bad or hand_bad) else 0
+
+    # --- Starter Kit metric ---------------------------------------------------------
+    kit = [
+        ("the property name matches the reporting list's filter",
+         STARTER_KIT_PROP == "outbound_starter_kit_offered"),
+        # Recorded from the SENT BODY, not the intent. A reviewer can delete the
+        # sentence or add it by hand, and the metric has to reflect what the prospect
+        # received rather than what the engine drafted.
+        ("recorded from the sent body, not the intent",
+         'kit_url in body' in _MAIN and 'intent' not in
+         _MAIN.split("kit_url = ")[1].split("if decision ==")[0]),
+        ("written only after a confirmed send",
+         _MAIN.index("kit_url = ") > _MAIN.index("sent += 1")),
+        ("a missing HubSpot contact is reported, not silently skipped",
+         "Starter Kit sent but NOT recorded" in _MAIN),
+        ("the configured url is non-empty, or the check can never fire",
+         bool((_rc.starter_kit().get("starter_kit_url") or "").strip())),
+    ]
+    kit_bad = 0
+    print()
+    for why, ok in kit:
+        kit_bad += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} kitmetric | {why}")
+    print(f"\n{len(kit) - kit_bad}/{len(kit)} Starter Kit metric cases correct")
+    return 1 if (bad or hand_bad or kit_bad) else 0
 
 
 def main(argv=None) -> int:
@@ -405,6 +436,19 @@ def main(argv=None) -> int:
             # was never told anybody is taking over, so standing the engine down would
             # abandon a live conversation on the strength of an email that does not
             # exist.
+            # Recorded from the BODY THAT WENT OUT, not from the intent. The offer is
+            # appended for objections naming no competitor, but a reviewer may add or
+            # remove it by hand, and what we want to measure is what the prospect
+            # actually received.
+            kit_url = (_rc.starter_kit().get("starter_kit_url") or "").strip()
+            if kit_url and kit_url in body:
+                cid = (props or {}).get("hs_object_id")
+                if cid:
+                    print(f"      {writer.write(cid, {STARTER_KIT_PROP: now[:10]})}"
+                          f"  (Starter Kit offer recorded)")
+                else:
+                    print(f"      Starter Kit sent but NOT recorded: no HubSpot "
+                          f"contact for {email}")
             if decision == HANDOFF_DECISION:
                 # `props` comes from the suppression lookup a few lines above and
                 # already carries hs_object_id -- no second fetch.

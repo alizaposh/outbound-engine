@@ -305,3 +305,41 @@ again as the original sender.
 mailboxes are unwatched, so a colleague CC'd on a reply is invisible to it -- the next
 prospect reply arrives exactly like any other and gets drafted for. The CC tells the
 prospect who is coming; this tells the engine to stop.
+
+
+## `outbound_starter_kit_offered` (added 2026-09-30)
+
+Date the Starter Kit session link actually **reached** a prospect. Written by
+`send_replies.py`, after a confirmed send, and only when the **sent body** contains the
+link.
+
+**Not written by `reply_check`, deliberately.** `reply_check` appends the offer to a
+DRAFT, and a draft is not a send: a reviewer can delete the sentence, mark the row "Do
+not send", or the send can fail. Recording at draft time would produce a metric
+counting offers nobody received -- the same class of error as `sync_sends` writing
+Outreached at enrolment instead of on delivery.
+
+Keyed on the body rather than on the intent for the same reason. A reviewer may add the
+sentence to a reply the engine did not put it on, or remove it from one it did, and what
+we are measuring is what the prospect got.
+
+### The two lists, and why two
+
+| List | Answers |
+|---|---|
+| **Starter Kit offered** (2192) | how often we used the softer CTA |
+| **Starter Kit → meeting** (2193) | whether it works |
+
+The first alone is a vanity number. Only the pair answers the question in the Notion
+doc -- is a lower-commitment ask a better ask?
+
+### Read the conversion list with care, for a while
+
+**As scoped today the Starter Kit only goes to objections that name no competitor** --
+people who have just said some version of no. So "Starter Kit → meeting" will sit at or
+near zero for months, and that is NOT evidence the CTA fails: it is the coldest segment
+the engine has, and the recycle window on those contacts is 180 days anyway.
+
+To make this a real test of the CTA rather than a record of one narrow path, the offer
+would have to reach `interested` replies too -- where it competes with the booking link
+on the same kind of prospect. That is a deliberate open decision, not an oversight.
