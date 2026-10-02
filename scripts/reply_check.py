@@ -764,8 +764,19 @@ events, they have closed, they are a charity with no events. NOT for "not intere
 "bad timing", "happy with our current tool" or any other decision they could reverse.
 The test is whether the fact would still be true in a year.
 
-**For `interested` and `question`, the draft MUST include this booking link, as a plain
-visible URL: {booking_link}** ({owner}'s calendar). **If that value is a bracketed
+**For `interested` ONLY, the draft MUST include this booking link, as a plain
+visible URL: {booking_link}** ({owner}'s calendar).
+
+**NEVER put a booking link in a `question` reply.** Changed 2026-10-02, on a real
+thread: a prospect asked "what is it exactly what you want me to as an offering" and
+then "Is the a job offering?" -- and both drafts proposed a 30-minute call with Zach.
+Someone asking WHAT WE ARE is not ready to put it on a calendar, and answering a
+question with a meeting request reads as not having listened. Answer the question, stop,
+and let the link come when they show interest. A money-adjacent question ("what does it
+cost?") is a BUYING SIGNAL and you classify it `interested`, so it still gets the link
+-- that rule is unchanged and this one does not weaken it.
+
+**If that value is a bracketed
 placeholder rather than a URL, reproduce it verbatim** -- it means this lead has no
 HubSpot record so the right calendar is not knowable, and a reviewer will paste it in.
 Never substitute a real link you have seen elsewhere in the thread. Do not invent a
@@ -786,7 +797,17 @@ unexplained switch reads as a bait and switch on an otherwise warm reply.
 an empty draft makes a human write from scratch, which is most of what the queue exists to
 save. What each one says (from instructions/reply-handling.md):
 
-  interested / question -> warm, one line, PLUS the booking link above. **Offer the
+  question              -> ANSWER IT, in one or two plain sentences, and STOP. No
+                           booking link, no call, no "happy to walk you through it".
+                           They asked something specific; the reply that earns the next
+                           one answers it. The owner's edit on a real thread:
+                             "Hi Angel, no. Posh isn't a job. We're a ticketing
+                              platform for event organizers. If you run events and sell
+                              tickets, we can help. If that's not you, no worries."
+                           Note what that does -- answers plainly, says who it IS for,
+                           and gives them an easy exit. No ask at all.
+
+  interested            -> warm, one line, PLUS the booking link above. **Offer the
                            conversation; do not re-pitch.** They already said yes to
                            hearing more, so a claim here can only lose. The owner's edit:
                              "I'm happy to walk you through what Posh has to offer and
@@ -1257,6 +1278,50 @@ def add_starter_kit(draft: str, kit: dict[str, str] | None = None) -> tuple[str,
     return draft.rstrip() + "\n\n" + sentence, True
 
 
+BOOKING_HOST = "meetings.hubspot.com"
+
+
+def drop_booking_link(draft: str) -> tuple[str, bool]:
+    """Remove the sentence offering a booking link. (draft, removed).
+
+    The prompt is told not to write one on a `question`, and that is not enough -- six
+    copy rules in this engine were "fixed" by instruction and broken again later. This
+    is the enforcement.
+
+    It removes the whole SENTENCE, not just the URL. Deleting the link alone leaves
+    "You can grab some time with Zach here:" dangling, which is worse than the link:
+    it promises something and delivers nothing.
+
+    **It refuses rather than mangles.** If removal would leave almost nothing, the
+    original is returned unchanged and the caller reports it instead -- a draft gutted
+    to "Hi Angel." is not an improvement on one with a stray link, and a reviewer can
+    fix a visible problem.
+    """
+    if BOOKING_HOST not in (draft or ""):
+        return draft, False
+    out = draft
+    # Repeatedly: find the link, cut back to the start of its sentence, forward to the
+    # end of the URL. A draft can only hold a couple, but the loop costs nothing.
+    for _ in range(4):
+        i = out.find(BOOKING_HOST)
+        if i < 0:
+            break
+        start = max((out.rfind(c, 0, i) for c in (".", "!", "?", "\n")), default=-1)
+        start = 0 if start < 0 else start + 1
+        end = len(out)
+        for j in range(i, len(out)):
+            if out[j].isspace():
+                end = j
+                break
+        out = out[:start] + out[end:]
+    out = re.sub(r"[ \t]+", " ", out)
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    # A reply that is now just a greeting is not a reply.
+    if len(out) < 40:
+        return draft, False
+    return out, True
+
+
 def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
     """Normalise a message-history list. Returns (all messages, newest inbound).
 
@@ -1395,8 +1460,15 @@ CLASSIFY_CASES = [
     # flipped a pricing ask to not_now, which parks a warm lead for 90 days. Fixing a
     # difference that changes nothing, at the cost of one that changes a lot, is a bad
     # trade.
+    # **"Either intent acts the same" stopped being true on 2026-10-02**, when
+    # `question` lost the booking link. Still accepted either way, and the tolerance is
+    # now a real judgement rather than a shrug: answering "what's the payout timing
+    # like?" without a calendar link is a perfectly good reply, and answering it WITH
+    # one is also defensible because payout terms are money. The boundary is genuinely
+    # blurred here, so both remain correct -- but they no longer produce the same draft.
     ("What's the payout timing like?", ("question", "interested"),
-     "a product question that is money-adjacent; either intent acts the same"),
+     "money-adjacent product question; both accepted, though they now differ in "
+     "whether a booking link is offered"),
     ("We're locked into a contract with Dice until next year.",
      "not_now", "SDR spec 2026-09-01: a contract lock is a successful answer to email 1, "
                 "not a rejection. Route to timing and capture the date"),
@@ -1767,6 +1839,44 @@ def _self_test() -> int:
         print(f"  {'ok  ' if ok else 'WRONG'} task           | {why}")
     print(f"\n{len(checks) - task_wrong}/{len(checks)} re-engagement-task cases correct")
 
+    # --- booking link on a question reply -------------------------------------------
+    LINK = "https://meetings.hubspot.com/zach-hickman"
+    ql = []
+    out, rm = drop_booking_link(
+        f"Hi Angel, great question. We handle ticketing and payments for event "
+        f"organizers. You can grab some time with Zach here: {LINK}")
+    ql.append(("the offer sentence goes, not just the url",
+               rm and BOOKING_HOST not in out and "grab some time" not in out))
+    ql.append(("the answer before it survives intact",
+               "ticketing and payments for event organizers." in out))
+    out, rm = drop_booking_link("No link here, just a plain answer about ticketing.")
+    ql.append(("a draft with no link is untouched", not rm))
+    # Refusing beats mangling: a reply cut down to a greeting is worse than a stray link.
+    orig = f"Hi Angel.\n{LINK}"
+    out, rm = drop_booking_link(orig)
+    ql.append(("it REFUSES when almost nothing would survive",
+               not rm and out == orig))
+    out, rm = drop_booking_link(
+        f"Thanks for asking. Posh handles ticketing for organizers like you. "
+        f"Grab time here: {LINK} and also here: {LINK}")
+    ql.append(("two links both go", rm and BOOKING_HOST not in out))
+    # The source of the rule, in code rather than in the prompt alone.
+    _src = __import__("inspect").getsource(main)
+    _code = "\n".join(l for l in _src.splitlines() if not l.strip().startswith("#"))
+    ql.append(("it is enforced for `question` in main()",
+               'if intent == "question":' in _code))
+    ql.append(("...before name_the_calendar_owner, which labels a link that STAYS",
+               _code.index("drop_booking_link(draft)")
+               < _code.index("name_the_calendar_owner(")))
+    ql.append(("a refusal is flagged on the row, not swallowed",
+               "booking link in a QUESTION reply" in _code))
+    q_wrong = 0
+    print()
+    for why, ok in ql:
+        q_wrong += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} questionCTA   | {why}")
+    print(f"\n{len(ql) - q_wrong}/{len(ql)} question-CTA cases correct")
+
     # --- Starter Kit ----------------------------------------------------------------
     kit_checks = []
     for intent, plat, want, why in (
@@ -1799,7 +1909,7 @@ def _self_test() -> int:
         kit_wrong += 0 if ok else 1
         print(f"  {'ok  ' if ok else 'WRONG'} starterkit     | {why}")
     print(f"\n{len(kit_checks) - kit_wrong}/{len(kit_checks)} Starter Kit cases correct")
-    return 1 if (fails or wrong or owner_wrong or task_wrong or kit_wrong) else 0
+    return 1 if (fails or wrong or owner_wrong or task_wrong or kit_wrong or q_wrong) else 0
 
 
 def main(argv=None) -> int:
@@ -2052,6 +2162,26 @@ def main(argv=None) -> int:
             if draft:
                 # The calendar may not be the sender's -- meetings round-robin across the
                 # team. Say whose it is rather than "with me".
+                # A `question` never carries a booking link (2026-10-02). Enforced
+                # here because the prompt saying so has never been enough. Done BEFORE
+                # name_the_calendar_owner, which exists to label a link that is
+                # staying -- running it first would rename a link about to be deleted.
+                if intent == "question":
+                    stripped, removed = drop_booking_link(draft)
+                    if removed:
+                        draft = stripped
+                        res["draft_response"] = draft
+                        print("      draft: booking link removed -- a question gets an "
+                              "answer, not a calendar")
+                    elif BOOKING_HOST in draft:
+                        # Refused because removal would have gutted the draft. Say so
+                        # on the row: a reviewer deleting a line is fine, a reviewer
+                        # not knowing it is there is not.
+                        res["_banned"] = ((res.get("_banned") or "") +
+                                          "; booking link in a QUESTION reply -- "
+                                          "remove it before sending").lstrip("; ")
+                        print("      draft: ** booking link in a question reply and "
+                              "too little would survive removing it; flagged **")
                 _owner, _link = booking_link_for(existing.get("outbound_sender", ""),
                                                  contact_email=email)
                 draft, renamed = name_the_calendar_owner(
