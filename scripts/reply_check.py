@@ -818,6 +818,18 @@ save. What each one says (from instructions/reply-handling.md):
                            unasked-for positioning AND a swipe at competitors, in a
                            reply to someone who had already said "Tell me more".
 
+  **IF YOU OPEN WITH A GREETING, PUT IT ON ITS OWN LINE.** "Hi Joseph," then a line
+  break, then the reply. Not "Hi Joseph, that's awesome to hear" as one run-on line --
+  that reads like a chat message, not an email. ONE newline, not a blank line. The
+  engine enforces this after you, so writing it correctly only saves a rewrite.
+
+      Hi Joseph,
+      That's awesome to hear! I'm happy to walk you through what we can put
+      together for you and your events.
+
+  A greeting is optional -- a one-line answer often reads better without one -- but if
+  you write one, break the line.
+
   **US SPELLING, always.** The model wrote "organisations" in a real draft. Posh is a
   New York company writing to US organizers: organize, personalize, recognize, center,
   favorite. Never -ise, -isation or -re.
@@ -1320,6 +1332,44 @@ def drop_booking_link(draft: str) -> tuple[str, bool]:
     if len(out) < 40:
         return draft, False
     return out, True
+
+
+# "Hi Joseph," / "Hey Amelia," / "Hello there," at the very start of a draft, glued to
+# the body by a space rather than a line break. Anchored to the start: a "Hi" in the
+# middle of a sentence is not a greeting.
+GREETING_RE = re.compile(r"^(H(?:i|ey|ello)\b[^,\n]{0,40},)[ \t]+(\S)")
+
+
+def split_reply_greeting(draft: str) -> tuple[str, bool]:
+    """Put the greeting on its own line. (draft, changed).
+
+    Aliza's rule, 2026-10-02, from the way she hand-formats every draft she edits:
+
+        Hi Joseph,
+        That's awesome to hear! ...
+
+    The engine writes "Hi Angel, great question. We handle ticketing..." -- greeting and
+    body as one run-on line, which reads like a chat message rather than an email.
+
+    **ONE newline, not two.** The cold-copy rule in `repair.split_greeting` inserts a
+    BLANK line, because a cold email is a composed object and wants the air. A reply is
+    a conversation and she writes it tight; this matches what she actually does rather
+    than what the other rule does.
+
+    **Leaves an existing break alone**, one newline or two. The complaint is gluing, not
+    spacing, and churning drafts that are already fine would make this rule its own
+    source of diffs.
+
+    The body's first letter is capitalised, because on its own line it starts a sentence:
+    "Hi Angel,\ngreat question" reads as a mistake where "Hi Angel,\nGreat question"
+    does not.
+    """
+    m = GREETING_RE.match(draft or "")
+    if not m:
+        return draft, False
+    greeting, first = m.group(1), m.group(2)
+    rest = draft[m.end():]
+    return f"{greeting}\n{first.upper()}{rest}", True
 
 
 def read_thread(messages: list[dict]) -> tuple[list[dict], dict | None]:
@@ -1877,6 +1927,37 @@ def _self_test() -> int:
         print(f"  {'ok  ' if ok else 'WRONG'} questionCTA   | {why}")
     print(f"\n{len(ql) - q_wrong}/{len(ql)} question-CTA cases correct")
 
+    # --- greeting on its own line ---------------------------------------------------
+    gl = []
+    out, ch = split_reply_greeting("Hi Angel, great question. We handle ticketing.")
+    gl.append(("a glued greeting is split", ch and out.startswith("Hi Angel,\n")))
+    gl.append(("the body is capitalised on its new line", "\nGreat question." in out))
+    # One newline, not two. The cold-copy rule inserts a blank line; a reply is written
+    # tight, and this matches how the drafts are hand-formatted.
+    gl.append(("ONE newline, not a blank line", "\n\n" not in out))
+    _, ch = split_reply_greeting("Hi Joseph, \nThat's awesome to hear!")
+    gl.append(("an existing single break is left alone", not ch))
+    _, ch = split_reply_greeting("Hi Joseph,\n\nAlready spaced.")
+    gl.append(("an existing blank line is left alone", not ch))
+    _, ch = split_reply_greeting("Thanks for letting us know. We will circle back.")
+    gl.append(("a draft with no greeting is untouched", not ch))
+    # "Hi" mid-sentence is not a greeting; the regex is anchored to the start.
+    _, ch = split_reply_greeting("They said Hi Angel, which was odd.")
+    gl.append(("'Hi' mid-sentence is not treated as a greeting", not ch))
+    _src = __import__("inspect").getsource(main)
+    _code = "\n".join(l for l in _src.splitlines() if not l.strip().startswith("#"))
+    gl.append(("it runs AFTER the rewrites that can change the opening",
+               _code.index("split_reply_greeting(draft)")
+               > _code.index("name_the_calendar_owner(")
+               and _code.index("split_reply_greeting(draft)")
+               > _code.index("drop_booking_link(draft)")))
+    g_wrong = 0
+    print()
+    for why, ok in gl:
+        g_wrong += 0 if ok else 1
+        print(f"  {'ok  ' if ok else 'WRONG'} greeting      | {why}")
+    print(f"\n{len(gl) - g_wrong}/{len(gl)} greeting cases correct")
+
     # --- Starter Kit ----------------------------------------------------------------
     kit_checks = []
     for intent, plat, want, why in (
@@ -1909,7 +1990,7 @@ def _self_test() -> int:
         kit_wrong += 0 if ok else 1
         print(f"  {'ok  ' if ok else 'WRONG'} starterkit     | {why}")
     print(f"\n{len(kit_checks) - kit_wrong}/{len(kit_checks)} Starter Kit cases correct")
-    return 1 if (fails or wrong or owner_wrong or task_wrong or kit_wrong or q_wrong) else 0
+    return 1 if (fails or wrong or owner_wrong or task_wrong or kit_wrong or q_wrong or g_wrong) else 0
 
 
 def main(argv=None) -> int:
@@ -2189,6 +2270,14 @@ def main(argv=None) -> int:
                 if renamed:
                     print(f"      draft: calendar belongs to {_owner}, not the sender; "
                           f'"with me" corrected')
+                res["draft_response"] = draft
+                # Greeting onto its own line. Last of the rewrites on purpose: every
+                # step above can change the opening (name_the_calendar_owner rewrites
+                # "with me", drop_booking_link can delete the first sentence), so
+                # splitting earlier would format a draft that then changed underneath.
+                draft, split = split_reply_greeting(draft)
+                if split:
+                    print("      draft: greeting put on its own line")
                 res["draft_response"] = draft
                 fixed, dash_records = repair.normalize_dashes(draft)
                 if dash_records:

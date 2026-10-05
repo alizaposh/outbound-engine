@@ -336,3 +336,24 @@ So after a CC'd reply:
 watched mailbox. The CC gives them the context and tells the prospect who is coming;
 their first direct email is what actually moves the conversation. Until then the engine
 still owns the thread.
+
+
+## Reply drafts: the greeting goes on its own line (2026-10-02)
+
+    Hi Joseph,
+    That's awesome to hear! ...
+
+**ONE newline, not two.** Cold copy uses a BLANK line after the greeting
+(`repair.split_greeting`, `config/message-shapes.md`) because a cold email is a composed
+object and wants the air. A reply is a conversation and is written tighter. The two rules
+look contradictory and are not -- they apply to different things, and each matches how
+that thing is actually written by hand.
+
+Enforced in `reply_check.split_reply_greeting` and also asked for in the classifier
+prompt. The prompt alone has never been enough in this engine; the prompt is there to
+reduce the number of drafts that need rewriting, not to be the rule.
+
+**It only fixes GLUING.** A draft that already has one newline or two is left alone --
+the complaint was "Hi Angel, great question..." as a run-on line, not spacing. Checked
+against every draft in the queue: it would have reformatted 2 and left 23 untouched.
+A rule that rewrites drafts which were already fine becomes its own source of noise.
