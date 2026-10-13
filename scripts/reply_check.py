@@ -608,6 +608,34 @@ def match_platform(said: str, allowed: set[str]) -> str:
     return ""
 
 
+# Intents a "we use Posh" reply is mistaken for. interested and asked_to_stop are left
+# alone: a customer asking for more, or asking us to stop, means exactly that.
+_CUSTOMER_MISREADS = {"objection", "not_now", "not_interested", "question"}
+
+
+def existing_customer_intent(res: dict, allowed: set[str]) -> str:
+    """not_qualified when the prospect says they are ON POSH, else the model's intent.
+
+    **Posh is us** (2026-10-13). "We're already partnered with Posh" was classified
+    objection, so the engine wrote a six-month recycle date and opened a task to
+    "re-engage" an existing customer away from ourselves -- the incumbent-objection path
+    for a platform that is not a competitor. Enforced in code because the alias table
+    maps "posh" like any other platform and the prompt alone has already missed it
+    ("Great to hear you're using Posh" on an earlier reply).
+
+    not_qualified lands them in `disqualified` with no task, no recycle and no Starter
+    Kit, and the named platform keeps the lifecycle write off (a customer must not be
+    marked Disqualified). Sets `_existing_customer` so the queue row asks the reviewer to
+    verify and set Has group, the portal's customer flag. Never written by the engine:
+    an attendee who buys tickets on Posh also "uses Posh".
+    """
+    intent = res.get("intent", "")
+    if match_platform(res.get("named_platform") or "", allowed) != "Posh":
+        return intent
+    res["_existing_customer"] = True
+    return "not_qualified" if intent in _CUSTOMER_MISREADS else intent
+
+
 def competitor_options(hs) -> set[str]:
     """The exact values `current_competitor` accepts, from HubSpot."""
     d = hs._call("GET", "/crm/v3/properties/contacts/current_competitor")
@@ -707,6 +735,18 @@ different replies from the ones you will be given; apply the reasoning, not the 
      you want to hop on a call this week to talk through it more? Here is my calendar
      link if so" on 2026-10-13. Contrast "what is it exactly you want from me?" with no
      answer to our question, which stays question.
+
+  "Sorry for the delay in response. I am on the sincerely team, and we're already
+   partnered with Posh for ticketing."
+  -> not_qualified, with named_platform "Posh" and not_a_fit_reason "already a Posh
+     customer". **POSH IS US.** You are writing AS Posh, so a prospect on Posh is not
+     naming an incumbent to win them from -- they are an existing customer, and the
+     outbound sequence should never have reached them. Classified objection on
+     2026-10-13, which booked a six-month "re-engage" task to win a customer back from
+     ourselves. The draft thanks them, says we're glad to have them, and pitches
+     nothing: "Thanks for letting me know, Deja! Great to hear you're already with us.
+     Apologies for the extra email." Interest or a removal request still wins
+     (precedence 1 and 5); only an incumbent-style mention of Posh becomes this.
 
   "I no longer work for this business, please remove me from your mailing list."
   -> asked_to_stop, NOT wrong_contact. Precedence 1: any removal request wins, however
@@ -972,6 +1012,12 @@ save. What each one says (from instructions/reply-handling.md):
                            which hedges a judgement the prospect already made for us,
                            and "organisations", which is both the wrong word for our
                            audience and British spelling.
+                           **ALREADY ON POSH is not_qualified too, and still gets a
+                           draft.** They are our customer, so thank them, say we're glad
+                           to have them, apologise for the extra email, and stop:
+                             "Thanks for letting me know, Deja! Great to hear you're
+                              already with us. Apologies for the extra email."
+                           Never pitch, offer support, or suggest "exploring more".
   wrong_contact         -> thank them, and ask nothing further ABOUT THE OLD COMPANY.
                            Do not ask them to forward it or for the replacement's
                            details; a human decides what to do with a referral.
@@ -1666,6 +1712,10 @@ CLASSIFY_CASES = [
     ("No I'm not currently locked in my ticketing platform but can you explain "
      "everything to me again please?",
      "interested", "answered email 1 favourably and asked to hear more: an open door"),
+    ("Hi Zach, Sorry for the delay in response. I am on the sincerely team, and we're "
+     "already partnered with Posh for ticketing. Deja Janai",
+     ("not_qualified", "objection"),
+     "Posh is us: an existing customer. objection accepted because code converts it"),
 ]
 
 
@@ -1820,6 +1870,19 @@ def _self_test() -> int:
           sorted(m for m in dir(Smartlead) if not m.startswith("_")),
           ["campaigns", "get", "lead_ids_by_email", "replied_leads", "resume", "thread",
            "unsubscribe"])
+
+    # Posh is us: "we're on Posh" is an existing customer, never an incumbent objection.
+    _opts = {"Posh", "Resident Advisor"}
+    for _in, _plat, _want in (("objection", "Posh", "not_qualified"),
+                              ("not_now", "posh", "not_qualified"),
+                              ("interested", "Posh", "interested"),
+                              ("asked_to_stop", "Posh", "asked_to_stop"),
+                              ("objection", "RA", "objection"),
+                              ("objection", "", "objection")):
+        _r = {"intent": _in, "named_platform": _plat}
+        check(f"existing customer: {_in} naming {_plat or 'nothing'!r}",
+              (existing_customer_intent(_r, _opts), bool(_r.get("_existing_customer"))),
+              (_want, _plat.lower() == "posh"))
 
     print(f"config: not_now floor {nn}d, not_interested {ni}d, auto-send "
           f"{cfg['auto_send_intents'] or 'empty (enforced)'}")
@@ -2186,7 +2249,7 @@ def main(argv=None) -> int:
             res = classify(client, model, messages,
                            sender=existing.get("outbound_sender", ""),
                            contact_email=email)
-            intent = res["intent"]
+            intent = res["intent"] = existing_customer_intent(res, comp_options)
             spec = INTENTS[intent]
             processed += 1
             print(f"  {email}: {intent}  ({res.get('reason','')[:60]})")
@@ -2460,6 +2523,11 @@ def main(argv=None) -> int:
                     payload["review_reason"] = (
                         f"{rq.review_reason_for(intent)} — DRAFT CONTAINS A BANNED "
                         f"PHRASE: {res['_banned']}. Rewrite before approving.")
+                if res.get("_existing_customer"):
+                    payload["review_reason"] = (
+                        f"{rq.review_reason_for(intent)} — SAYS THEY'RE ALREADY ON "
+                        f"POSH. Verify, and set Has group = Yes in HubSpot if they are "
+                        f"a customer; the engine does not write it.")
                 if res.get("_link_fallback"):
                     payload["review_reason"] = (
                         f"{rq.review_reason_for(intent)} — booking link is "
