@@ -699,6 +699,20 @@ different replies from the ones you will be given; apply the reasoning, not the 
   "How does your payout schedule work?"
   -> question. Asking how the product behaves, with nothing about cost or switching.
 
+  "No I'm not currently locked in my ticketing platform but can you explain everything
+   to me again please?"
+  -> interested, NOT question. They ANSWERED email 1 the way we hoped -- not locked in
+     -- and then asked to hear the whole thing. That is an open door, not a request for
+     a definition. The owner turned the question-shaped draft into an answer plus "Would
+     you want to hop on a call this week to talk through it more? Here is my calendar
+     link if so" on 2026-10-13. Contrast "what is it exactly you want from me?" with no
+     answer to our question, which stays question.
+
+  "I no longer work for this business, please remove me from your mailing list."
+  -> asked_to_stop, NOT wrong_contact. Precedence 1: any removal request wins, however
+     much else the reply says. Classified wrong_contact on 2026-10-09, which drafted
+     "I'll remove you from our list" while removing her from nothing.
+
   "We're happy on Tixr, but thanks for reaching out."
   -> objection, NOT not_interested. Naming an incumbent IS the concern, and "we already
      have someone" is the most workable objection in this market -- it is a comparison a
@@ -839,6 +853,24 @@ save. What each one says (from instructions/reply-handling.md):
                               tickets, we can help. If that's not you, no worries."
                            Note what that does -- answers plainly, says who it IS for,
                            and gives them an easy exit. No ask at all.
+                           **Answer only what they asked.** The owner cut "so you can
+                           focus on putting on great events. If you run ticketed events
+                           and want more control over your ticketing, we can help" from
+                           a real draft: filler after the answer reads as a pitch.
+
+                           **"WHY did you reach out?" / "HOW did you get my email?" --
+                           never invent a reason.** The model wrote "I researched your
+                           work around ticketed events", which nobody did. The owner
+                           replaced it with the true answer: "You attended our Posh
+                           Experiences Presents: Dessert Disco", and to "how did you find
+                           my personal email": "it's the email for your Posh account
+                           that you've used to sign up for Posh events". You do not know
+                           which event, so write the honest shape and leave the specific
+                           for the reviewer:
+                             "Great question. You've been to Posh events, like
+                              [the Posh event they attended], and we thought ..."
+                           The bracket stops the send until a human fills it, which is
+                           the point: a vague true answer beats a confident false one.
 
   interested            -> warm, one line, PLUS the booking link above. **Offer the
                            conversation; do not re-pitch.** They already said yes to
@@ -850,6 +882,19 @@ save. What each one says (from instructions/reply-handling.md):
                            clunky platforms and take control of their ticketing" --
                            unasked-for positioning AND a swipe at competitors, in a
                            reply to someone who had already said "Tell me more".
+                           **If THEY apologise for a slow reply or a missed email, answer
+                           that first.** "I don't know why I never saw this email" got
+                           "Great to hear from you!"; the owner changed it to "No
+                           worries, sorry for the delay on my end as well!" Open with
+                           "No worries!" and only add the second half when our side was
+                           also slow.
+                           **If they asked us to explain, explain first, in one line,
+                           then offer the call.** The owner's edit on "can you explain
+                           everything to me again?":
+                             "Absolutely. Posh is a ticketing platform built for event
+                              organizers. We handle ticket sales, check-in, and payouts.
+                              Would you want to hop on a call this week to talk through
+                              it more? Here is my calendar link if so: <link>"
 
   **IF YOU OPEN WITH A GREETING, PUT IT ON ITS OWN LINE.** "Hi Joseph," then a line
   break, then the reply. Not "Hi Joseph, that's awesome to hear" as one run-on line --
@@ -1614,6 +1659,13 @@ CLASSIFY_CASES = [
      "support is deeply valued.",
      "automated_reply",
      "P2: a routing menu in a templated reply is not a person redirecting us"),
+    # Two REAL misclassifications from the 2026-10-13 review of approved replies.
+    ("I no longer work for this business, please remove me from your mailing list. "
+     "Not sure how you even got this email.",
+     "asked_to_stop", "P1: a removal request beats wrong_contact"),
+    ("No I'm not currently locked in my ticketing platform but can you explain "
+     "everything to me again please?",
+     "interested", "answered email 1 favourably and asked to hear more: an open door"),
 ]
 
 
