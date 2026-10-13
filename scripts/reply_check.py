@@ -304,11 +304,31 @@ class Smartlead:
         except urllib.error.HTTPError as e:
             return e.code, (e.read() or b"").decode()[:300]
 
-    def get(self, path: str):
-        s, d = self._call("GET", path)
-        if s != 200:
-            raise RuntimeError(f"GET {path} -> {s}: {d}")
-        return d
+    def get(self, path: str, tries: int = 4):
+        """One read, retried on a rate limit, a transient 5xx, or a network fault.
+
+        **Added 2026-10-06** after a single Cloudflare 502 on `GET /campaigns` failed the
+        whole morning reply check; the same call returned 200 minutes later. Same shape
+        as `sync_sends.Smartlead.get`. Reads only: the POSTs go through `_call` unretried,
+        so a retry can never repeat a write. A 4xx is a real answer and is not retried.
+        """
+        for attempt in range(tries):
+            try:
+                s, d = self._call("GET", path)
+            except (OSError, http.client.HTTPException) as e:
+                # OSError, not URLError: RemoteDisconnected is a ConnectionResetError.
+                if attempt == tries - 1:
+                    raise
+                s, d = None, f"{type(e).__name__}: {e}"
+            if s == 200:
+                return d
+            transient = s is None or s == 429 or 500 <= s < 600
+            if not transient or attempt == tries - 1:
+                raise RuntimeError(f"GET {path} -> {s}: {d}")
+            wait = 2 ** attempt
+            print(f"    Smartlead {s or d} on {path[:52]}; retrying in {wait}s "
+                  f"({attempt + 1}/{tries - 1})")
+            time.sleep(wait)
 
     def campaigns(self) -> list[dict]:
         return self.get("/campaigns") or []
@@ -742,6 +762,19 @@ ONCE FORM SAYS MACHINE, PICK THE SUBTYPE ON WHO IS ABSENT -- the PERSON or nobod
      and classifying by form means not recording that. That is the trade precedence
      rule 2 already makes, and it is the right one -- a human can disqualify a contact
      in one click, where a reply sent to a no-reply address is gone.
+
+  "Dear friends, thank you for your message. Due to an exceptionally high number of
+   incoming messages, I may be slow to respond... Brand Deals, Speaking Opportunities,
+   and Other Business Requests: please contact my manager Arjun (arjun@...) and cc his
+   assistant. Press Requests: ... Private Individual/Follower: ..."
+  -> automated_reply, NOT wrong_contact. A real one came in on 2026-10-08, seven seconds
+     after our email, and was classified wrong_contact with a draft to "reach out to
+     Arjun", which also marked the contact disqualified. The names in it are a STANDING
+     ROUTING MENU addressed to everyone ("Dear friends"), sorted by request category,
+     not a person telling US they are the wrong contact. **A redirect inside a
+     templated reply is part of the template.** wrong_contact needs a human who read our
+     email and pointed elsewhere. "Slow to respond" with no return date is not an
+     absence either, so it is not out_of_office.
 
 The test in one line: **out_of_office means a person is temporarily absent and will be
 back; automated_reply means a machine answered and no one is absent at all.** Getting
@@ -1569,6 +1602,18 @@ CLASSIFY_CASES = [
      "automated_reply",
      "P2: an ORG auto-responder is classified by form, however much apparent "
      "qualification signal its text carries"),
+    # A REAL misclassification, 2026-10-08: came back wrong_contact, so the contact was
+    # set disqualified and a human was asked to email the manager named in a template.
+    ("Dear friends, Thank you for your message. Due to an exceptionally high number of "
+     "incoming messages, I may be slow to respond (and in some cases, may not be able "
+     "to personally respond at all). Currently, I am also traveling and researching. "
+     "Brand Deals, Speaking Opportunities, and Other Business Requests: Please contact "
+     "my manager Arjun (arjun@oddprojects.com) and cc his assistant Erin. Press "
+     "Requests: For interview requests, please contact Arjun. Private "
+     "Individual/Follower: While I likely won't be able to respond individually, your "
+     "support is deeply valued.",
+     "automated_reply",
+     "P2: a routing menu in a templated reply is not a person redirecting us"),
 ]
 
 
