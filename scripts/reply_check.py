@@ -562,10 +562,11 @@ def name_the_calendar_owner(draft: str, owner: str, sender: str) -> tuple[str, b
 # automate: a value that is not an exact option is rejected by HubSpot, so the worst a
 # wrong guess can do is fail loudly rather than write a fiction into the CRM.
 #
-# Keys are matched against the prospect's text lower-cased, longest key first. The
-# options themselves are fetched from HubSpot at runtime and checked against this map on
-# startup, so adding an option there without adding an alias here is visible rather than
-# silent.
+# Keys are matched against the prospect's text lower-cased, longest key first. These are
+# only the nicknames and misspellings: every option HubSpot lists also matches under its
+# own name (see `match_platform`), so an option added in HubSpot works with no change
+# here. That was not always so -- "I am currently using SweatPals" (2026-10-14) went
+# unwritten because SweatPals was a valid option missing from this table.
 PLATFORM_ALIASES = {
     "resident advisor": "Resident Advisor", "ra": "Resident Advisor",
     "eventbrite": "Eventbrite", "event brite": "Eventbrite", "eb": "Eventbrite",
@@ -601,11 +602,18 @@ def match_platform(said: str, allowed: set[str]) -> str:
     t = f" {(said or '').lower().strip()} "
     if not t.strip():
         return ""
-    for alias in sorted(PLATFORM_ALIASES, key=len, reverse=True):
+    names = {o.lower(): o for o in allowed if o not in _NOT_A_PLATFORM}
+    names.update({re.sub(r"[\s-]+", "", k): v for k, v in names.items()})
+    names.update(PLATFORM_ALIASES)
+    for alias in sorted(names, key=len, reverse=True):
         if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", t):
-            got = PLATFORM_ALIASES[alias]
+            got = names[alias]
             return got if got in allowed else ""
     return ""
+
+
+# Options that are answers, not platforms: never matched from a prospect's words.
+_NOT_A_PLATFORM = {"Other", "N/A - Only on Posh", "Free Admission"}
 
 
 # Intents a "we use Posh" reply is mistaken for. interested and asked_to_stop are left
@@ -1883,6 +1891,14 @@ def _self_test() -> int:
         check(f"existing customer: {_in} naming {_plat or 'nothing'!r}",
               (existing_customer_intent(_r, _opts), bool(_r.get("_existing_customer"))),
               (_want, _plat.lower() == "posh"))
+
+    # Every HubSpot option matches under its own name, not only the aliased ones.
+    _opts = {"SweatPals", "Get-In", "Resident Advisor", "Other", "Free Admission"}
+    for _said, _want in (("SweatPals", "SweatPals"), ("sweat pals", ""),
+                         ("I'm using Sweatpals for tickets", "SweatPals"),
+                         ("getin", "Get-In"), ("RA", "Resident Advisor"),
+                         ("other", ""), ("free admission", ""), ("our own app", "")):
+        check(f"match_platform {_said!r}", match_platform(_said, _opts), _want)
 
     print(f"config: not_now floor {nn}d, not_interested {ni}d, auto-send "
           f"{cfg['auto_send_intents'] or 'empty (enforced)'}")
