@@ -442,7 +442,7 @@ class HubSpotWriter:
                         # platform would rewrite the same value and report it as news.
                         # hubspot_owner_id is read ONLY to check whether one is
                         # already set. A contact with a real owner has a real
-                        # relationship with that person; the meeting round robin must
+                        # relationship with that person; meeting routing must
                         # never displace it. See assign_meeting_owner().
                         # company / prospect_org / firstname name the prospect in a
                         # re-engagement task's subject. Without them the subject reads
@@ -879,8 +879,8 @@ different link, do
 not write "I'll send over some times" and do not offer to find a slot by hand -- give
 them the link so they can book.
 
-**WHOSE calendar it is matters, and you are told above.** Meetings are round-robined
-across the team, so {owner} is usually NOT the person writing:
+**WHOSE calendar it is matters, and you are told above.** It is normally the sender's
+own; occasionally a colleague's, when the sender has no calendar:
   - {owner} is the SENDER -> "You can grab some time with me here: {booking_link}"
   - {owner} is SOMEONE ELSE -> name them. "You can grab some time with {owner} on our
     team here: {booking_link}"
@@ -1073,8 +1073,9 @@ def booking_links() -> dict[str, str]:
     Parsed, never restated. Changing a link, or adding a sender, is a config edit in one
     place; hardcoding here would defeat that.
 
-    **A round robin across the whole team as of 2026-09-24**, and the column is headed
-    "Meeting owner" rather than "Sender" because those are no longer the same people.
+    **One row per sender as of 2026-10-14** (a team round robin 2026-09-24 to 10-14,
+    which is why the column is headed "Meeting owner"; a sender with no row gets the
+    fallback's calendar).
     History: a single owner (Zach, the only person taking meetings), then one link per
     sender when he was promoted, now a pool because sending capacity and meeting
     capacity are different constraints.
@@ -1111,65 +1112,32 @@ def booking_links() -> dict[str, str]:
 
 def booking_link_for(sender: str, links: dict[str, str] | None = None,
                      contact_email: str = "") -> tuple[str, str]:
-    """(sender name, their link), or ("", "") when the sender is UNKNOWABLE.
+    """(owner name, their link): the SENDER's own calendar, else the fallback's.
 
-    **Two different situations, and conflating them cost the whole run once.**
+    `sender` is `outbound_sender` from the contact, written once at enrolment, so a
+    reply months later still resolves to the person who actually wrote to them.
 
-    An EMPTY sender means there is no HubSpot contact for this lead, or it was not
-    enrolled by the engine -- a Smartlead-only lead, a hand-uploaded list, a contact
-    deleted after enrolment. That is an ordinary fact about the data, it is reachable
-    today (the reply-test leads have no HubSpot record at all), and it must NOT raise:
-    there is no per-contact try/except in the reply loop, so one such lead would abort
-    the run and stop every real prospect's reply being processed. Returns ("", "") and
-    the draft goes out without a link for a human to add.
-
-    A NAMED sender with no row is different: somebody added a sender to `senders.md` and
-    forgot `meeting-routing.md`. That is a config gap, it affects every contact that
-    sender ever mails, and it should be loud. Still raises.
-
-    **Neither case ever falls back to another sender's calendar.** Handing a prospect the
-    wrong person's time while looking like it worked is the failure both branches exist
-    to prevent, and defaulting to the first row would quietly restore the single-owner
-    behaviour this replaced.
+    Falls back (name suffixed " (fallback)") when there is no sender -- a Smartlead-only
+    lead with no HubSpot record -- or the sender has no row in meeting-routing.md, as
+    for a departed sender. Never raises: there is no per-contact try/except in the reply
+    loop, so one such lead would abort the run for every real prospect. Returns
+    ("", "") only when no fallback is configured; the draft then carries a placeholder
+    that send_replies refuses to send.
     """
     links = links if links is not None else booking_links()
     fallback = links.get("__fallback__", "")
     links = {k: v for k, v in links.items() if k != "__fallback__"}
     who = (sender or "").strip()
-    pool = sorted(links)                       # fixed order, so the hash is stable
-    if not pool:
-        return "", ""
-    # **ROUND ROBIN, not sender-matched (2026-09-24).** Who writes and who takes the
-    # meeting are now separate questions -- see config/meeting-routing.md. The owner is
-    # chosen from the whole pool regardless of which identity sent the email.
-    #
-    # Keyed on the CONTACT, and deterministic, because this function runs again on every
-    # heartbeat: `random()` would show one prospect Kate's calendar on Monday and
-    # Caroline's on Tuesday, which reads as a company that cannot keep track of itself.
-    # Same reasoning as pick_variant in run_generation.
-    if contact_email:
-        # **SALTED, and the salt is load-bearing (fixed 2026-09-25).** This used to hash
-        # the bare address, which collided with `split_by_sender --batch K/N` -- that
-        # selects contacts on `hash % N` of the SAME unsalted string. With N=2 the batch
-        # filter consumes the low bit, and because len(pool) is even, `% len(pool)`
-        # inherits that parity: batch 1/2 could only ever reach the even-indexed owners
-        # (Carl, Henry, Lawrence) and batch 2/2 only the odd (Caroline, Kate, Zach).
-        # The 1,314-contact round was silently routing to three of six calendars.
-        #
-        # Two hashes of one string are only independent if something distinguishes them.
-        # `run_generation.pick_variant` takes a `salt` for exactly this reason; this
-        # function predated that lesson. Any future per-contact hash needs its own salt.
-        idx = int(hashlib.sha256(
-            ("meeting-owner:" + contact_email.strip().lower()).encode()).hexdigest(), 16)
-        name = pool[idx % len(pool)]
-        return name, links[name]
-    # No contact email -- a Smartlead-only lead. The sender's own calendar if they have
-    # one, otherwise the configured fallback. Not a hash of nothing, which would send
-    # every anonymous lead to the same person.
-    for name in pool:
+    # **THE SENDER'S OWN CALENDAR (2026-10-14), no longer a round robin.** A prospect
+    # who has been writing to Carl books with Carl. The round robin (2026-09-24) handed
+    # them a stranger's link; Aliza was correcting those rows by hand before sending.
+    # `contact_email` is still accepted so callers need not change, and is unused.
+    for name in links:
         if name.lower() == who.lower():
             return name, links[name]
-    for name in pool:
+    # No sender (a Smartlead-only lead), or one with no calendar (Brooke, departed):
+    # the configured fallback, labelled so the draft names them instead of "with me".
+    for name in links:
         if name.lower() == fallback.lower():
             return f"{name} (fallback)", links[name]
     return "", ""
@@ -1211,8 +1179,9 @@ def assign_meeting_owner(props: dict, existing: dict, owner: str, link: str,
                          draft: str) -> str:
     """Set the contact owner to the person whose calendar the prospect was just sent.
 
-    Added 2026-09-25 on Aliza's call: meetings round-robin across the whole team, so
-    without this a prospect books with Kate while the contact record stays unowned and
+    Added 2026-09-25 on Aliza's call, when meetings round-robined across the team. Still
+    needed with sender-owned calendars: without it a prospect books with Kate while the
+    contact record stays unowned and
     nobody is accountable for the relationship.
 
     THREE CONDITIONS, all necessary:
@@ -1224,7 +1193,7 @@ def assign_meeting_owner(props: dict, existing: dict, owner: str, link: str,
          not reassign the contact.
       2. The contact has NO owner today. 90 of the 1,314 in the first large round were
          owned by people with real relationships (Daniela, Rob, Gabriela and others).
-         A round robin must never displace a human's book.
+         Meeting routing must never displace a human's book.
       3. The name resolves to a HubSpot owner id. An unresolvable name is reported and
          skipped rather than written as a blank, which would LOOK like an assignment.
 
@@ -1238,7 +1207,8 @@ def assign_meeting_owner(props: dict, existing: dict, owner: str, link: str,
         return ""
     if (existing.get("hubspot_owner_id") or "").strip():
         return ""                                  # condition 2 -- never displace
-    oid = owner_ids().get(owner.strip().lower())
+    owner = owner.replace(" (fallback)", "").strip()
+    oid = owner_ids().get(owner.lower())
     if not oid:
         return (f"owner NOT assigned: {owner!r} has no HubSpot owner record "
                 f"(add one, or the meeting lands on an unowned contact)")
@@ -1250,11 +1220,9 @@ def recycle_task_owner(existing: dict, contact_email: str) -> tuple[str, str]:
     """(owner id, why) for a re-engagement task. Aliza's call, 2026-09-25.
 
     An existing HubSpot owner wins -- that is a real relationship and the person who
-    should hear that their contact is ready again. Otherwise the contact's deterministic
-    meeting-routing owner takes it, which spreads recycle work across the whole team
-    instead of piling every one of them on the two people who happen to own the warmed
-    mailboxes. Same rotation, same salt, so the rep who would have taken their meeting
-    is the rep who gets the reminder.
+    should hear that their contact is ready again. Otherwise the person whose calendar
+    the contact routes to (their sender, or the fallback), so the rep who would have
+    taken their meeting is the rep who gets the reminder.
     """
     owned = (existing.get("hubspot_owner_id") or "").strip()
     if owned:
@@ -1263,10 +1231,11 @@ def recycle_task_owner(existing: dict, contact_email: str) -> tuple[str, str]:
                                   contact_email=contact_email)
     if not who:
         return "", "no owner and no routing match"
-    oid = owner_ids().get(who.strip().lower())
+    who = who.replace(" (fallback)", "").strip()
+    oid = owner_ids().get(who.lower())
     if not oid:
         return "", f"{who} has no HubSpot owner record"
-    return oid, f"round-robin -> {who}"
+    return oid, f"sender's calendar -> {who}"
 
 
 def recycle_task_text(existing: dict, res: dict, recycle: str,
@@ -1566,10 +1535,6 @@ def classify(client, model: str, thread: list[dict], sender: str = "",
     # reply-handling.md step 3 requires reading the full conversation before acting.
     # The SENDER'S link, not a single owner's. Raises on an unknown or missing sender
     # rather than handing the prospect somebody else's calendar -- see booking_link_for.
-    # contact_email drives the round robin -- see booking_link_for. Passing it is what
-    # makes the choice per PROSPECT and stable; without it every lead falls through to
-    # the sender-or-fallback branch, which is the old single-owner behaviour wearing the
-    # new code.
     owner, link = booking_link_for(sender, contact_email=contact_email)
     if not link:
         # Only reachable if meeting-routing.md names no fallback sender, or names one
@@ -1892,6 +1857,17 @@ def _self_test() -> int:
               (existing_customer_intent(_r, _opts), bool(_r.get("_existing_customer"))),
               (_want, _plat.lower() == "posh"))
 
+    # Booking links: the sender's own calendar, never a round robin (2026-10-14).
+    _links = {"Carl": "L-carl", "Kate": "L-kate", "Zach": "L-zach",
+              "__fallback__": "Zach"}
+    for _snd, _em, _want in (("Carl", "a@b.com", ("Carl", "L-carl")),
+                             ("carl", "z@y.com", ("Carl", "L-carl")),
+                             ("Kate", "a@b.com", ("Kate", "L-kate")),
+                             ("Brooke", "a@b.com", ("Zach (fallback)", "L-zach")),
+                             ("", "", ("Zach (fallback)", "L-zach"))):
+        check(f"booking link for sender {_snd or '(none)'!r}",
+              booking_link_for(_snd, _links, contact_email=_em), _want)
+
     # Every HubSpot option matches under its own name, not only the aliased ones.
     _opts = {"SweatPals", "Get-In", "Resident Advisor", "Other", "Free Admission"}
     for _said, _want in (("SweatPals", "SweatPals"), ("sweat pals", ""),
@@ -2000,7 +1976,7 @@ def _self_test() -> int:
     ]
     # An existing owner is a real relationship and must win over the rotation.
     _owned, _why = recycle_task_owner({"hubspot_owner_id": "89417286"}, "a@b.com")
-    checks.append(("existing owner beats the round robin", _owned == "89417286"))
+    checks.append(("existing owner beats the sender routing", _owned == "89417286"))
 
     # --- task DUE DATE: ahead of a named contract end, on the date otherwise --------
     _T = "2026-09-28"
@@ -2417,8 +2393,8 @@ def main(argv=None) -> int:
             # paragraphs in copy that is one or two sentences long.
             draft = res.get("draft_response", "")
             if draft:
-                # The calendar may not be the sender's -- meetings round-robin across the
-                # team. Say whose it is rather than "with me".
+                # The calendar is the sender's own unless they have none (fallback).
+                # Say whose it is rather than "with me" in that case.
                 # A `question` never carries a booking link (2026-10-02). Enforced
                 # here because the prompt saying so has never been enough. Done BEFORE
                 # name_the_calendar_owner, which exists to label a link that is
