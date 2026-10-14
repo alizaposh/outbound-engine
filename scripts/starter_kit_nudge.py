@@ -83,6 +83,15 @@ def nudge_body(kit: dict[str, str]) -> str:
             f"{' -- ' + when if when else ''}! Here's the link to sign up: {url}")
 
 
+def nudge_context(row: dict) -> str:
+    """The original reply, headed so it cannot be read as a new one."""
+    when = (row.get("received_at") or "")[:10] or "earlier"
+    sent = parse_sent_at(row.get("sent_at", ""))
+    link = f", answered with a booking link {sent:%Y-%m-%d}" if sent else ""
+    return (f"[STARTER KIT NUDGE -- not a new reply. Their reply from {when}{link}, "
+            f"shown for context:]\n{row.get('reply_text', '')}")
+
+
 def parse_sent_at(raw: str) -> dt.datetime | None:
     """The sheet's sent_at, which reads like 'sent 2026-09-22T15:19:11+00:00'."""
     s = (raw or "").strip()
@@ -241,15 +250,20 @@ def main(argv=None) -> int:
             continue
         orig = (r.get("smartlead_message_id") or "").strip()
         res = rq.append_reply({
+            # The ORIGINAL reply's date, not today's. Stamping the queue time here made a
+            # nudge row read as the same reply arriving twice (deja.s.cherry, 2026-10-14).
+            "received_at": r.get("received_at", ""),
             "contact_name": r.get("contact_name", ""),
             "email": email,
             "company": r.get("company", ""),
             "campaign": campaign,
             "sent_by": r.get("sent_by", ""),
-            # The ORIGINAL words, so a reviewer sees what they are following up on.
-            "reply_text": r.get("reply_text", ""),
+            # The ORIGINAL words, so a reviewer sees what they are following up on --
+            # LABELLED, so nobody mistakes them for a new reply.
+            "reply_text": nudge_context(r),
             "intent": (r.get("intent") or "").strip(),
-            "proposed_action": "Offer the Starter Kit instead of a call.",
+            "proposed_action": "STARTER KIT NUDGE (not a new reply): offer the Starter "
+                               "Kit instead of a call.",
             "draft_response": body,
             "review_reason": REVIEW_REASON,
             # Derived id: the queue's own dedup then makes a second nudge impossible.
@@ -347,6 +361,14 @@ def _self_test() -> int:
         ("it does not presume WHY they went quiet",
          "aren't ready" not in body and "not ready" not in body),
         ("the derived id would dedup", NUDGE_PREFIX + "<abc>" != "<abc>"),
+        ("the copied reply is labelled as context, with its date and the link date",
+         nudge_context({"received_at": "2026-10-05T18:37:33.000Z",
+                        "sent_at": "sent 2026-10-06T15:32:06+00:00",
+                        "reply_text": "Hi Carl!"}).startswith(
+             "[STARTER KIT NUDGE -- not a new reply. Their reply from 2026-10-05, "
+             "answered with a booking link 2026-10-06")),
+        ("the original words survive the label",
+         nudge_context({"reply_text": "Hi Carl!"}).endswith("\nHi Carl!")),
     ]
     for why, ok in checks:
         bad += 0 if ok else 1
