@@ -11,7 +11,7 @@ and appends the sign-off in code. The model never writes a sign-off.
 
 ## Mailbox to sender
 
-5 sender identities, 16 mailboxes. Caroline and Kate were added 2026-09-30 and are WARMING -- see the section below; they are in this table because their mailboxes exist, and unassignable until warm.
+5 sender identities, 16 mailboxes. Caroline and Kate were added 2026-09-30, warmed for two weeks, and were marked ready 2026-10-14 -- see the Warming section below.
 
 | mailbox                            | first name |
 |------------------------------------|------------|
@@ -88,8 +88,12 @@ premise fails when that person has gone.
 
 | first name | since |
 |---|---|
-| Caroline | 2026-09-30 |
-| Kate | 2026-09-30 |
+
+**Empty since 2026-10-14: Caroline and Kate marked ready by the owner.** Evidence at the
+time: 14 days warming, all four mailboxes 0 spam and 100% inbox placement on Smartlead's
+warmup stats, ~130-170 warmup sends each. Still at `message_per_day` 15, so each sender
+takes ~10 new leads/day until raised. They started on batch 2 of list 1987 while Carl's
+and Zach's mailboxes were still saturated by batch 1.
 
 Names here keep their rows in the mailbox table above and are **excluded from being
 assigned new contacts**, exactly like the Departed section and for the opposite reason:

@@ -179,6 +179,23 @@ def load_rows(path: pathlib.Path, skip_failed: bool) -> list[dict]:
     return unique
 
 
+def lead_cap(cfg: dict, per_day: list[int]) -> int:
+    """New leads/day this sender's mailboxes can actually carry.
+
+    `max_new_leads_per_day` (40) is arithmetic for a sender with 4 mailboxes at 30/day:
+    120 sends / 3 emails. **Added 2026-10-14 for Caroline and Kate**, who have 2
+    mailboxes each at 15/day -- 30 sends, so 10 new leads. Given the fleet's 40 they would
+    spend every send on email 1 and starve the follow-ups. So: the sender's total
+    `message_per_day` divided by the sequence length, never above config. Raising their
+    mailboxes with set_send_limits.py raises this on the next --verify --repair.
+    """
+    want = int(cfg.get("max_new_leads_per_day", 15))
+    total = sum(int(x or 0) for x in per_day)
+    if not total:
+        return want
+    return max(1, min(want, total // len(POSITIONS)))
+
+
 def verify_campaign(sl, cid, cfg, repair: bool = False) -> int:
     """Read a campaign back and check the API-set settings still match config.
 
@@ -202,7 +219,8 @@ def verify_campaign(sl, cid, cfg, repair: bool = False) -> int:
         ("stop_lead_settings", c.get("stop_lead_settings"), want_stop),
     ]
     sched = c.get("scheduler_cron_value") or {}
-    want_cap = int(cfg.get("max_new_leads_per_day", 15))
+    want_cap = lead_cap(cfg, [a_.get("message_per_day") for a_ in
+                              (sl.call("GET", f"/campaigns/{cid}/email-accounts") or [])])
     checks += [
         ("schedule timezone", sched.get("tz"), cfg.get("timezone", "America/New_York")),
         ("schedule days", sched.get("days"), cfg.get("days", [1, 2, 3, 4, 5])),
@@ -610,14 +628,18 @@ def main(argv=None) -> int:
             "send_as_plain_text": bool(cfg.get("send_as_plain_text", False)),
             "stop_lead_settings": cfg.get("stop_lead_settings", "REPLY_TO_AN_EMAIL"),
             "track_settings": cfg.get("track_settings", ["DONT_EMAIL_OPEN"])})
+        accts = [a_ for a_ in sl.call("GET", "/email-accounts/?offset=0&limit=200")
+                 if (a_.get("from_email") or "").lower() in boxes]
+        ids = [a_["id"] for a_ in accts]
+        cap = lead_cap(cfg, [a_.get("message_per_day") for a_ in accts])
+        print(f"  new leads/day : {cap} (from {sum(int(a_.get('message_per_day') or 0) for a_ in accts)} "
+              f"sends/day across {len(accts)} mailbox(es))")
         sl.call("POST", f"/campaigns/{cid}/schedule", {
             "timezone": cfg.get("timezone"),
             "days_of_the_week": cfg.get("days_of_the_week"),
             "start_hour": cfg.get("start_hour"), "end_hour": cfg.get("end_hour"),
             "min_time_btw_emails": int(cfg.get("min_time_btw_emails", 10)),
             "max_new_leads_per_day": cap, "schedule_start_time": None})
-        ids = [a_["id"] for a_ in sl.call("GET", "/email-accounts/?offset=0&limit=200")
-               if (a_.get("from_email") or "").lower() in boxes]
         if len(ids) != len(boxes):
             raise RuntimeError(f"matched {len(ids)} Smartlead accounts for {len(boxes)} "
                                f"mailboxes; refusing a campaign with the wrong senders")
