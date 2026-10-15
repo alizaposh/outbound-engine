@@ -95,6 +95,23 @@ def newer_than(messages: list[dict], watermark: str | None) -> list[dict]:
     return [m for _, m in sorted(out, key=lambda x: x[0])]
 
 
+def needs_thread(newest_ms: int | None, ever_replied: bool,
+                 watermark: str | None) -> bool:
+    """Whether a lead's thread must be fetched to find messages not yet logged.
+
+    A lead who EVER replied is always fetched: the statistics carry one reply time per
+    step, so a second reply, or our answer sent from the review queue, would not move
+    `newest_ms`. They are a few dozen leads, so the cost is small. Otherwise: nothing
+    sent yet means nothing to log, and activity at or before the watermark is logged.
+    """
+    if ever_replied:
+        return True
+    if not newest_ms:
+        return False
+    cut = to_millis(watermark) if watermark else None
+    return cut is None or newest_ms > cut
+
+
 def engagement_body(m: dict, contact_id: str, owner: str | None) -> dict:
     """The HubSpot engagement for one Smartlead message."""
     kind = str(m.get("type") or "").upper()
@@ -203,6 +220,36 @@ class Smartlead:
             if offset >= int(d.get("total_leads") or 0):
                 return out
 
+    def activity(self, cid) -> tuple[dict[str, int], set[str]]:
+        """({email: newest send/reply in millis}, {emails that ever replied}).
+
+        From the campaign STATISTICS, one row per email step sent, 100 rows a page.
+        **Added 2026-10-15, after the job timed out at 15 minutes** once two new
+        campaigns took the fleet past 2,000 leads: fetching every lead's thread costs
+        one call per lead, every run, even though most leads have nothing new. A page
+        of statistics answers "anything new?" for ~100 leads, so only leads with
+        activity past their watermark cost a thread fetch.
+        """
+        newest: dict[str, int] = {}
+        replied: set[str] = set()
+        offset = 0
+        while True:
+            d = self.get(f"/campaigns/{cid}/statistics?offset={offset}&limit=100")
+            rows = d.get("data") or []
+            for row in rows:
+                email = (row.get("lead_email") or "").strip().lower()
+                if not email:
+                    continue
+                if row.get("reply_time"):
+                    replied.add(email)
+                for k in ("sent_time", "reply_time"):
+                    ms = to_millis(row.get(k))
+                    if ms and ms > newest.get(email, 0):
+                        newest[email] = ms
+            offset += len(rows)
+            if not rows or offset >= int(d.get("total_stats") or 0):
+                return newest, replied
+
     def thread(self, cid, lead_id) -> list[dict]:
         d = self.get(f"/campaigns/{cid}/leads/{lead_id}/message-history"
                      f"?show_plain_text_response=true")
@@ -263,6 +310,12 @@ def main(argv=None) -> int:
         if not leads:
             continue
         contacts = hs.search_by_email([e for e, _ in leads], READ_PROPS)
+        try:
+            newest, replied = sl.activity(cid)
+        except RuntimeError as e:
+            # Never worse than before: without the summary, fetch every thread.
+            print(f"  statistics unavailable ({e}); fetching every thread")
+            newest, replied = None, set()
         print(f"\ncampaign {cid} {camp.get('name','')!r}: {len(leads)} lead(s), "
               f"{len(contacts)} matched in HubSpot")
         for email, lead_id in leads:
@@ -272,6 +325,11 @@ def main(argv=None) -> int:
             if not c:
                 unmatched += 1
                 print(f"  UNMATCHED {email}: no HubSpot contact, cannot log")
+                continue
+            if newest is not None and not needs_thread(
+                    newest.get(email), email in replied,
+                    c.get("outbound_last_logged_send")):
+                current += 1
                 continue
             msgs = newer_than(sl.thread(cid, lead_id), c.get("outbound_last_logged_send"))
             if not msgs:
@@ -402,6 +460,18 @@ def _self_test() -> int:
           ["2026-09-01T10:00:00Z", "2026-09-02T10:00:00Z", "2026-09-03T10:00:00Z"])
     check("a message with no timestamp is skipped, not crashed on",
           len(newer_than([{"type": "SENT", "time": None}], None)), 0)
+
+    # The statistics pre-check (2026-10-15): skip only what is provably logged.
+    _w = "2026-09-03T10:00:00Z"
+    _at = to_millis(_w)
+    check("never replied, nothing sent -> skip", needs_thread(None, False, None), False)
+    check("activity newer than the watermark -> fetch",
+          needs_thread(_at + 1, False, _w), True)
+    check("activity at the watermark -> skip", needs_thread(_at, False, _w), False)
+    check("activity but no watermark (backfill) -> fetch",
+          needs_thread(_at, False, None), True)
+    check("ever replied -> always fetch, statistics miss later replies",
+          needs_thread(_at, True, _w), True)
 
     print(f"{len(fails)} FAILED" if fails else "all pure cases passed")
     for f in fails:
