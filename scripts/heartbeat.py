@@ -97,6 +97,9 @@ SLOTS = {
                    # yesterday. MORNING ONLY -- it measures days of silence, so there is
                    # nothing a second run in the same day can discover.
                    "sync_meetings", "starter_kit_nudge",
+                   # Starter Kit sign-ups for contacts we offered it. Morning only:
+                   # sessions are weekly, so a later run in the day finds nothing new.
+                   "sync_starter_kit",
                    "check_enrolment", "slack_intake"],
     # `build_approved` is MORNING ONLY, by decision on 2026-09-14. It was briefly in all
     # three slots so an approval reached a campaign within hours; that was reverted
@@ -172,6 +175,7 @@ JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sy
               "resume_sequences": "Out-of-office restarts",
               "campaign_report": "Weekly campaign review",
               "sync_meetings": "Meetings booked",
+              "sync_starter_kit": "Starter Kit sign-ups",
               "build_approved": "Approved campaigns"}
 
 # Extra arguments per job. `send_replies` is capped because the heartbeat runs it
@@ -214,6 +218,8 @@ SUMMARY_PATTERNS = [
     re.compile(r"^\d+ resumed, \d+ blocked.*$", re.M),            # resume_sequences
     re.compile(r"^no contact has a resume date.*$", re.M),
     re.compile(r"^\d+ promoted, \d+ already current.*$", re.M),    # sync_meetings
+    re.compile(r"^\d+ offered, \d+ signed up.*$", re.M),         # sync_starter_kit
+    re.compile(r"^no contact has been sent the Starter Kit.*$", re.M),
     re.compile(r"^no engine-enrolled contact has booked.*$", re.M),
     re.compile(r"^\d+ accepted, \d+ queued, \d+ rejected.*$", re.M),   # slack_intake
     re.compile(r"^NO CONTACT IS IN MORE THAN ONE LIVE CAMPAIGN\.$", re.M),

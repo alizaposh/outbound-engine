@@ -323,6 +323,26 @@ Keyed on the body rather than on the intent for the same reason. A reviewer may 
 sentence to a reply the engine did not put it on, or remove it from one it did, and what
 we are measuring is what the prospect got.
 
+### Did they take it? `outbound_starter_kit_signed_up` / `_session_held` (added 2026-10-15)
+
+Written by `scripts/sync_starter_kit.py` (morning heartbeat) for contacts with
+`outbound_starter_kit_offered` set, from the weekly session meetings Gong logs to
+HubSpot (any title containing "starter kit"; cancelled ones never count).
+
+| Property | Means |
+|---|---|
+| `outbound_starter_kit_signed_up` | date of the first session they signed up for **on or after** our offer |
+| `outbound_starter_kit_session_held` | date of the first such session marked **Completed** |
+
+**"Session held" is a proxy for attendance, not proof.** Each session meeting is linked
+to the contacts who signed up -- a future session already carries its sign-ups -- and
+HubSpot never learns who actually joined. Gong does, and does not pass it on. Chosen
+over wiring the Gong API (Aliza, 2026-10-15); revisit if the gap starts to matter.
+
+Both dates are recomputed every run, so a session cancelled after sign-up clears them.
+
+Lists: **Starter Kit -> signed up** (2398), **Starter Kit -> session held** (2399).
+
 ### The two lists, and why two
 
 | List | Answers |

@@ -138,6 +138,18 @@ def specs(cfg: dict) -> list[tuple[str, str, dict]]:
                                    "conversion this CTA has to earn",
          branch([enrolled, has("outbound_starter_kit_offered"),
                  is_any("outbound_status", ["meeting_booked"])])),
+        # Did they take the offer itself? From the Gong-logged session meetings, by
+        # scripts/sync_starter_kit.py (2026-10-15). "Session held" is a PROXY for
+        # attendance -- signed up and the session ran -- because HubSpot records
+        # sign-ups, not who joined.
+        ("Starter Kit -> signed up", "offered the Starter Kit and signed up for a "
+                                     "session on or after the offer",
+         branch([enrolled, has("outbound_starter_kit_offered"),
+                 has("outbound_starter_kit_signed_up")])),
+        ("Starter Kit -> session held", "signed up for a session (after our offer) that "
+                                        "ran; a proxy for attendance, not confirmed",
+         branch([enrolled, has("outbound_starter_kit_offered"),
+                 has("outbound_starter_kit_session_held")])),
         ("Positive replies", f"intent in {', '.join(positive)}",
          branch([enrolled, is_any("outbound_reply_intent", positive)])),
         ("Negative replies", f"intent in {', '.join(negative)}",

@@ -294,6 +294,10 @@ scripts/                   ← Python (stdlib + anthropic only)
                              four places and produced by none, so "meetings booked" was
                              permanently zero. Refuses to credit a booking that predates
                              enrolment. DRY RUN BY DEFAULT. Runs in all three slots
+  sync_starter_kit.py      ← contacts sent the Starter Kit -> did they sign up for a
+                             session, and did it run (a proxy for attendance: HubSpot
+                             has sign-ups, not who joined). From the Gong-logged
+                             session meetings. DRY RUN BY DEFAULT. Morning slot
   build_reporting.py       ← creates the 15 DYNAMIC HubSpot lists the dashboard clicks
                              into. Intent buckets parsed from analysis-defaults.md, so
                              the dashboard cannot disagree with the weekly report.
