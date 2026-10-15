@@ -311,11 +311,11 @@ def main(argv=None) -> int:
             continue
         contacts = hs.search_by_email([e for e, _ in leads], READ_PROPS)
         try:
-            newest, replied = sl.activity(cid)
+            activity, replied = sl.activity(cid)
         except RuntimeError as e:
             # Never worse than before: without the summary, fetch every thread.
             print(f"  statistics unavailable ({e}); fetching every thread")
-            newest, replied = None, set()
+            activity, replied = None, set()
         print(f"\ncampaign {cid} {camp.get('name','')!r}: {len(leads)} lead(s), "
               f"{len(contacts)} matched in HubSpot")
         for email, lead_id in leads:
@@ -326,8 +326,8 @@ def main(argv=None) -> int:
                 unmatched += 1
                 print(f"  UNMATCHED {email}: no HubSpot contact, cannot log")
                 continue
-            if newest is not None and not needs_thread(
-                    newest.get(email), email in replied,
+            if activity is not None and not needs_thread(
+                    activity.get(email), email in replied,
                     c.get("outbound_last_logged_send")):
                 current += 1
                 continue
