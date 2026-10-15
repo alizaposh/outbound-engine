@@ -293,7 +293,7 @@ scripts/                   ← Python (stdlib + anthropic only)
                              until 2026-09-15: the value was documented and guarded in
                              four places and produced by none, so "meetings booked" was
                              permanently zero. Refuses to credit a booking that predates
-                             enrolment. DRY RUN BY DEFAULT. Runs last in the morning
+                             enrolment. DRY RUN BY DEFAULT. Runs in all three slots
   build_reporting.py       ← creates the 15 DYNAMIC HubSpot lists the dashboard clicks
                              into. Intent buckets parsed from analysis-defaults.md, so
                              the dashboard cannot disagree with the weekly report.

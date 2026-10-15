@@ -79,13 +79,15 @@ PY = sys.executable
 # gone before close_sequences looks, so it closes the lead that was just revived. See the
 # docstring in resume_sequences.py.
 #
-# `sync_meetings` runs LAST, and only in the morning. Last because it promotes a status
-# every job ahead of it may have just written -- reply_check sets `replied`,
-# close_sequences sets `no_response`, and a booking supersedes either -- so reading after
-# they have all settled means one pass sees the day's final state instead of racing it.
-# Morning-only because it feeds the weekly report rather than anything time-sensitive:
-# `meeting_booked` is a number a human reads on a dashboard, and recording it hours
-# earlier changes nothing for the prospect, who has already got the meeting.
+# `sync_meetings` runs AFTER every status-writing job in its slot, because it promotes a
+# status they may have just written -- reply_check sets `replied`, close_sequences sets
+# `no_response`, and a booking supersedes either -- so reading after they have settled
+# means one pass sees the slot's final state instead of racing it.
+#
+# In ALL THREE slots as of 2026-10-15 (morning-only before). A prospect booked at 10:22,
+# minutes after the morning pass, and stayed off the meetings report until the next
+# morning -- the day of the meeting itself. It is cheap (one HubSpot search, a few
+# Smartlead calls, seconds), and idempotent, so extra runs cost nothing.
 SLOTS = {
     "morning":   ["send_replies", "build_approved", "reply_check", "sync_unsubscribes",
                    "sync_bounces", "close_sequences", "resume_sequences", "sync_sends",
@@ -125,7 +127,7 @@ SLOTS = {
     # `Smartlead.get` retries 429s with backoff as of the same date, so throttling shows
     # up as a slow job rather than a lost one, and the retry count is printed. If that
     # count starts climbing, narrow the per-lead fetch before adding more runs.
-    "midday":    ["reply_check", "sync_sends", "slack_intake"],
+    "midday":    ["reply_check", "sync_sends", "sync_meetings", "slack_intake"],
     # `sync_sends` added to the AFTERNOON slot 2026-09-17, and the reason is a real
     # complaint rather than tidiness. It ran morning-only, so the three campaigns
     # launched after the 10:07 heartbeat sent 40 emails that appeared NOWHERE in HubSpot
@@ -142,7 +144,7 @@ SLOTS = {
     # lead (253 Smartlead calls at 247 leads, so roughly one per lead) and that scales
     # with every campaign still ACTIVE. Two runs a day is the compromise: revisit if reps
     # ask for same-hour visibility, and optimise the per-lead fetch first if so.
-    "afternoon": ["reply_check", "sync_sends", "slack_intake"],
+    "afternoon": ["reply_check", "sync_sends", "sync_meetings", "slack_intake"],
     # Mondays only, via its own routine. Separate from the daily slots because it is a
     # REPORT, not a job that keeps state correct -- running it daily would append six
     # near-identical history rows a week and bury the weekly signal it exists to show.
