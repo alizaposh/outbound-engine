@@ -56,6 +56,10 @@ refresh them. All are prefixed `Outbound — ` so they sort together in the list
 | Outbound — Bounced | 1954 | Undeliverable |
 | Outbound — Suppressed | 1955 | Excluded from every future campaign |
 | Outbound — Paused for out-of-office | 1956 | Frozen until `outbound_resume_after` |
+| Outbound — Starter Kit offered | 2192 | Sent the Starter Kit session link (a confirmed send) |
+| Outbound — Starter Kit -> signed up | 2398 | Signed up for a session on or after our offer |
+| Outbound — Starter Kit -> session held | 2399 | That session ran. **A proxy for attendance** — HubSpot has sign-ups, not who joined |
+| Outbound — Starter Kit -> meeting | 2193 | Offered the Starter Kit and later booked a 1:1 |
 
 The intent buckets are **not** written in this file or in the script. They are parsed
 from `config/analysis-defaults.md`, the same block the weekly report parses, so the
@@ -166,10 +170,18 @@ row 1  volume     Enrolled · In sequence · No response
 row 2  outcomes   Replied (human) · Meetings booked · Positive · Negative · Deferred
 row 3  pipeline   Replied awaiting next step · Disqualified
 row 4  hygiene    Opted out · Bounced · Suppressed · Auto-responders · Paused for OOO
+row 5  starter    Starter Kit offered · signed up · session held · meeting
 ```
 
 Row 1 plus rows 3–4 are the status axis and must total Enrolled. Row 2 is the intent
 axis and must not be added to them.
+
+**Row 5 is its own funnel, deliberately NOT a value of `outbound_status`** (decided
+2026-10-15). A contact offered the Starter Kit is still `replied`, then maybe
+`meeting_booked`; folding it into the status axis would make it vanish the moment they
+did anything else, and every script that branches on status would need to learn it.
+Read row 5 left to right as a funnel, each tile a subset of the one before, and never
+add it to rows 1–4.
 
 ---
 
@@ -227,12 +239,14 @@ ever be as truthful as the property behind it.
 | In sequence | `create_campaign.py` | **on campaign creation — NOT on send** |
 | **Emailed (confirmed send)** | **`sync_sends.py`** | **after a real send is observed in Smartlead** |
 | Replied, Positive/Negative/Deferred, Auto-responders | `reply_check.py` | every heartbeat |
-| **Meetings booked** | **`sync_meetings.py`** | **morning heartbeat** |
+| **Meetings booked** | **`sync_meetings.py`** | **every heartbeat** (morning only before 2026-10-15) |
 | No response | `close_sequences.py` | morning heartbeat |
 | Opted out | `reply_check.py`, `sync_unsubscribes.py` | morning heartbeat |
 | Bounced | `sync_bounces.py` | morning heartbeat |
 | Suppressed | `sync_unsubscribes.py` | morning heartbeat |
 | Paused for OOO | `reply_check.py`, cleared by `resume_sequences.py` | every heartbeat |
+| Starter Kit offered | `send_replies.py` | after a confirmed send |
+| Starter Kit signed up / session held | `sync_starter_kit.py` | morning heartbeat |
 
 **Meetings booked was the gap.** `meeting_booked` was named as the outcome state in
 `config/hubspot-properties.md` and defended against overwriting in four separate
