@@ -72,6 +72,8 @@ HANDED_OFF_STATUS = "handed_off"
 # "Do not send", or the send can fail -- all of which would leave a metric claiming an
 # offer nobody received. The sent body is the only evidence that counts.
 STARTER_KIT_PROP = "outbound_starter_kit_offered"
+# Same rule for the third-party links offer (added 2026-10-16): the sent body decides.
+THREE_PL_PROP = "outbound_3pl_offered"
 
 # A queued nudge carries a derived message id. Asserted equal to
 # starter_kit_nudge.NUDGE_PREFIX in the self-test rather than imported, so this module
@@ -278,6 +280,8 @@ def _self_test() -> int:
          "Starter Kit sent but NOT recorded" in _MAIN),
         ("the configured url is non-empty, or the check can never fire",
          bool((_rc.starter_kit().get("starter_kit_url") or "").strip())),
+        ("3PL: recorded from the sent body, only after a confirmed send",
+         "pl_url in body" in _MAIN and _MAIN.index("pl_url = ") > _MAIN.index("sent += 1")),
     ]
     kit.extend([
         # One nudge, then silence. The cooldown is what makes "leave them be" true --
@@ -478,6 +482,15 @@ def main(argv=None) -> int:
                           f"  (Starter Kit offer recorded)")
                 else:
                     print(f"      Starter Kit sent but NOT recorded: no HubSpot "
+                          f"contact for {email}")
+            pl_url = _rc.three_pl_url()
+            if pl_url and pl_url in body:
+                cid = (props or {}).get("hs_object_id")
+                if cid:
+                    print(f"      {writer.write(cid, {THREE_PL_PROP: now[:10]})}"
+                          f"  (third-party links offer recorded)")
+                else:
+                    print(f"      third-party links sent but NOT recorded: no HubSpot "
                           f"contact for {email}")
             # A SENT nudge is the second ignored ask, so leave them alone. Written
             # here and not at queue time on purpose: a nudge a reviewer discards must

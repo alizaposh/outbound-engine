@@ -228,3 +228,33 @@ link in its body, which is accidental and would stop being true if anyone added 
 refuses to chase anyone who has booked, and `sync_meetings` is what makes that true for
 today's bookings. It measures days of silence, so a second run in the same day can
 discover nothing.
+
+
+## Third-party links: the named-competitor CTA (added 2026-10-16)
+
+A prospect happy on another platform ("we're happy on Tixr, but thanks for reaching
+out") is not going to switch, and a booking link asks them to. **Third-party links** ask
+for nothing they would have to give up: they list their Tixr (or any platform's) events
+on Posh, free, for the extra traffic, and keep selling where they sell today.
+
+```
+three_pl_url: https://posh.vip/3pl
+```
+
+**When it is offered: an `objection` that NAMES a platform.** The exact complement of the
+Starter Kit above, which goes to an objection naming none, so one reply never gets both.
+The classifier already routes "we're happy on X" to `objection` rather than
+`not_interested` -- naming an incumbent is the concern -- so this needs no new intent.
+
+- **Named in the sentence** when the platform matches a `current_competitor` option
+  ("your Tixr events"); "your events" otherwise, so an unrecognised name the prospect
+  typed loosely is never echoed back mangled.
+- **Not on Posh.** "We're on Posh" is an existing customer and is converted to
+  `not_qualified` before this runs.
+- **Appended in CODE**, for the same reason as the Starter Kit: the model is told the
+  offer exists so it does not write a competing version, and never describes the
+  feature itself -- it has never seen its documentation.
+- **It does not replace the 180-day cooldown or the dated task.** It is a no-cost way to
+  get their events onto Posh in the meantime, not a substitute for the re-engagement.
+- **Tracked** as `outbound_3pl_offered`, written by `send_replies.py` from the body that
+  actually went out, exactly like `outbound_starter_kit_offered`.

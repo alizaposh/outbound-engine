@@ -1001,6 +1001,11 @@ save. What each one says (from instructions/reply-handling.md):
                            the same offer. Never mention a Starter Kit, a webinar, a
                            session, a demo or a walkthrough yourself, and never invent a
                            time or a link for one.
+
+                           **DO NOT PITCH THIRD-PARTY LINKS EITHER.** When they named a
+                           platform, the engine appends a sentence offering to list
+                           their events on Posh for free. Do not describe that feature,
+                           mention listing their events on Posh, or add any link.
   not_now               -> acknowledge their timing, say you will come back then, name
                            the time they gave. No link, no pitch.
   not_interested        -> short and gracious. No re-pitch, no link, no "just one more
@@ -1388,6 +1393,47 @@ def add_starter_kit(draft: str, kit: dict[str, str] | None = None) -> tuple[str,
     sentence = (f"In the meantime, feel free to check out our next Starter Kit session"
                 f"{' on ' + when if when else ''} for tips on making the most of Posh! "
                 f"Here is the link: {url}")
+    return draft.rstrip() + "\n\n" + sentence, True
+
+
+_THREE_PL: str | None = None
+
+
+def three_pl_url() -> str:
+    """The third-party links page, from config/meeting-routing.md. "" disables the offer
+    rather than raising, for the same reason as the Starter Kit: a soft CTA must not be
+    able to abort a reply run."""
+    global _THREE_PL
+    if _THREE_PL is None:
+        m = re.search(r"## Third-party links.*?```.*?three_pl_url:\s*(\S+).*?```",
+                      MEETING_ROUTING.read_text(encoding="utf-8"), re.S)
+        _THREE_PL = m.group(1).strip() if m else ""
+        if not _THREE_PL:
+            print("    3PL: no url in config/meeting-routing.md; offer disabled")
+    return _THREE_PL
+
+
+def wants_3pl(intent: str, named_platform: str) -> bool:
+    """An objection that NAMES a platform ("we're happy on Tixr") -- the exact complement
+    of wants_starter_kit, so a reply never gets both. Added 2026-10-16."""
+    return intent == "objection" and bool((named_platform or "").strip())
+
+
+def add_3pl(draft: str, platform: str = "", url: str | None = None) -> tuple[str, bool]:
+    """Append the third-party links offer if it is not already there. (draft, added).
+
+    `platform` is the MATCHED current_competitor option, never the prospect's raw text:
+    echoing a loosely typed name back at them reads as a mail merge gone wrong, so an
+    unmatched platform becomes "your events". Idempotent on the URL.
+    """
+    url = (three_pl_url() if url is None else url).strip()
+    if not url or not draft.strip() or url in draft:
+        return draft, False
+    plat = (platform or "").strip()
+    events = f"your {plat} events" if plat and plat not in _NOT_A_PLATFORM else "your events"
+    sentence = (f"One thing that might help: we just launched third-party links, which let "
+                f"you list {events} on Posh for free so more people find them. "
+                f"You can learn more here: {url}")
     return draft.rstrip() + "\n\n" + sentence, True
 
 
@@ -2136,6 +2182,27 @@ def _self_test() -> int:
     _f = validate.check_banned("", add_starter_kit("x")[0], literals=_lits,
                                regexes=_res)
     kit_checks.append(("the CONFIGURED sentence carries no banned phrase", not _f))
+    # --- third-party links (2026-10-16) ---
+    for intent, plat, want, why in (
+            ("objection", "Tixr", True, "3PL: 'we're happy on Tixr' gets it"),
+            ("objection", "", False, "3PL: a bare objection gets the Starter Kit instead"),
+            ("not_interested", "Tixr", False, "3PL: a decline gets nothing"),
+            ("asked_to_stop", "Tixr", False, "3PL: never to someone who asked us to stop")):
+        kit_checks.append((why, wants_3pl(intent, plat) == want))
+    kit_checks.append(("3PL and the Starter Kit never both fire",
+                       not any(wants_3pl(i, p) and wants_starter_kit(i, p)
+                               for i in ("objection", "interested") for p in ("", "DICE"))))
+    _p, _padded = add_3pl(_d, "Tixr")
+    kit_checks.append(("3PL: appended, names the platform, carries the url",
+                       _padded and _p.startswith(_d) and "your Tixr events" in _p
+                       and three_pl_url() in _p))
+    kit_checks.append(("3PL: idempotent", add_3pl(_p, "Tixr") == (_p, False)))
+    kit_checks.append(("3PL: no matched platform -> 'your events'",
+                       "your events" in add_3pl(_d, "")[0]
+                       and "your Other events" not in add_3pl(_d, "Other")[0]))
+    kit_checks.append(("3PL: the configured url is non-empty", bool(three_pl_url())))
+    _f = validate.check_banned("", add_3pl("x", "Tixr")[0], literals=_lits, regexes=_res)
+    kit_checks.append(("3PL: the sentence carries no banned phrase", not _f))
     kit_wrong = 0
     print()
     for why, ok in kit_checks:
@@ -2460,6 +2527,19 @@ def main(argv=None) -> int:
                         res["draft_response"] = kitted
                         print("      draft: Starter Kit offer appended (objection with "
                               "no named competitor)")
+                # Third-party links, for an objection that DID name a platform ("we're
+                # happy on Tixr"). The matched option, so the sentence never echoes a
+                # misspelling; see config/meeting-routing.md.
+                if wants_3pl(intent, res.get("named_platform") or ""):
+                    # What THEY said, matched -- not a stored competitor, which may
+                    # be a different, older platform.
+                    plat = match_platform(res.get("named_platform") or "",
+                                          comp_options) or ""
+                    pl, added = add_3pl(res["draft_response"], plat)
+                    if added:
+                        res["draft_response"] = pl
+                        print(f"      draft: third-party links offer appended (named "
+                              f"{plat or res.get('named_platform')!r})")
                 note = assign_meeting_owner(props, existing, _owner, _link,
                                             res.get("draft_response", ""))
                 if note:

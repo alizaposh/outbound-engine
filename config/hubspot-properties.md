@@ -323,6 +323,14 @@ Keyed on the body rather than on the intent for the same reason. A reviewer may 
 sentence to a reply the engine did not put it on, or remove it from one it did, and what
 we are measuring is what the prospect got.
 
+## `outbound_3pl_offered` (added 2026-10-16)
+
+Date the third-party links offer (`https://posh.vip/3pl`) actually **reached** a
+prospect. Same rules as `outbound_starter_kit_offered` above: written by
+`send_replies.py` after a confirmed send, keyed on the sent body. The offer is appended
+by `reply_check` to objections that name a platform ("we're happy on Tixr"); see
+`config/meeting-routing.md`.
+
 ### Did they take it? `outbound_starter_kit_signed_up` / `_session_held` (added 2026-10-15)
 
 Written by `scripts/sync_starter_kit.py` (morning heartbeat) for contacts with
