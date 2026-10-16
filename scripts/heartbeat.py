@@ -189,6 +189,11 @@ JOB_LABELS = {"reply_check": "Reply check", "sync_unsubscribes": "Unsubscribe sy
 NO_APPLY = {"check_enrolment"}
 
 JOB_ARGS = {"send_replies": ["--limit", "25"],
+            # A HARD bounce (address or domain does not exist, read from the mail
+            # server's bounce message) also sets lifecycle Disqualified, with a note
+            # saying it is a dead address, not a bad fit. Aliza's call, 2026-10-16.
+            # Soft and blocked bounces are never touched.
+            "sync_bounces": ["--disqualify"],
             # Writes the history row AND posts its own detailed summary. That means two
             # Slack messages on a Monday: the report itself, and the heartbeat's health
             # line saying the job ran green. Deliberate -- "did it run" and "what did it

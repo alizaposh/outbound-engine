@@ -43,6 +43,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -91,11 +92,62 @@ def classify_bounce(row: dict) -> tuple[str, str]:
     return "unknown", "no bounce-type field on the row"
 
 
+# The mail server's own bounce message, which Smartlead stores in the lead's message
+# history as a REPLY from mailer-daemon/postmaster. **Added 2026-10-16**: the statistics
+# row carries only `is_bounced`, so every bounce read as "unknown" and none was ever
+# recorded -- 32 dead addresses a day were skipped, albert@freewater.io among them, while
+# the reason ("550 5.1.1 ... address couldn't be found") sat one API call away.
+#
+# Checked in this order, because the categories overlap on codes: "Inbox full" is a 5.2.2
+# (a 5xx) and is still temporary, so SOFT is tested first.
+DAEMON_FROM = ("mailer-daemon", "postmaster", "mail delivery")
+DAEMON_SOFT = ("delivery incomplete", "temporary problem", "will retry",
+               "delivery is delayed", "inbox full", "over quota", "overquota",
+               "mailbox full", "4.2.2", "5.2.2")
+# Blocked is NOT a dead address: the recipient's server refused us, often by policy.
+# Left for a human, never disqualified.
+DAEMON_BLOCKED = ("message blocked", "has been blocked", "5.7.1", "5.4.1")
+DAEMON_HARD = ("address not found", "couldn't be found", "could not be found",
+               "nosuchuser", "no such user", "user unknown", "unknown user",
+               "does not exist", "mailbox unavailable", "5.1.1", "5.1.10", "5.5.0",
+               "badrcptdomain",
+               # Exchange's permanent-failure NDR. Its temporary one reads "Delivery
+               # is delayed", which is in DAEMON_SOFT.
+               "delivery has failed to these recipients")
+
+
+def classify_daemon(messages: list[dict]) -> tuple[str, str]:
+    """(kind, evidence) from the NEWEST bounce message in a lead's history.
+
+    Newest, because a temporary failure is followed by a final one if retries run out:
+    Gmail says "will retry for 44 more hours", then later "permanently failed".
+    """
+    for m in reversed(messages or []):
+        who = f"{m.get('from') or ''} {m.get('subject') or ''}".lower()
+        if str(m.get("type") or "").upper() != "REPLY" or not any(
+                d in who for d in DAEMON_FROM):
+            continue
+        body = re.sub(r"\[data:[^\]]*\]", "", str(m.get("email_body") or ""))
+        body = re.sub(r"\s+", " ", body).strip()
+        low = body.lower()
+        for kind, markers in (("soft", DAEMON_SOFT), ("blocked", DAEMON_BLOCKED),
+                              ("hard", DAEMON_HARD)):
+            hit = next((x for x in markers if x in low), None)
+            if hit:
+                return kind, f"bounce message: {body[:140]!r}"
+        return "unknown", f"bounce message not recognised: {body[:140]!r}"
+    return "unknown", "no bounce message in the thread"
+
+
 def decide(kind: str, existing: dict, include_soft: bool) -> tuple[str, dict, str]:
     """(outcome, properties, note). Pure, so the rules are testable without an API."""
     status = (existing.get("outbound_status") or "").strip()
     if status == "bounced":
         return "already recorded", {}, "already outbound_status=bounced"
+    if kind == "blocked":
+        return ("skip", {},
+                "BLOCKED by the recipient's server: not proof the address is dead, so "
+                "left for a human")
     if kind == "soft":
         return ("skip", {},
                 "SOFT bounce: temporary, so it must not permanently exclude anyone")
@@ -148,9 +200,9 @@ def bounce_note_body(email: str, row: dict, kind: str, evidence: str,
         "does NOT mean the organisation is a bad fit. If someone finds a working "
         "address for this person, clear the stage and they become workable again.",
         "",
-        "Smartlead reports no SMTP code or bounce category, so hard vs soft cannot be "
-        "confirmed from the provider. Treated as permanent because it failed on first "
-        "contact.",
+        "Hard vs soft is read from the mail server's own bounce message (above), "
+        "which Smartlead keeps in the thread. Only a hard bounce -- the address or "
+        "domain does not exist -- is recorded this way.",
         "",
         NOTE_MARKER,
     ]
@@ -280,22 +332,36 @@ def main(argv=None) -> int:
         for r in rows:
             email = (r.get("lead_email") or "").strip().lower()
             if email:
-                found[email] = r
+                found[email] = {**r, "_campaign_id": cid}
 
     if not found:
         print("\nno bounced rows found." if not mismatch
               else "\nno rows enumerated, but the aggregate disagrees — see above.")
         return 1 if mismatch else 0
 
+    # sync_sends' client: retries 429/5xx, and has the lead list and thread reads.
+    from sync_sends import Smartlead as ThreadReader
+    thread_reader = ThreadReader(key)
     hs_read = HubSpot(env_token())
     writer = HubSpotWriter(env_token(), a.apply)
     contacts = hs_read.search_by_email(sorted(found), READ_PROPS)
     counts = {"record": 0, "skip": 0, "already recorded": 0, "unmatched": 0}
     print(f"\n{len(found)} bounced address(es), {len(contacts)} matched in HubSpot\n")
 
+    lead_ids: dict[str, dict[str, int]] = {}      # campaign -> {email: lead id}
     for email, row in sorted(found.items()):
         kind, evidence = classify_bounce(row)
         existing = contacts.get(email)
+        # The statistics row has no bounce type, so read the bounce message itself --
+        # only for contacts not already recorded, to keep the call count down.
+        if (kind == "unknown" and existing is not None
+                and (existing.get("outbound_status") or "") != "bounced"):
+            cid_ = str(row.get("_campaign_id") or "")
+            if cid_ not in lead_ids:
+                lead_ids[cid_] = dict(thread_reader.leads(cid_))
+            lid = lead_ids[cid_].get(email)
+            if lid:
+                kind, evidence = classify_daemon(thread_reader.thread(cid_, lid))
         if existing is None:
             counts["unmatched"] += 1
             print(f"  UNMATCHED {email:42} {kind} bounce ({evidence}); no HubSpot "
@@ -337,12 +403,13 @@ def main(argv=None) -> int:
 
     print(f"\n{counts['record']} recorded, {counts['skip']} skipped, "
           f"{counts['already recorded']} already current, {counts['unmatched']} unmatched")
-    print(f"{sl.calls} Smartlead calls, {hs_read.calls + writer.calls} HubSpot calls")
+    print(f"{sl.calls + thread_reader.calls} Smartlead calls, "
+          f"{hs_read.calls + writer.calls} HubSpot calls")
     if not a.apply:
         print("DRY RUN: nothing was written.")
     if counts["skip"]:
-        print("Skipped rows are soft or unknown bounces. Re-run with --include-soft only "
-              "if you accept permanently excluding a contact that may bounce temporarily.")
+        print("Skipped rows are temporary (soft), blocked or unrecognised bounces. A soft "
+              "one is recorded later if its final bounce message says it failed for good.")
     return 1 if mismatch else 0
 
 
@@ -368,6 +435,35 @@ def _self_test() -> int:
     check("guarantee 3: never native opt-out", "hs_email_optout" in props, False)
 
     # Guarantee 5.
+    # The bounce message in the thread (2026-10-16), from real Smartlead histories.
+    def _d(body, frm="mailer-daemon@googlemail.com"):
+        return classify_daemon([{"type": "SENT", "from": "caroline@x.com",
+                                 "email_body": "hi"},
+                                {"type": "REPLY", "from": frm, "email_body": body}])[0]
+    check("address not found -> hard", _d("Error Icon [data:image/png;base64,iVBO] "
+          "ADDRESS NOT FOUND ... The response from the remote server was: 550 5.1.1"),
+          "hard")
+    check("domain not found -> hard", _d("ADDRESS NOT FOUND Your message wasn't "
+          "delivered to x because the domain 7feur.com couldn't be found."), "hard")
+    check("Exchange permanent NDR -> hard", _d("Delivery has failed to these recipients "
+          "or groups: a@albany.edu", "postmaster@live.albany.edu"), "hard")
+    check("gmail retrying -> soft", _d("DELIVERY INCOMPLETE There was a temporary "
+          "problem delivering your message. Gmail will retry for 44 more hours. 452 4.2.2"),
+          "soft")
+    check("inbox full (a 5xx) -> soft, not hard", _d("RECIPIENT INBOX FULL ... 552 5.2.2 "
+          ": user is over quota"), "soft")
+    check("blocked -> blocked, never hard", _d("MESSAGE BLOCKED Your message to x has "
+          "been blocked. 550 5.4.1"), "blocked")
+    check("the NEWEST bounce message wins",
+          classify_daemon([{"type": "REPLY", "from": "mailer-daemon@g.com",
+                            "email_body": "Gmail will retry"},
+                           {"type": "REPLY", "from": "mailer-daemon@g.com",
+                            "email_body": "ADDRESS NOT FOUND 550 5.1.1"}])[0], "hard")
+    check("a prospect's reply is not a bounce message",
+          classify_daemon([{"type": "REPLY", "from": "albert@freewater.io",
+                            "email_body": "this address does not exist anymore lol"}])[0],
+          "unknown")
+    check("blocked is skipped", decide("blocked", {}, True)[0], "skip")
     check("soft bounce is skipped", decide("soft", {}, False)[0], "skip")
     check("soft stays skipped even with --include-soft",
           decide("soft", {}, True)[0], "skip")

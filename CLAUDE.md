@@ -309,7 +309,11 @@ scripts/                   ← Python (stdlib + anthropic only)
                              open them; the scope is what allows these lists
   sync_bounces.py          ← Smartlead bounces -> HubSpot outbound_status=bounced.
                              DRY RUN BY DEFAULT. Never sets outbound_suppressed: a
-                             bounce is a deliverability fact, not a consent decision
+                             bounce is a deliverability fact, not a consent decision.
+                             Hard vs soft is read from the mail server's bounce
+                             message in the thread; a HARD bounce also sets lifecycle
+                             Disqualified (--disqualify, on in the heartbeat) with a
+                             note. Soft and blocked bounces are left alone
   sync_unsubscribes.py     ← Smartlead unsubscribes -> HubSpot outbound_suppressed.
                              DRY RUN BY DEFAULT. Scoped suppression only, never the
                              native global opt-out
