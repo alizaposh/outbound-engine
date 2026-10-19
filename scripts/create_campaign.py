@@ -387,6 +387,52 @@ def record_enrolment(rows, cid, name, apply_changes: bool) -> int:
     return done
 
 
+def add_to_campaign(sl, target: dict, boxes: list[str], lead_list: list[dict],
+                    rows: list[dict], name: str) -> int:
+    """Append approved leads to an EXISTING campaign (added 2026-10-19).
+
+    For a rep's next batch: one campaign keeps one `max_leads_per_day` flowing across
+    the rep's mailboxes, where a second campaign on the same mailboxes would double the
+    new-lead rate and starve the follow-ups. Same guarantees as a new campaign:
+
+      * THE CAMPAIGN'S MAILBOXES ARE EXACTLY THIS SENDER'S. Checked live, not assumed,
+        so a wrong id cannot put Carl's copy in Zach's campaign (guarantee 5).
+      * Never a lead already in another campaign (`ignore_duplicate_...`), and every
+        drop is reported.
+      * The enrolment is recorded in HubSpot after the upload, never before.
+      * It changes nothing else about the campaign: not its status, sequence, schedule
+        or settings. The custom fields carry the copy, so the sequence is untouched.
+    """
+    cid = target["id"]
+    attached = {(x.get("from_email") or "").lower()
+                for x in (sl.call("GET", f"/campaigns/{cid}/email-accounts") or [])}
+    if attached != set(boxes):
+        raise RuntimeError(
+            f"campaign {cid} ({name}) sends from {sorted(attached)}, but this copy is "
+            f"for {sorted(boxes)}. Refusing: the sign-off would not match the mailbox.")
+    print(f"\nadding to existing campaign {cid} ({name}, {target.get('status')})")
+    up = sl.call("POST", f"/campaigns/{cid}/leads", {
+        "lead_list": lead_list,
+        "settings": {"ignore_duplicate_leads_in_other_campaign": True}})
+    landed = int(up.get("total_leads") or 0)
+    dupes = int(up.get("skipped_in_other_campaign_count") or 0)
+    print(f"  uploaded {up.get('upload_count')} lead(s), {landed} landed; "
+          f"duplicates={up.get('duplicate_count')} blocked={up.get('block_count')} "
+          f"invalid={up.get('invalid_email_count')} already_in_another_campaign={dupes}")
+    if dupes or landed != len(lead_list):
+        print(f"\n  !! {len(lead_list) - landed} of {len(lead_list)} lead(s) did NOT land. "
+              f"Reconcile before treating the batch as enrolled.")
+    print()
+    try:
+        record_enrolment(rows, cid, name, apply_changes=True)
+    except Exception as e:
+        print(f"  ENROLMENT NOT RECORDED: {e}", file=sys.stderr)
+        return 1
+    print(f"\nstatus: {sl.call('GET', f'/campaigns/{cid}').get('status')}  "
+          f"({sl.calls} API calls)")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Create a DRAFTED Smartlead campaign from approved copy. Never launches.")
@@ -425,6 +471,10 @@ def main(argv=None) -> int:
                          "config/smartlead-defaults.md for deliverability reasons.")
     ap.add_argument("--dry-run", action="store_true",
                     help="print exactly what would be sent to Smartlead; write nothing")
+    ap.add_argument("--add-to", metavar="CAMPAIGN_ID",
+                    help="append these leads to an EXISTING campaign instead of creating "
+                         "one. Its mailboxes must be exactly this sender's. Used when a "
+                         "rep's next batch should flow on from the last with no gap.")
     a = ap.parse_args(argv)
     cfg = load_defaults()
 
@@ -502,7 +552,15 @@ def main(argv=None) -> int:
     # A same-day second campaign from the same rep gets "-2", matching the tab suffix
     # rule. Smartlead does not enforce unique names, so without this two campaigns would
     # be indistinguishable in the UI and in the weekly report.
-    if a.campaign_name:
+    target = None
+    if a.add_to:
+        # The existing campaign's name, so the enrolment write-back and the review tab's
+        # `Built into` stamp both point at the campaign the leads actually joined.
+        target = Smartlead(api_key()).call("GET", f"/campaigns/{a.add_to}")
+        if not target.get("id"):
+            raise RuntimeError(f"--add-to {a.add_to}: no such campaign")
+        name = target.get("name") or str(a.add_to)
+    elif a.campaign_name:
         name = a.campaign_name
     elif a.requester:
         who = re.sub(r"[^A-Za-z0-9]", "", a.requester.split()[0]).title()
@@ -595,6 +653,9 @@ def main(argv=None) -> int:
             print(f"  WOULD REFUSE: {e}", file=sys.stderr)
             return 2
         return 0
+
+    if a.add_to:
+        return add_to_campaign(Smartlead(api_key()), target, boxes, lead_list, rows, name)
 
     sl = Smartlead(api_key())
     created = sl.call("POST", "/campaigns/create", {"name": name})

@@ -233,7 +233,12 @@ def main(argv=None) -> int:
     ap.add_argument("--tab", help="one tab; default is every engine-created tab")
     ap.add_argument("--mailboxes", help="override the mailboxes; default is every box "
                                         "belonging to the row's sender")
+    ap.add_argument("--add-to", metavar="CAMPAIGN_ID",
+                    help="with --tab: append the approved rows to this EXISTING campaign "
+                         "instead of building a new one (a rep's next batch)")
     a = ap.parse_args(argv)
+    if a.add_to and not a.tab:
+        ap.error("--add-to needs --tab: one tab, one campaign")
 
     svc, _ = rq.sheets_service()
     cfg = er.load_config()
@@ -293,8 +298,13 @@ def main(argv=None) -> int:
         cname, n = tab, 2
         while cname in existing:
             cname, n = f"{tab}-b{n}", n + 1
+        if a.add_to:
+            cname = Smartlead(api_key()).call("GET", f"/campaigns/{a.add_to}").get("name") \
+                or str(a.add_to)
         requester = tab.split("-")[0]
-        work = ROOT / "reviews" / f"approved-{cname}.csv"
+        # Named for the TAB when adding to an existing campaign: named for the campaign,
+        # a second batch overwrote the first batch's file (2026-10-19).
+        work = ROOT / "reviews" / f"approved-{tab if a.add_to else cname}.csv"
         filled, missing = fill_hubspot_ids(rows)
         if missing:
             # Reported, never silent. A contact the engine cannot identify in HubSpot
@@ -307,7 +317,8 @@ def main(argv=None) -> int:
         print(f"  {tab}: {len(rows)} of {total} row(s) approved, sender {sender}, "
               f"{len(boxes.split(','))} mailbox(es)")
         if not a.apply:
-            print(f"    would build campaign {cname!r} from {work.name}"
+            print(f"    would {'ADD to' if a.add_to else 'build'} campaign {cname!r} "
+                  f"from {work.name}"
                   + (f" ({already} row(s) already built earlier)" if already else ""))
             built += 1
             continue
@@ -316,6 +327,7 @@ def main(argv=None) -> int:
                "--csv", str(work), "--audience", tab, "--usecase", "approved-review",
                "--mailboxes", boxes, "--requester", requester,
                "--campaign-name", cname,
+               *(["--add-to", a.add_to] if a.add_to else []),
                # **Do not name a person we did not verify.** This read
                # f"{requester} (Approved column, {tab})", where requester is
                # tab.split("-")[0] -- the name in the TAB, i.e. whoever REQUESTED the
@@ -336,7 +348,8 @@ def main(argv=None) -> int:
             failed += 1
             continue
         for line in out.splitlines():
-            if "created campaign" in line or "uploaded" in line or "status:" in line:
+            if ("created campaign" in line or "adding to" in line or "uploaded" in line
+                    or "did NOT land" in line or "status:" in line):
                 print(f"    {line.strip()}")
         # Stamp the rows AFTER the campaign exists. Stamping first would mark rows built
         # into a campaign that then failed to create, and they would never be retried.

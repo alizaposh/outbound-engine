@@ -329,3 +329,20 @@ indistinguishable in the UI and in the weekly report.
 
 *Campaign 3955179 was renamed from `2026-09_list1914_ticketing-switch` to
 `Aliza-2026-09-14` when this landed, so the convention is not split across campaigns.*
+
+## A rep's next batch: add to the live campaign (added 2026-10-19)
+
+When a rep's current campaign is about to run out of new leads, append the next batch
+rather than building a second campaign on the same mailboxes (two campaigns would double
+the new-lead rate and starve the follow-ups):
+
+```
+build_approved.py --tab <Review-Tab> --add-to <campaign_id>          # dry run
+build_approved.py --tab <Review-Tab> --add-to <campaign_id> --apply
+```
+
+It refuses unless the campaign's mailboxes are exactly the tab's sender's, uploads with
+the same duplicate guard, records the enrolment in HubSpot, and stamps `Built into` with
+the existing campaign's name. It changes nothing else about the campaign, and an ACTIVE
+campaign starts sending the new leads with no launch step. First used for batch 2 of
+list 1987 (Carl and Zach, 321 each).
