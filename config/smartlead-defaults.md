@@ -19,7 +19,14 @@ Lock these once the Smartlead account exists (Phase 1).
     drifting down — lagging and noisy at this volume. Read bounces AND replies before
     going further, and per golden rule 4 the way past 30 is more mailboxes, not a higher
     number here.
-- Fleet capacity: **12 mailboxes × 30 = 360/day**, or 120/day per sender identity.
+- **Caroline and Kate: 20/mailbox (raised from 15 on 2026-10-19).** Their 4 mailboxes
+  (2 each) launched 2026-10-14 at 15; raised after 4 business days with 1 bounce in 40
+  sends and warmup at 100%. Their campaigns follow at 13 new leads/day (40 / 3 emails,
+  via `create_campaign.py --verify <id> --repair`). Next step is 30, about a week on, if
+  bounces stay low. **The read-back LAGS the write**: `set_send_limits.py` now re-reads
+  for up to a minute before calling a write failed.
+- Fleet capacity: **8 mailboxes × 30 + 4 × 20 = 320/day**: 120/day each for Carl and
+  Zach, 40/day each for Caroline and Kate.
   - This line read "~30 messages/mailbox/day" while the account was actually set to 15
     until 2026-09-16, overstating capacity by 2×. The figures above are now the measured
     account state, not an aspiration; re-derive them from

@@ -33,6 +33,7 @@ import argparse
 import json
 import pathlib
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -121,14 +122,19 @@ def main(argv=None) -> int:
         print("DRY RUN: nothing was written.")
         return 0
 
-    # Guarantee 4: a 200 is not proof.
-    after = accounts(key)
-    if a.mailbox:
-        after = [r for r in after
-                 if (r.get("from_email") or "").lower() == a.mailbox.lower()]
-
-    wrong = [(r.get("from_email"), r.get("message_per_day")) for r in after
-             if int(r.get("message_per_day") or 0) != a.limit]
+    # Guarantee 4: a 200 is not proof. But the read LAGS the write: on 2026-10-19 all
+    # four writes landed, the immediate read-back still said 15, and a minute later
+    # every mailbox read 20. So re-read a few times before calling a write failed.
+    for attempt in range(4):
+        after = accounts(key)
+        if a.mailbox:
+            after = [r for r in after
+                     if (r.get("from_email") or "").lower() == a.mailbox.lower()]
+        wrong = [(r.get("from_email"), r.get("message_per_day")) for r in after
+                 if int(r.get("message_per_day") or 0) != a.limit]
+        if not wrong or attempt == 3:
+            break
+        time.sleep(20)
     fleet_after = sum(int(r.get("message_per_day") or 0) for r in after)
     print(f"\nread back: fleet capacity {fleet_before} -> {fleet_after} emails/day "
           f"across {len(after)} mailbox(es)")
