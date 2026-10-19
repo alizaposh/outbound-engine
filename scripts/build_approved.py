@@ -349,8 +349,16 @@ def main(argv=None) -> int:
             continue
         for line in out.splitlines():
             if ("created campaign" in line or "adding to" in line or "uploaded" in line
-                    or "did NOT land" in line or "status:" in line):
+                    or "did NOT land" in line or "status:" in line
+                    or "NOT RECORDED" in line or "recorded enrolment" in line):
                 print(f"    {line.strip()}")
+        # create_campaign keeps going when the HubSpot write-back fails, because the
+        # campaign already exists. That failure was printed and then filtered out of
+        # this summary, so 642 un-recorded enrolments went unnoticed (2026-10-14).
+        if "NOT RECORDED" in out:
+            print("    ** ENROLMENT NOT RECORDED IN HUBSPOT -- fix before replies arrive, "
+                  "or they get the fallback's calendar **")
+            failed += 1
         # Stamp the rows AFTER the campaign exists. Stamping first would mark rows built
         # into a campaign that then failed to create, and they would never be retried.
         stamp_built(svc, sheet_id, tab, [r["_row"] for r in rows], cname)

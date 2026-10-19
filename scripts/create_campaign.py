@@ -345,6 +345,20 @@ def record_enrolment(rows, cid, name, apply_changes: bool) -> int:
             f"them would switch the person they have been corresponding with. Filter them "
             f"out with `scripts/eligibility.py --sender {sender.lower()}` and regenerate.")
 
+    # **The sender must be a valid option of the outbound_sender DROPDOWN.** It is an
+    # enumeration, and HubSpot rejects the WHOLE batch for one bad value -- campaign id
+    # and in_sequence included. Caroline and Kate were added as senders on 2026-10-14
+    # without being added here, so all 642 of their contacts were enrolled in Smartlead
+    # with nothing recorded in HubSpot, and their replies got the fallback's calendar.
+    if sender:
+        allowed = {o.get("value") for o in (hs._call(
+            "GET", "/crm/v3/properties/contacts/outbound_sender").get("options") or [])}
+        if sender.lower() not in allowed:
+            raise RuntimeError(
+                f"{sender.lower()!r} is not an option of the HubSpot outbound_sender "
+                f"dropdown ({sorted(allowed)}). Add it in HubSpot property settings, "
+                f"then re-record this enrolment.")
+
     props = {"outbound_last_campaign_id": f"{cid}", "outbound_status": "in_sequence"}
     # Only contacts with no sender yet get one; the rest already match (conflicts raised).
     unassigned = [e for e, p in current.items() if not p.get("outbound_sender")]
